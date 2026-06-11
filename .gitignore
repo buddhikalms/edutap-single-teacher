@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+apps/mobile/node_modules/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Production builds
+dist/
+build/
+
+# Environment files
+.env
+.env*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/migration_lock.toml
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test and cache output
+coverage/
+.turbo/
+.vercel/
+.eslintcache
+
+# Expo / React Native generated output
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/android/app/build/
+apps/mobile/android/local.properties
+apps/mobile/ios/
+
+# Local generated APKs
+*.apk
+*.aab

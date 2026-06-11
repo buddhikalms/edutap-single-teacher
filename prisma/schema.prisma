@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  INSTITUTE_ADMIN
+  BRANCH_ADMIN
+  TEACHER
+  STAFF
+  STUDENT
+  PARENT
+}
+
+enum StudentStatus {
+  ACTIVE
+  PAUSED
+  GRADUATED
+  ARCHIVED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AttendanceSessionStatus {
+  ACTIVE
+  ENDED
+}
+
+enum AttendanceSource {
+  MANUAL
+  QR
+  NFC
+  BULK
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentType {
+  MONTHLY_FEE
+  ADMISSION_FEE
+  EXAM_FEE
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  ONLINE
+}
+
+enum NoticeAudience {
+  INSTITUTE
+  CLASS
+  STUDENTS
+}
+
+enum NotificationType {
+  NOTICE
+  PAYMENT_DUE
+  ABSENT_ALERT
+  CLASS_NOTICE
+  RECEIPT
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  READ
+}
+
+enum SubscriptionPlan {
+  TEACHER
+  SMALL_INSTITUTE
+  PREMIUM_INSTITUTE
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  SUSPENDED
+}
+
+model Institute {
+  id            String                 @id @default(cuid())
+  name          String
+  slug          String                 @unique
+  email         String
+  phone         String?
+  address       String?
+  logoUrl       String?
+  active        Boolean                @default(true)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  branches      Branch[]
+  users         User[]
+  students      Student[]
+  parents       Parent[]
+  teachers      Teacher[]
+  courses       Course[]
+  classGroups   ClassGroup[]
+  payments      Payment[]
+  receipts      Receipt[]
+  auditLogs     AttendanceAuditLog[]
+  notices       Notice[]
+  notifications NotificationLog[]
+  settings      InstituteSettings?
+  subscription  InstituteSubscription?
+}
+
+model InstituteSettings {
+  id                      String    @id @default(cuid())
+  instituteId             String    @unique
+  receiptPrefix           String    @default("RCT")
+  receiptFooter           String?   @db.Text
+  paymentDueDay           Int       @default(10)
+  attendanceLateAfterMins Int       @default(15)
+  attendanceAutoAbsent    Boolean   @default(false)
+  currency                String    @default("USD")
+  themeColor              String    @default("#0f766e")
+  logoPlaceholder         String?
+  branchSettings          Json?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  institute               Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+}
+
+model InstituteSubscription {
+  id               String             @id @default(cuid())
+  instituteId      String             @unique
+  plan             SubscriptionPlan   @default(SMALL_INSTITUTE)
+  status           SubscriptionStatus @default(TRIAL)
+  startedAt        DateTime           @default(now())
+  currentPeriodEnd DateTime?
+  monthlyPrice     Decimal            @default(79) @db.Decimal(10, 2)
+  studentLimit     Int
+  teacherLimit     Int
+  branchLimit      Int
+  smsCredits       Int
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  institute        Institute          @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+
+  @@index([plan])
+  @@index([status])
+}
+
+model Branch {
+  id          String       @id @default(cuid())
+  name        String
+  code        String
+  address     String?
+  phone       String?
+  instituteId String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  institute   Institute    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  users       User[]
+  students    Student[]
+  teachers    Teacher[]
+  classGroups ClassGroup[]
+
+  @@unique([instituteId, code])
+  @@index([instituteId])
+}
+
+model User {
+  id             String            @id @default(cuid())
+  name           String
+  email          String            @unique
+  passwordHash   String
+  role           UserRole          @default(STAFF)
+  image          String?
+  emailVerified  DateTime?
+  instituteId    String?
+  branchId       String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  institute      Institute?        @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  branch         Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  teacher        Teacher?
+  parent         Parent?
+  student        Student?
+  mobileTokens   MobileAuthToken[]
+  noticesCreated Notice[]
+  notifications  NotificationLog[]
+
+  @@index([instituteId])
+  @@index([branchId])
+}
+
+model MobileAuthToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  userId     String
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Student {
+  id               String               @id @default(cuid())
+  admissionNo      String
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  dateOfBirth      DateTime?
+  status           StudentStatus        @default(ACTIVE)
+  avatarUrl        String?
+  nfcUid           String?
+  qrCode           String?
+  attendanceToken  String?              @default(cuid())
+  userId           String?              @unique
+  instituteId      String
+  branchId         String
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  institute        Institute            @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  branch           Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user             User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  parents          Parent[]
+  enrollments      Enrollment[]
+  attendance       AttendanceRecord[]
+  payments         Payment[]
+  auditLogs        AttendanceAuditLog[]
+  noticeRecipients NoticeRecipient[]
+  notifications    NotificationLog[]
+
+  @@unique([instituteId, admissionNo])
+  @@index([instituteId, nfcUid])
+  @@index([instituteId, qrCode])
+  @@index([attendanceToken])
+  @@index([branchId])
+}
+
+model Parent {
+  id               String            @id @default(cuid())
+  name             String
+  email            String?
+  phone            String
+  occupation       String?
+  userId           String?           @unique
+  instituteId      String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  institute        Institute         @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  students         Student[]
+  noticeRecipients NoticeRecipient[]
+  notifications    NotificationLog[]
+
+  @@index([instituteId])
+}
+
+model Teacher {
+  id          String       @id @default(cuid())
+  name        String
+  email       String
+  phone       String?
+  specialty   String?
+  userId      String?      @unique
+  instituteId String
+  branchId    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  institute   Institute    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  branch      Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  classGroups ClassGroup[]
+
+  @@unique([instituteId, email])
+  @@index([branchId])
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  name        String
+  code        String
+  subject     String?
+  grade       String?
+  description String?
+  fee         Decimal      @db.Decimal(10, 2)
+  instituteId String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  institute   Institute    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  classGroups ClassGroup[]
+
+  @@unique([instituteId, code])
+  @@index([instituteId])
+}
+
+model ClassGroup {
+  id                 String              @id @default(cuid())
+  name               String
+  code               String
+  schedule           String
+  room               String?
+  capacity           Int                 @default(30)
+  instituteId        String
+  branchId           String
+  courseId           String
+  teacherId          String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  institute          Institute           @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher            Teacher?            @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  enrollments        Enrollment[]
+  attendanceSessions AttendanceSession[]
+  payments           Payment[]
+  notices            Notice[]
+
+  @@unique([instituteId, code])
+  @@index([branchId])
+  @@index([courseId])
+}
+
+model Enrollment {
+  id           String     @id @default(cuid())
+  studentId    String
+  classGroupId String
+  enrolledAt   DateTime   @default(now())
+  active       Boolean    @default(true)
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classGroup   ClassGroup @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classGroupId])
+  @@index([classGroupId])
+}
+
+model AttendanceSession {
+  id           String                  @id @default(cuid())
+  classGroupId String
+  sessionDate  DateTime
+  startsAt     DateTime?
+  endsAt       DateTime?
+  status       AttendanceSessionStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @default(now()) @updatedAt
+  classGroup   ClassGroup              @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
+  records      AttendanceRecord[]
+  auditLogs    AttendanceAuditLog[]
+
+  @@unique([classGroupId, sessionDate])
+  @@index([sessionDate])
+  @@index([classGroupId, status])
+}
+
+model AttendanceRecord {
+  id        String               @id @default(cuid())
+  sessionId String
+  studentId String
+  status    AttendanceStatus     @default(PRESENT)
+  source    AttendanceSource     @default(MANUAL)
+  markedAt  DateTime             @default(now())
+  notes     String?
+  session   AttendanceSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student   Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  auditLogs AttendanceAuditLog[]
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
+model AttendanceAuditLog {
+  id          String            @id @default(cuid())
+  instituteId String
+  sessionId   String
+  studentId   String?
+  recordId    String?
+  source      AttendanceSource
+  status      AttendanceStatus?
+  success     Boolean
+  message     String
+  metadata    Json?
+  createdAt   DateTime          @default(now())
+  institute   Institute         @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  session     AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student     Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  record      AttendanceRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+
+  @@index([instituteId, createdAt])
+  @@index([sessionId])
+  @@index([studentId])
+}
+
+model Payment {
+  id           String         @id @default(cuid())
+  invoiceNo    String
+  type         PaymentType    @default(MONTHLY_FEE)
+  month        String?
+  amount       Decimal        @db.Decimal(10, 2)
+  discount     Decimal        @default(0) @db.Decimal(10, 2)
+  paidAmount   Decimal        @default(0) @db.Decimal(10, 2)
+  balance      Decimal        @default(0) @db.Decimal(10, 2)
+  dueDate      DateTime
+  paidAt       DateTime?
+  status       PaymentStatus  @default(PENDING)
+  method       PaymentMethod?
+  note         String?
+  receivedBy   String?
+  instituteId  String
+  studentId    String
+  classGroupId String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  institute    Institute      @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student      Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classGroup   ClassGroup?    @relation(fields: [classGroupId], references: [id], onDelete: SetNull)
+  receipts     Receipt[]
+
+  @@unique([instituteId, invoiceNo])
+  @@index([studentId])
+  @@index([classGroupId])
+  @@index([instituteId, month])
+  @@index([instituteId, status])
+}
+
+model Receipt {
+  id            String            @id @default(cuid())
+  receiptNo     String
+  issuedAt      DateTime          @default(now())
+  amount        Decimal           @db.Decimal(10, 2)
+  receivedBy    String?
+  paymentId     String
+  instituteId   String
+  payment       Payment           @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  institute     Institute         @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  notifications NotificationLog[]
+
+  @@unique([instituteId, receiptNo])
+  @@index([instituteId])
+  @@index([paymentId])
+}
+
+model Notice {
+  id            String            @id @default(cuid())
+  title         String
+  body          String            @db.Text
+  audience      NoticeAudience    @default(INSTITUTE)
+  type          NotificationType  @default(NOTICE)
+  instituteId   String
+  classGroupId  String?
+  createdById   String?
+  publishAt     DateTime          @default(now())
+  expiresAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  institute     Institute         @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  classGroup    ClassGroup?       @relation(fields: [classGroupId], references: [id], onDelete: SetNull)
+  createdBy     User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  recipients    NoticeRecipient[]
+  notifications NotificationLog[]
+
+  @@index([instituteId, createdAt])
+  @@index([classGroupId])
+}
+
+model NoticeRecipient {
+  id        String   @id @default(cuid())
+  noticeId  String
+  studentId String
+  parentId  String?
+  createdAt DateTime @default(now())
+  notice    Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent    Parent?  @relation(fields: [parentId], references: [id], onDelete: SetNull)
+
+  @@unique([noticeId, studentId])
+  @@index([studentId])
+  @@index([parentId])
+}
+
+model NotificationLog {
+  id          String              @id @default(cuid())
+  instituteId String
+  noticeId    String?
+  userId      String?
+  studentId   String?
+  parentId    String?
+  receiptId   String?
+  type        NotificationType
+  channel     NotificationChannel @default(IN_APP)
+  status      NotificationStatus  @default(QUEUED)
+  title       String
+  message     String              @db.Text
+  target      String?
+  provider    String?
+  providerRef String?
+  error       String?
+  metadata    Json?
+  readAt      DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime            @default(now())
+  institute   Institute           @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  notice      Notice?             @relation(fields: [noticeId], references: [id], onDelete: SetNull)
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  student     Student?            @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  parent      Parent?             @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  receipt     Receipt?            @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([instituteId, createdAt])
+  @@index([noticeId])
+  @@index([userId])
+  @@index([studentId])
+  @@index([parentId])
+  @@index([type])
+  @@index([channel, status])
+}

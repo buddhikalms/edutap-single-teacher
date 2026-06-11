@@ -1,0 +1,416 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  useReactTable
+} from "@tanstack/react-table";
+import { useForm, useWatch } from "react-hook-form";
+import { Eye, Loader2, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { toast } from "sonner";
+import { createTeacher, deleteTeacher, updateTeacher } from "@/app/(dashboard)/teachers/actions";
+import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { teacherSchema, type TeacherInput } from "@/lib/validations";
+
+export type TeacherRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  specialty: string | null;
+  branchId: string;
+  branch: string;
+  classGroupIds: string[];
+  classes: string;
+  activeClasses: number;
+  students: number;
+};
+
+export type TeacherClassOption = {
+  id: string;
+  name: string;
+  teacherId: string | null;
+};
+
+export type TeacherBranchOption = {
+  id: string;
+  name: string;
+};
+
+const emptyTeacher: TeacherInput = {
+  name: "",
+  email: "",
+  phone: undefined,
+  specialty: undefined,
+  branchId: "",
+  classGroupIds: []
+};
+
+function rowToInput(row: TeacherRow): TeacherInput {
+  return {
+    name: row.name,
+    email: row.email,
+    phone: row.phone ?? undefined,
+    specialty: row.specialty ?? undefined,
+    branchId: row.branchId,
+    classGroupIds: row.classGroupIds
+  };
+}
+
+export function TeachersTable({
+  data,
+  branches,
+  classes
+}: {
+  data: TeacherRow[];
+  branches: TeacherBranchOption[];
+  classes: TeacherClassOption[];
+}) {
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [editing, setEditing] = useState<TeacherRow | null>(null);
+  const [deleting, setDeleting] = useState<TeacherRow | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const columns = useMemo<ColumnDef<TeacherRow>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Teacher",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-700 text-white">
+              <UserRound className="h-5 w-5" />
+            </div>
+            <div>
+              <Link href={`/teachers/${row.original.id}`} className="font-semibold hover:underline">
+                {row.original.name}
+              </Link>
+              <p className="text-xs text-muted-foreground">{row.original.email}</p>
+            </div>
+          </div>
+        )
+      },
+      { accessorKey: "specialty", header: "Specialty", cell: ({ row }) => row.original.specialty ?? "General" },
+      { accessorKey: "branch", header: "Branch" },
+      {
+        accessorKey: "activeClasses",
+        header: "Classes",
+        cell: ({ row }) => (
+          <div>
+            <p className="font-semibold">{row.original.activeClasses}</p>
+            <p className="max-w-[260px] truncate text-xs text-muted-foreground">{row.original.classes || "Unassigned"}</p>
+          </div>
+        )
+      },
+      { accessorKey: "students", header: "Students" },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => (
+          <div className="flex justify-end gap-2">
+            <Button asChild variant="ghost" size="icon" aria-label="View teacher">
+              <Link href={`/teachers/${row.original.id}`}>
+                <Eye className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setEditing(row.original)} aria-label="Edit teacher">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setDeleting(row.original)} aria-label="Delete teacher">
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        )
+      }
+    ],
+    []
+  );
+
+  // TanStack Table intentionally returns function-heavy instances that React Compiler cannot memoize.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data,
+    columns,
+    state: { globalFilter },
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel()
+  });
+
+  function confirmDelete() {
+    if (!deleting) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await deleteTeacher(deleting.id);
+      if (result.ok) {
+        toast.success(result.message);
+        setDeleting(null);
+      } else {
+        toast.error(result.message);
+      }
+    });
+  }
+
+  return (
+    <>
+      <Card className="glass-panel">
+        <CardContent className="p-6">
+          <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+            <div>
+              <Badge variant="secondary">Faculty operations</Badge>
+              <h2 className="mt-3 text-2xl font-semibold">Teachers</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Manage teacher profiles and class assignments.</p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative min-w-[260px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={globalFilter} onChange={(event) => setGlobalFilter(event.target.value)} placeholder="Search teachers..." className="pl-9" />
+              </div>
+              <Button onClick={() => setIsCreating(true)}>
+                <Plus className="h-4 w-4" />
+                Add teacher
+              </Button>
+            </div>
+          </div>
+          <TeacherDataTable table={table} columns={columns} />
+        </CardContent>
+      </Card>
+
+      {isCreating ? (
+        <TeacherPanel
+          title="Add teacher"
+          branches={branches}
+          classes={classes}
+          defaultValues={{ ...emptyTeacher, branchId: branches[0]?.id ?? "" }}
+          onClose={() => setIsCreating(false)}
+          onSubmit={createTeacher}
+        />
+      ) : null}
+      {editing ? (
+        <TeacherPanel
+          title="Edit teacher"
+          branches={branches}
+          classes={classes}
+          defaultValues={rowToInput(editing)}
+          teacherId={editing.id}
+          onClose={() => setEditing(null)}
+          onSubmit={(values) => updateTeacher(editing.id, values)}
+        />
+      ) : null}
+      {deleting ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/35 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-luxury">
+            <h3 className="text-lg font-semibold">Remove {deleting.name}?</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Their assigned classes will become unassigned.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setDeleting(null)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete} disabled={isPending}>
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Remove
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function TeacherPanel({
+  title,
+  branches,
+  classes,
+  defaultValues,
+  teacherId,
+  onClose,
+  onSubmit
+}: {
+  title: string;
+  branches: TeacherBranchOption[];
+  classes: TeacherClassOption[];
+  defaultValues: TeacherInput;
+  teacherId?: string;
+  onClose: () => void;
+  onSubmit: (values: TeacherInput) => Promise<{ ok: boolean; message: string }>;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const form = useForm<TeacherInput>({
+    resolver: zodResolver(teacherSchema),
+    defaultValues
+  });
+  const selected = useWatch({ control: form.control, name: "classGroupIds" }) ?? [];
+
+  function toggleClass(id: string, checked: boolean) {
+    form.setValue("classGroupIds", checked ? [...selected, id] : selected.filter((classId) => classId !== id), { shouldValidate: true });
+  }
+
+  function submit(values: TeacherInput) {
+    startTransition(async () => {
+      const result = await onSubmit(values);
+      if (result.ok) {
+        toast.success(result.message);
+        onClose();
+      } else {
+        toast.error(result.message);
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden bg-primary/35 backdrop-blur-sm">
+      <button className="absolute inset-0" aria-label="Close teacher form" onClick={onClose} />
+      <div className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto border-l bg-background p-5 shadow-luxury sm:p-7">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <Badge variant="secondary">Teacher profile</Badge>
+            <h2 className="mt-3 text-2xl font-semibold">{title}</h2>
+          </div>
+          <Button variant="outline" size="icon" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
+          <FormShell title="Teacher details" description="Profile information and branch assignment.">
+            <div className="space-y-4">
+              <FieldRow>
+                <FormField label="Name" error={form.formState.errors.name?.message}>
+                  <Input {...form.register("name")} />
+                </FormField>
+                <FormField label="Email" error={form.formState.errors.email?.message}>
+                  <Input type="email" {...form.register("email")} />
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Phone" error={form.formState.errors.phone?.message}>
+                  <Input {...form.register("phone")} />
+                </FormField>
+                <FormField label="Branch" error={form.formState.errors.branchId?.message}>
+                  <Select {...form.register("branchId")}>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </FieldRow>
+              <FormField label="Specialty" error={form.formState.errors.specialty?.message}>
+                <Input placeholder="Mathematics, Physics, English..." {...form.register("specialty")} />
+              </FormField>
+            </div>
+          </FormShell>
+          <FormShell title="Assign classes" description="Classes assigned here will show this teacher as the class owner.">
+            <div className="grid gap-3">
+              {classes.map((classGroup) => {
+                const disabled = Boolean(classGroup.teacherId && classGroup.teacherId !== teacherId);
+                return (
+                  <label key={classGroup.id} className="flex items-center justify-between gap-4 rounded-xl border bg-white/70 p-4">
+                    <span>
+                      <span className="block font-semibold">{classGroup.name}</span>
+                      {disabled ? <span className="text-xs text-muted-foreground">Assigned to another teacher</span> : null}
+                    </span>
+                    <Checkbox
+                      checked={selected.includes(classGroup.id)}
+                      disabled={disabled}
+                      onChange={(event) => toggleClass(classGroup.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </FormShell>
+          <div className="sticky bottom-0 flex justify-end gap-3 border-t bg-background/92 py-4 backdrop-blur">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save teacher
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TeacherDataTable<TData>({
+  table,
+  columns
+}: {
+  table: ReturnType<typeof useReactTable<TData>>;
+  columns: ColumnDef<TData>[];
+}) {
+  return (
+    <>
+      <div className="overflow-hidden rounded-xl border bg-white/75">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="bg-muted/70">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <th key={header.id} className="px-4 py-3 text-left font-semibold text-muted-foreground">
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <tr key={row.id} className="border-t transition hover:bg-muted/40">
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-4">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-14 text-center">
+                    <p className="font-semibold">No teachers found</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Add faculty profiles to start assigning classes.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            Previous
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            Next
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
