@@ -40,6 +40,7 @@ coverage/
 .turbo/
 .vercel/
 .eslintcache
+public/uploads/
 
 # Expo / React Native generated output
 apps/mobile/.expo/
@@ -50,6 +51,12 @@ apps/mobile/android/build/
 apps/mobile/android/app/build/
 apps/mobile/android/local.properties
 apps/mobile/ios/
+apps/student/node_modules/
+apps/student/.expo/
+apps/student/dist/
+apps/student/build/
+apps/student/android/
+apps/student/ios/
 
 # Local generated APKs
 *.apk

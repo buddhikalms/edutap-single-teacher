@@ -3,14 +3,17 @@ import {
   BarChart3,
   BellRing,
   BookOpen,
+  BookOpenCheck,
   CalendarCheck,
   CreditCard,
   GraduationCap,
   LayoutDashboard,
   Settings2,
   ShieldCheck,
+  Trophy,
   UserPlus,
-  UsersRound
+  UsersRound,
+  Video
 } from "lucide-react";
 import { canAccess, roleAccess } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
@@ -23,6 +26,9 @@ const tenantNavItems = [
   { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance" },
   { href: "/payments", label: "Payments", icon: CreditCard, area: "payments" },
+  { href: "/homework", label: "Homework", icon: BookOpenCheck, area: "homework" },
+  { href: "/quizzes", label: "Quizzes", icon: Trophy, area: "quizzes" },
+  { href: "/live-classes", label: "Live Classes", icon: Video, area: "liveClasses" },
   { href: "/reports", label: "Reports", icon: BarChart3, area: "reports" },
   { href: "/notifications", label: "Notifications", icon: BellRing, area: "notifications" },
   { href: "/settings", label: "Settings", icon: Settings2, area: "settings" },

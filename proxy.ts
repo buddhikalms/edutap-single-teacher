@@ -34,6 +34,14 @@ export default withAuth({
         return canAccess(token.role, "payments");
       }
 
+      if (pathname.startsWith("/homework")) {
+        return canAccess(token.role, "homework");
+      }
+
+      if (pathname.startsWith("/quizzes")) {
+        return canAccess(token.role, "quizzes");
+      }
+
       if (pathname.startsWith("/reports")) {
         return canAccess(token.role, "reports");
       }
@@ -71,6 +79,8 @@ export const config = {
     "/enrollment/:path*",
     "/attendance/:path*",
     "/payments/:path*",
+    "/homework/:path*",
+    "/quizzes/:path*",
     "/reports/:path*",
     "/settings/:path*",
     "/billing/:path*",

@@ -5,5 +5,5 @@ import nextTypescript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextCoreWebVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "apps/mobile/**", "node_modules/**", "out/**", "next-env.d.ts"])
+  globalIgnores([".next/**", "apps/mobile/**", "apps/student/**", "node_modules/**", "out/**", "next-env.d.ts"])
 ]);

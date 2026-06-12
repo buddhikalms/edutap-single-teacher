@@ -166,6 +166,127 @@ export const noticeSchema = z.object({
   studentIds: z.array(z.string()).optional().default([])
 });
 
+export const homeworkSchema = z.object({
+  title: z.string().trim().min(3, "Homework title is required."),
+  description: z.string().trim().min(3, "Description is required."),
+  deadline: z.string().min(1, "Deadline is required."),
+  marks: z.coerce.number().int().min(0, "Marks must be zero or more."),
+  status: z.enum(["DRAFT", "PUBLISHED", "CLOSED"]),
+  classGroupId: z.string().min(1, "Class is required."),
+  courseId: optionalText,
+  externalLinks: optionalText,
+  attachments: optionalText,
+  studentIds: z.array(z.string()).optional().default([])
+});
+
+export const homeworkSubmissionReviewSchema = z.object({
+  submissionId: z.string().min(1, "Submission is required."),
+  marksAwarded: z.coerce.number().min(0, "Marks must be zero or more.").optional(),
+  feedback: optionalText,
+  reviewStatus: z.enum(["ACCEPTED", "REJECTED", "RESUBMIT"]),
+  status: z.enum(["REVIEWED", "SUBMITTED", "LATE"]).default("REVIEWED")
+});
+
+export const homeworkSubmitSchema = z.object({
+  homeworkId: z.string().min(1, "Homework is required."),
+  answerText: optionalText,
+  attachmentUrl: optionalText
+});
+
+export const quizSchema = z.object({
+  title: z.string().trim().min(3, "Quiz title is required."),
+  description: optionalText,
+  instructions: optionalText,
+  startsAt: z.string().min(1, "Start date is required."),
+  endsAt: z.string().min(1, "End date is required."),
+  timeLimitMins: z.coerce.number().int().min(1, "Time limit is required."),
+  totalMarks: z.coerce.number().min(0, "Total marks must be zero or more."),
+  passMark: z.coerce.number().min(0, "Pass mark must be zero or more."),
+  attemptLimit: z.coerce.number().int().min(1, "Attempt limit must be at least one."),
+  status: z.enum(["DRAFT", "PUBLISHED", "CLOSED"]),
+  classGroupId: z.string().min(1, "Class is required."),
+  courseId: optionalText
+});
+
+export const quizQuestionSchema = z.object({
+  quizId: z.string().min(1, "Quiz is required."),
+  questionId: optionalText,
+  type: z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "ESSAY"]),
+  prompt: z.string().trim().min(3, "Question prompt is required."),
+  explanation: optionalText,
+  marks: z.coerce.number().min(0, "Marks must be zero or more."),
+  order: z.coerce.number().int().min(0).default(0),
+  correctAnswer: optionalText,
+  options: z.array(
+    z.object({
+      id: optionalText,
+      label: z.string().trim().min(1),
+      text: z.string().trim().min(1),
+      isCorrect: z.boolean().default(false),
+      order: z.number().int().min(0).default(0)
+    })
+  ).optional().default([])
+});
+
+export const quizAttemptStartSchema = z.object({
+  quizId: z.string().min(1, "Quiz is required.")
+});
+
+export const quizAnswerSaveSchema = z.object({
+  attemptId: z.string().min(1, "Attempt is required."),
+  questionId: z.string().min(1, "Question is required."),
+  selectedOptionId: optionalText,
+  answerText: optionalText
+});
+
+export const quizManualMarkSchema = z.object({
+  answerId: z.string().min(1, "Answer is required."),
+  marksAwarded: z.coerce.number().min(0, "Marks must be zero or more."),
+  feedback: optionalText
+});
+
+export const liveClassSchema = z.object({
+  title: z.string().trim().min(3, "Live class title is required."),
+  description: optionalText,
+  classGroupId: z.string().min(1, "Class is required."),
+  courseId: optionalText,
+  teacherId: optionalText,
+  meetingProvider: z.enum(["ZOOM_AUTO", "GOOGLE_MEET_AUTO", "EXTERNAL_ZOOM", "EXTERNAL_GOOGLE_MEET", "YOUTUBE_LIVE", "OTHER_LINK"]),
+  externalUrl: optionalText,
+  startTime: z.string().min(1, "Date and time is required."),
+  durationMinutes: z.coerce.number().int().min(5, "Duration must be at least 5 minutes."),
+  accessType: z.enum(["FREE", "PAID"]),
+  price: z.coerce.number().min(0, "Price must be zero or more.").default(0),
+  status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"]).default("DRAFT"),
+  recordingEnabled: z.coerce.boolean().default(false),
+  studentIds: z.array(z.string()).optional().default([])
+}).superRefine((value, ctx) => {
+  const externalProviders = ["EXTERNAL_ZOOM", "EXTERNAL_GOOGLE_MEET", "YOUTUBE_LIVE", "OTHER_LINK"];
+  if (!externalProviders.includes(value.meetingProvider)) return;
+
+  if (!value.externalUrl) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["externalUrl"], message: "Meeting URL is required for external providers." });
+    return;
+  }
+
+  try {
+    const url = new URL(value.externalUrl);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      throw new Error("Invalid protocol.");
+    }
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["externalUrl"], message: "Enter a valid meeting URL." });
+  }
+});
+
+export const liveClassRecordingSchema = z.object({
+  title: z.string().trim().min(3, "Recording title is required."),
+  description: optionalText,
+  recordingUrl: z.string().trim().url("Enter a valid recording URL."),
+  accessType: z.enum(["FREE", "PAID"]),
+  price: z.coerce.number().min(0, "Price must be zero or more.").default(0)
+});
+
 export type StudentInput = z.infer<typeof studentSchema>;
 export type TeacherInput = z.infer<typeof teacherSchema>;
 export type CourseInput = z.infer<typeof courseSchema>;
@@ -179,3 +300,10 @@ export type NfcAttendanceInput = z.infer<typeof nfcAttendanceSchema>;
 export type PaymentInput = z.infer<typeof paymentSchema>;
 export type DuePaymentInput = z.infer<typeof duePaymentSchema>;
 export type NoticeInput = z.infer<typeof noticeSchema>;
+export type HomeworkInput = z.infer<typeof homeworkSchema>;
+export type HomeworkSubmissionReviewInput = z.infer<typeof homeworkSubmissionReviewSchema>;
+export type HomeworkSubmitInput = z.infer<typeof homeworkSubmitSchema>;
+export type QuizInput = z.infer<typeof quizSchema>;
+export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
+export type LiveClassInput = z.infer<typeof liveClassSchema>;
+export type LiveClassRecordingInput = z.infer<typeof liveClassRecordingSchema>;

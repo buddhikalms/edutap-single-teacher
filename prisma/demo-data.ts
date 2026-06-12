@@ -2,9 +2,12 @@ import {
   AttendanceSource,
   AttendanceStatus,
   AttendanceSessionStatus,
+  HomeworkStatus,
   PaymentMethod,
   PaymentStatus,
   PrismaClient,
+  QuizQuestionType,
+  QuizStatus,
   SubscriptionPlan,
   SubscriptionStatus,
   UserRole
@@ -595,6 +598,184 @@ async function main() {
       }
     }
   }
+
+  await Promise.all(
+    classGroups.map((classGroup) =>
+      prisma.courseMaterial.upsert({
+        where: { id: `demo-material-${classGroup.code.toLowerCase()}` },
+        create: {
+          id: `demo-material-${classGroup.code.toLowerCase()}`,
+          instituteId: institute.id,
+          classGroupId: classGroup.id,
+          courseId: classGroup.courseId,
+          createdById: admin.id,
+          title: `${classGroup.name} revision pack`,
+          description: "Demo course material for the student app.",
+          type: "LINK",
+          url: `https://classcard.test/materials/${classGroup.code.toLowerCase()}`
+        },
+        update: {
+          title: `${classGroup.name} revision pack`,
+          description: "Demo course material for the student app.",
+          url: `https://classcard.test/materials/${classGroup.code.toLowerCase()}`
+        }
+      })
+    )
+  );
+
+  const homeworkSeeds = [
+    {
+      title: "Algebra practice worksheet",
+      description: "Complete all algebra simplification problems and upload your working.",
+      classGroup: classGroups[0],
+      course: courses[0],
+      deadline: addDays(today, 3),
+      marks: 20
+    },
+    {
+      title: "Physics motion case study",
+      description: "Write a short explanation of velocity-time graph interpretation.",
+      classGroup: classGroups[1],
+      course: courses[1],
+      deadline: addDays(today, 5),
+      marks: 15
+    },
+    {
+      title: "Essay paragraph draft",
+      description: "Submit one polished paragraph with topic sentence and evidence.",
+      classGroup: classGroups[2],
+      course: courses[2],
+      deadline: addDays(today, -1),
+      marks: 10
+    }
+  ];
+
+  for (const seed of homeworkSeeds) {
+    const existing = await prisma.homework.findFirst({ where: { instituteId: institute.id, title: seed.title } });
+    const homework =
+      existing ??
+      (await prisma.homework.create({
+        data: {
+          title: seed.title,
+          description: seed.description,
+          deadline: seed.deadline,
+          marks: seed.marks,
+          status: HomeworkStatus.PUBLISHED,
+          instituteId: institute.id,
+          classGroupId: seed.classGroup.id,
+          courseId: seed.course.id,
+          createdById: admin.id,
+          externalLinks: [`https://classcard.test/homework/${seed.classGroup.code.toLowerCase()}`],
+          attachments: {
+            create: [{ name: "Worksheet placeholder", url: `worksheet-${seed.classGroup.code.toLowerCase()}.pdf` }]
+          }
+        }
+      }));
+
+    const enrolled = await prisma.enrollment.findMany({ where: { classGroupId: seed.classGroup.id, active: true }, select: { studentId: true }, take: 8 });
+    for (const [index, enrollment] of enrolled.entries()) {
+      const submittedAt = index % 3 === 0 ? addDays(today, -1) : null;
+      await prisma.homeworkSubmission.upsert({
+        where: { homeworkId_studentId: { homeworkId: homework.id, studentId: enrollment.studentId } },
+        create: {
+          homeworkId: homework.id,
+          studentId: enrollment.studentId,
+          instituteId: institute.id,
+          answerText: submittedAt ? "Demo homework answer with working steps." : null,
+          status: submittedAt ? (submittedAt > homework.deadline ? "LATE" : "SUBMITTED") : today > homework.deadline ? "MISSING" : "PENDING",
+          submittedAt
+        },
+        update: {}
+      });
+    }
+  }
+
+  const quiz = await prisma.quiz.findFirst({ where: { instituteId: institute.id, title: "Grade 10 Algebra Checkpoint" } }) ??
+    await prisma.quiz.create({
+      data: {
+        title: "Grade 10 Algebra Checkpoint",
+        description: "Short auto-marked quiz for algebra fundamentals.",
+        instructions: "Answer all questions before the timer ends.",
+        startsAt: addDays(today, -1),
+        endsAt: addDays(today, 7),
+        timeLimitMins: 20,
+        totalMarks: "5.00",
+        passMark: "3.00",
+        attemptLimit: 2,
+        status: QuizStatus.PUBLISHED,
+        instituteId: institute.id,
+        classGroupId: classGroups[0].id,
+        courseId: courses[0].id,
+        createdById: admin.id
+      }
+    });
+
+  if ((await prisma.quizQuestion.count({ where: { quizId: quiz.id } })) === 0) {
+    await prisma.quizQuestion.create({
+      data: {
+        quizId: quiz.id,
+        type: QuizQuestionType.MULTIPLE_CHOICE,
+        prompt: "What is the value of x if 2x + 4 = 12?",
+        marks: "2.00",
+        order: 0,
+        options: {
+          create: [
+            { label: "A", text: "2", order: 0 },
+            { label: "B", text: "4", isCorrect: true, order: 1 },
+            { label: "C", text: "8", order: 2 }
+          ]
+        }
+      }
+    });
+    await prisma.quizQuestion.create({
+      data: {
+        quizId: quiz.id,
+        type: QuizQuestionType.TRUE_FALSE,
+        prompt: "A linear equation can have exactly one solution.",
+        marks: "1.00",
+        order: 1,
+        correctAnswer: "true"
+      }
+    });
+    await prisma.quizQuestion.create({
+      data: {
+        quizId: quiz.id,
+        type: QuizQuestionType.SHORT_ANSWER,
+        prompt: "Explain one step used to isolate a variable.",
+        marks: "2.00",
+        order: 2
+      }
+    });
+  }
+
+  await Promise.all([
+    prisma.notification.upsert({
+      where: { id: "demo-student-homework-alert" },
+      create: {
+        id: "demo-student-homework-alert",
+        instituteId: institute.id,
+        studentId: students[0].id,
+        title: "New homework assigned",
+        message: "Algebra practice worksheet is due soon.",
+        type: "NOTICE",
+        actionUrl: "/homework"
+      },
+      update: { studentId: students[0].id, message: "Algebra practice worksheet is due soon." }
+    }),
+    prisma.notification.upsert({
+      where: { id: "demo-student-quiz-alert" },
+      create: {
+        id: "demo-student-quiz-alert",
+        instituteId: institute.id,
+        studentId: students[0].id,
+        title: "Quiz is live",
+        message: "Grade 10 Algebra Checkpoint is ready to attempt.",
+        type: "CLASS_NOTICE",
+        actionUrl: "/quizzes"
+      },
+      update: { studentId: students[0].id, message: "Grade 10 Algebra Checkpoint is ready to attempt." }
+    })
+  ]);
 
   const notice = await prisma.notice.findFirst({
     where: {
