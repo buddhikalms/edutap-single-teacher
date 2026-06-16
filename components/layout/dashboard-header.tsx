@@ -39,7 +39,7 @@ export function DashboardHeader({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-primary/40 backdrop-blur-sm" aria-label="Close navigation" onClick={() => setOpen(false)} />
           <div className="relative h-full w-[300px] max-w-[86vw]">
-            <Sidebar />
+            <Sidebar role={user.role} />
             <Button
               variant="outline"
               size="icon"
