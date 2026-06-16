@@ -75,7 +75,7 @@ export function DuePaymentsManager({ rows, classes, month }: { rows: DueRow[]; c
   const monthRows = useMemo(() => rows.filter((row) => row.month === selectedMonth), [rows, selectedMonth]);
 
   function editFor(row: DueRow) {
-    return edits[row.key] ?? { paidAmount: Math.max(0, row.balance), discount: 0, method: "CASH" as const };
+    return edits[row.key] ?? { paidAmount: Math.max(0, row.balance), discount: row.discount, method: "CASH" as const };
   }
 
   function updateEdit(row: DueRow, patch: Partial<{ paidAmount: number; discount: number; method: "CASH" | "BANK_TRANSFER" | "CARD" | "ONLINE" }>) {

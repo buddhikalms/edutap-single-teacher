@@ -22,6 +22,7 @@ const tenantNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, area: "dashboard" },
   { href: "/students", label: "Students", icon: UsersRound, area: "students" },
   { href: "/teachers", label: "Teachers", icon: GraduationCap, area: "teachers" },
+  { href: "/grades", label: "Grades", icon: BookOpenCheck, area: "grades" },
   { href: "/classes", label: "Classes", icon: BookOpen, area: "classes" },
   { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance" },

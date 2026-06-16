@@ -6,12 +6,15 @@ import { Prisma, StudentStatus } from "@prisma/client";
 import { actionError, type ActionState, getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { studentSchema, type StudentInput } from "@/lib/validations";
+import { normalizeNfcUid } from "@/lib/nfc";
 
 function toDate(value?: string) {
   return value ? new Date(value) : null;
 }
 
 function studentData(input: StudentInput, instituteId: string) {
+  const normalizedNfcUid = normalizeNfcUid(input.nfcUid);
+
   return {
     admissionNo: input.admissionNo,
     firstName: input.firstName,
@@ -21,11 +24,33 @@ function studentData(input: StudentInput, instituteId: string) {
     dateOfBirth: toDate(input.dateOfBirth),
     status: input.status as StudentStatus,
     avatarUrl: input.avatarUrl ?? null,
-    nfcUid: input.nfcUid ?? null,
+    nfcUid: normalizedNfcUid || null,
     qrCode: input.qrCode ?? null,
     branchId: input.branchId,
     instituteId
   };
+}
+
+async function assertUniqueNfcUid(instituteId: string, nfcUid: string | undefined, currentStudentId?: string) {
+  const normalizedNfcUid = normalizeNfcUid(nfcUid);
+
+  if (!normalizedNfcUid) {
+    return;
+  }
+
+  const existingStudents = await prisma.student.findMany({
+    where: {
+      instituteId,
+      nfcUid: { not: null },
+      ...(currentStudentId ? { id: { not: currentStudentId } } : {})
+    },
+    select: { id: true, firstName: true, lastName: true, admissionNo: true, nfcUid: true }
+  });
+  const existing = existingStudents.find((student) => normalizeNfcUid(student.nfcUid) === normalizedNfcUid);
+
+  if (existing) {
+    throw new Error(`This NFC card is already assigned to ${existing.firstName} ${existing.lastName} (${existing.admissionNo}).`);
+  }
 }
 
 async function assertBranch(instituteId: string, branchId: string) {
@@ -52,6 +77,7 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
     const { instituteId } = await getTenantContext();
     const parsed = studentSchema.parse(input);
     await assertBranch(instituteId, parsed.branchId);
+    await assertUniqueNfcUid(instituteId, parsed.nfcUid);
 
     await prisma.$transaction(async (tx) => {
       const parent = await tx.parent.create({
@@ -83,6 +109,10 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
       return { ok: false, message: duplicate };
     }
 
+    if (error instanceof Error && error.message.includes("NFC card is already assigned")) {
+      return { ok: false, message: error.message };
+    }
+
     return actionError(error, "Could not add student.");
   }
 }
@@ -92,6 +122,7 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
     const { instituteId } = await getTenantContext();
     const parsed = studentSchema.parse(input);
     await assertBranch(instituteId, parsed.branchId);
+    await assertUniqueNfcUid(instituteId, parsed.nfcUid, id);
 
     const existing = await prisma.student.findFirst({
       where: { id, instituteId },
@@ -149,6 +180,10 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
     const duplicate = uniqueMessage(error);
     if (duplicate) {
       return { ok: false, message: duplicate };
+    }
+
+    if (error instanceof Error && error.message.includes("NFC card is already assigned")) {
+      return { ok: false, message: error.message };
     }
 
     return actionError(error, "Could not update student.");

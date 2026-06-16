@@ -41,22 +41,29 @@ export default async function EnrollmentPage() {
     course: enrollment.classGroup.course.name,
     teacher: enrollment.classGroup.teacher?.name ?? "Unassigned",
     active: enrollment.active,
+    status: enrollment.status,
+    paymentStartDate: enrollment.paymentStartDate?.toISOString().slice(0, 10) ?? "",
+    freePeriodType: enrollment.freePeriodType,
+    freeDays: enrollment.freeDays,
+    monthlyFeeOverride: enrollment.monthlyFeeOverride ? Number(enrollment.monthlyFeeOverride) : null,
+    discount: Number(enrollment.discount),
     enrolledAt: enrollment.enrolledAt.toLocaleDateString()
   }));
 
-  return (
-    <EnrollmentManager
-      enrollments={rows}
-      students={students.map((student) => ({
-        id: student.id,
-        name: `${student.firstName} ${student.lastName}`,
-        meta: student.admissionNo
-      }))}
-      classes={classes.map((classGroup) => ({
-        id: classGroup.id,
-        name: classGroup.name,
-        meta: `${classGroup.course.name} · ${classGroup.teacher?.name ?? "Unassigned"}`
-      }))}
-    />
-  );
+  const studentOptions = students.map((student) => ({
+    id: student.id,
+    name: `${student.firstName} ${student.lastName}`,
+    meta: student.admissionNo
+  }));
+
+  const classOptions = classes.map((classGroup) => ({
+    id: classGroup.id,
+    name: classGroup.name,
+    meta: `${classGroup.course.name} - ${classGroup.teacher?.name ?? "Unassigned"}`,
+    monthlyFee: Number(classGroup.monthlyFee ?? classGroup.course.fee),
+    defaultFreePeriodType: classGroup.defaultFreePeriodType,
+    defaultFreeDays: classGroup.defaultFreeDays
+  }));
+
+  return <EnrollmentManager enrollments={rows} students={studentOptions} classes={classOptions} />;
 }

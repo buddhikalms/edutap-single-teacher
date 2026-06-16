@@ -1,5 +1,5 @@
 import { apiRequest } from "@/api/client";
-import type { BootstrapResponse, ClassRosterResponse, ScanResult, StudentProfileResponse } from "@/types/api";
+import type { AssignNfcResponse, BootstrapResponse, ClassRosterResponse, ScanResult, StudentProfileResponse } from "@/types/api";
 
 export function getBootstrap() {
   return apiRequest<BootstrapResponse>("/api/mobile/bootstrap");
@@ -42,4 +42,11 @@ export function saveManualAttendance(sessionId: string, records: Array<{ student
 
 export function getStudentProfile(studentId: string) {
   return apiRequest<StudentProfileResponse>(`/api/mobile/students/${studentId}`);
+}
+
+export function assignStudentNfc(studentId: string, nfcUid: string, writeMode: "UID_ONLY" | "NDEF_WRITTEN" | "NDEF_UNSUPPORTED") {
+  return apiRequest<AssignNfcResponse>(`/api/mobile/students/${studentId}/nfc`, {
+    method: "POST",
+    body: { nfcUid, writeMode }
+  });
 }

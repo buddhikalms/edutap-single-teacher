@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from "react-native";
-import NfcManager, { NfcTech } from "react-native-nfc-manager";
+import NfcManager from "react-native-nfc-manager";
 import { markNfcAttendance } from "@/api/mobile";
 import { PremiumButton } from "@/components/PremiumButton";
 import { PremiumCard } from "@/components/PremiumCard";
 import { ResultCard } from "@/components/ResultCard";
 import { ScreenShell } from "@/components/ScreenShell";
 import { StatusPill } from "@/components/StatusPill";
+import { ensureNfcReady, readNfcUid } from "@/lib/nfc";
 import { colors } from "@/theme/colors";
 import type { RootStackParamList } from "@/navigation/types";
 import type { ScanResult } from "@/types/api";
@@ -32,13 +33,8 @@ export function NfcAttendanceScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     mounted.current = true;
-    NfcManager.isSupported()
-      .then(async (isSupported) => {
-        setSupported(isSupported);
-        if (isSupported) {
-          await NfcManager.start();
-        }
-      })
+    ensureNfcReady()
+      .then(() => setSupported(true))
       .catch(() => setSupported(false));
 
     return () => {
@@ -103,16 +99,8 @@ export function NfcAttendanceScreen({ navigation, route }: Props) {
       setListening(true);
     }
     try {
-      await NfcManager.requestTechnology(NfcTech.Ndef);
-      const tag = await NfcManager.getTag();
-      const uid = tag?.id;
-      if (!uid) {
-        if (mounted.current) {
-          setResult({ ok: false, message: "NFC card was read, but no UID was found." });
-        }
-        return;
-      }
-      await handleUid(uid);
+      const card = await readNfcUid("Hold the student NFC card near this device.");
+      await handleUid(card.uid);
     } catch (scanError) {
       if (mounted.current) {
         setResult({ ok: false, message: scanError instanceof Error ? scanError.message : "NFC scan was cancelled." });

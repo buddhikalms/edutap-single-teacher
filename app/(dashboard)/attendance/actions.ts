@@ -18,19 +18,21 @@ function sessionDate(value: string) {
 async function assertClass(instituteId: string, classGroupId: string) {
   const classGroup = await prisma.classGroup.findFirst({
     where: { id: classGroupId, instituteId },
-    select: { id: true }
+    select: { id: true, branchId: true, classType: true }
   });
 
   if (!classGroup) {
     throw new Error("Invalid class.");
   }
+
+  return classGroup;
 }
 
 export async function startAttendanceSession(input: AttendanceSessionInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, userId } = await getTenantContext();
     const parsed = attendanceSessionSchema.parse(input);
-    await assertClass(instituteId, parsed.classGroupId);
+    const classGroup = await assertClass(instituteId, parsed.classGroupId);
 
     const date = sessionDate(parsed.sessionDate);
     const existing = await prisma.attendanceSession.findUnique({
@@ -53,6 +55,9 @@ export async function startAttendanceSession(input: AttendanceSessionInput): Pro
           status: "ACTIVE",
           startsAt: new Date(),
           endsAt: null,
+          branchId: classGroup.branchId,
+          sessionType: parsed.sessionType ?? classGroup.classType,
+          startedById: userId,
           notes: parsed.notes ?? existing.notes
         }
       });
@@ -60,7 +65,10 @@ export async function startAttendanceSession(input: AttendanceSessionInput): Pro
       await prisma.attendanceSession.create({
         data: {
           classGroupId: parsed.classGroupId,
+          branchId: classGroup.branchId,
           sessionDate: date,
+          sessionType: parsed.sessionType ?? classGroup.classType,
+          startedById: userId,
           startsAt: new Date(),
           status: "ACTIVE",
           notes: parsed.notes ?? null

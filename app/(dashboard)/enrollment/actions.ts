@@ -5,22 +5,55 @@ import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
 import { bulkEnrollmentSchema, enrollmentSchema, type BulkEnrollmentInput, type EnrollmentInput } from "@/lib/validations";
 
+function toDate(value?: string) {
+  return value ? new Date(`${value}T00:00:00.000`) : null;
+}
+
 async function assertStudentAndClass(instituteId: string, studentIds: string[], classGroupId: string) {
   const [students, classGroup] = await Promise.all([
     prisma.student.count({ where: { id: { in: studentIds }, instituteId } }),
-    prisma.classGroup.findFirst({ where: { id: classGroupId, instituteId }, select: { id: true } })
+    prisma.classGroup.findFirst({
+      where: { id: classGroupId, instituteId },
+      select: {
+        id: true,
+        monthlyFee: true,
+        defaultFreePeriodType: true,
+        defaultFreeDays: true,
+        defaultPaymentDueDay: true
+      }
+    })
   ]);
 
   if (students !== studentIds.length || !classGroup) {
     throw new Error("Invalid enrollment relationship.");
   }
+
+  return classGroup;
+}
+
+function enrollmentPaymentData(
+  input: EnrollmentInput | BulkEnrollmentInput,
+  classGroup: Awaited<ReturnType<typeof assertStudentAndClass>>
+) {
+  const status = input.active ? input.status : "INACTIVE";
+
+  return {
+    active: status === "ACTIVE",
+    status,
+    paymentStartDate: toDate(input.paymentStartDate) ?? new Date(),
+    freePeriodType: input.freePeriodType ?? classGroup.defaultFreePeriodType,
+    freeDays: input.freeDays ?? classGroup.defaultFreeDays,
+    monthlyFeeOverride: input.monthlyFeeOverride ?? classGroup.monthlyFee ?? null,
+    discount: input.discount ?? 0
+  };
 }
 
 export async function assignEnrollment(input: EnrollmentInput): Promise<ActionState> {
   try {
     const { instituteId } = await getTenantContext();
     const parsed = enrollmentSchema.parse(input);
-    await assertStudentAndClass(instituteId, [parsed.studentId], parsed.classGroupId);
+    const classGroup = await assertStudentAndClass(instituteId, [parsed.studentId], parsed.classGroupId);
+    const paymentData = enrollmentPaymentData(parsed, classGroup);
 
     await prisma.enrollment.upsert({
       where: {
@@ -32,10 +65,10 @@ export async function assignEnrollment(input: EnrollmentInput): Promise<ActionSt
       create: {
         studentId: parsed.studentId,
         classGroupId: parsed.classGroupId,
-        active: parsed.active
+        ...paymentData
       },
       update: {
-        active: parsed.active
+        ...paymentData
       }
     });
 
@@ -52,7 +85,8 @@ export async function bulkAssignEnrollment(input: BulkEnrollmentInput): Promise<
   try {
     const { instituteId } = await getTenantContext();
     const parsed = bulkEnrollmentSchema.parse(input);
-    await assertStudentAndClass(instituteId, parsed.studentIds, parsed.classGroupId);
+    const classGroup = await assertStudentAndClass(instituteId, parsed.studentIds, parsed.classGroupId);
+    const paymentData = enrollmentPaymentData(parsed, classGroup);
 
     await prisma.$transaction(
       parsed.studentIds.map((studentId) =>
@@ -66,10 +100,10 @@ export async function bulkAssignEnrollment(input: BulkEnrollmentInput): Promise<
           create: {
             studentId,
             classGroupId: parsed.classGroupId,
-            active: parsed.active
+            ...paymentData
           },
           update: {
-            active: parsed.active
+            ...paymentData
           }
         })
       )
@@ -96,7 +130,7 @@ export async function setEnrollmentStatus(id: string, active: boolean): Promise<
       return { ok: false, message: "Enrollment was not found." };
     }
 
-    await prisma.enrollment.update({ where: { id }, data: { active } });
+    await prisma.enrollment.update({ where: { id }, data: { active, status: active ? "ACTIVE" : "INACTIVE" } });
     revalidatePath("/enrollment");
     revalidatePath("/students");
     revalidatePath("/classes");

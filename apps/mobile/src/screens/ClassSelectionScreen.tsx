@@ -108,6 +108,12 @@ export function ClassSelectionScreen({ navigation }: Props) {
               <Text style={styles.meta}>{selectedClass.schedule}</Text>
               <View style={styles.actions}>
                 <PremiumButton title={activeSessionId ? "Continue NFC" : "Start NFC"} icon="card" onPress={startSession} loading={starting} />
+                <PremiumButton
+                  title="Setup NFC Cards"
+                  icon="create"
+                  variant="dark"
+                  onPress={() => selectedClass && navigation.navigate("NfcCardSetup", { classGroupId: selectedClass.id, className: selectedClass.name })}
+                />
                 <PremiumButton title="QR Scanner" icon="qr-code" variant="dark" onPress={() => screenParams && navigation.navigate("QrAttendance", screenParams)} disabled={!activeSessionId} />
                 <PremiumButton title="Manual" icon="people" variant="ghost" onPress={() => screenParams && navigation.navigate("ManualAttendance", screenParams)} disabled={!activeSessionId} />
               </View>

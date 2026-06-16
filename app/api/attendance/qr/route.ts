@@ -22,7 +22,8 @@ export async function POST(request: Request) {
       classGroupId: parsed.data.classGroupId,
       token: parsed.data.token,
       status: parsed.data.status as AttendanceStatus,
-      source: AttendanceSource.QR
+      source: AttendanceSource.QR,
+      searchMethod: "QR"
     });
 
     return NextResponse.json(result, { status: result.statusCode });

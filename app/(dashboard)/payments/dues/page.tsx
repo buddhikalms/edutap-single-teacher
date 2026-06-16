@@ -1,5 +1,6 @@
 import { DuePaymentsManager, type DueRow } from "@/components/payments/due-payments-manager";
 import { prisma } from "@/lib/prisma";
+import { firstPayableDate, paymentDueDate, shouldGenerateDueForMonth } from "@/lib/payments";
 import { getTenantContext } from "@/lib/session";
 
 function currentMonth() {
@@ -18,7 +19,7 @@ export default async function DuePaymentsPage() {
       include: {
         course: true,
         enrollments: {
-          where: { active: true },
+          where: { active: true, status: "ACTIVE" },
           include: { student: true }
         }
       },
@@ -38,9 +39,21 @@ export default async function DuePaymentsPage() {
       const key = `${enrollment.studentId}:${classGroup.id}:${month}`;
       const existingPayment = paymentMap.get(key);
       const payment = existingPayment?.status === "CANCELLED" ? undefined : existingPayment;
-      const fee = Number(classGroup.course.fee);
-      const balance = payment ? Number(payment.balance) : fee;
-      const dueDate = new Date(`${month}-10T00:00:00.000`);
+      const firstPayableAt = firstPayableDate({
+        paymentStartDate: enrollment.paymentStartDate,
+        enrolledAt: enrollment.enrolledAt,
+        freePeriodType: enrollment.freePeriodType,
+        freeDays: enrollment.freeDays
+      });
+
+      if (!payment && !shouldGenerateDueForMonth(month, firstPayableAt)) {
+        continue;
+      }
+
+      const fee = Number(enrollment.monthlyFeeOverride ?? classGroup.monthlyFee ?? classGroup.course.fee);
+      const discount = payment ? Number(payment.discount) : Number(enrollment.discount);
+      const balance = payment ? Number(payment.balance) : Math.max(0, fee - discount);
+      const dueDate = paymentDueDate(month, classGroup.defaultPaymentDueDay);
       const status = payment
         ? (payment.status as "PENDING" | "PAID" | "PARTIAL" | "OVERDUE")
         : dueDate < now
@@ -59,7 +72,7 @@ export default async function DuePaymentsPage() {
         month,
         fee,
         paidAmount: payment ? Number(payment.paidAmount) : 0,
-        discount: payment ? Number(payment.discount) : 0,
+        discount,
         balance,
         status,
         dueDate: dueDate.toLocaleDateString(),

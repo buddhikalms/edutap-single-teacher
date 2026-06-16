@@ -125,3 +125,9 @@ export type StudentProfileResponse = {
     payments: Array<{ id: string; invoiceNo: string; month?: string | null; type: string; amount: number; paidAmount: number; balance: number; status: string; dueDate: string; paidAt?: string | null }>;
   };
 };
+
+export type AssignNfcResponse = {
+  ok: true;
+  message: string;
+  student: { id: string; admissionNo: string; name: string; nfcUid: string };
+};

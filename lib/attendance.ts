@@ -32,6 +32,8 @@ type MarkInput = {
   status?: AttendanceStatus;
   token?: string;
   nfcUid?: string;
+  studentId?: string;
+  searchMethod?: "NFC" | "QR" | "MANUAL_ID" | "MANUAL_SEARCH";
 };
 
 function todayRange() {
@@ -125,14 +127,26 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
     return { ok: false, statusCode: 409, message: "No active attendance session for this class today." };
   }
 
-  const student = input.token
+  const student = input.studentId
+    ? await prisma.student.findFirst({
+        where: { id: input.studentId, instituteId: classGroup.instituteId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          admissionNo: true,
+          status: true
+        }
+      })
+    : input.token
     ? await prisma.student.findFirst({
         where: { attendanceToken: input.token, instituteId: classGroup.instituteId },
         select: {
           id: true,
           firstName: true,
           lastName: true,
-          admissionNo: true
+          admissionNo: true,
+          status: true
         }
       })
     : await findStudentByNfcUid(classGroup.instituteId, input.nfcUid);
@@ -145,17 +159,38 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
       source: input.source,
       status,
       success: false,
-      message: input.token ? "QR token was not recognized." : "NFC UID was not recognized.",
+      message: input.studentId ? "Student was not recognized." : input.token ? "QR token was not recognized." : "NFC UID was not recognized.",
       metadata: { token: input.token, nfcUid: input.nfcUid, normalizedNfcUid }
     });
 
     return {
       ok: false,
       statusCode: 404,
-      message: input.token
+      message: input.studentId
+        ? "Student was not recognized."
+        : input.token
         ? "QR token was not recognized."
         : `NFC UID was not recognized${normalizedNfcUid ? `: ${normalizedNfcUid}` : "."}`,
       credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid } : undefined
+    };
+  }
+
+  if (student.status !== "ACTIVE") {
+    await audit({
+      instituteId: classGroup.instituteId,
+      sessionId: session.id,
+      studentId: student.id,
+      source: input.source,
+      status,
+      success: false,
+      message: "Student is not active."
+    });
+
+    return {
+      ok: false,
+      statusCode: 403,
+      message: "Student is not active.",
+      student: { id: student.id, name: `${student.firstName} ${student.lastName}`, admissionNo: student.admissionNo }
     };
   }
 
@@ -166,10 +201,10 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
         classGroupId: input.classGroupId
       }
     },
-    select: { id: true, active: true }
+    select: { id: true, active: true, status: true }
   });
 
-  if (!enrollment?.active) {
+  if (!enrollment?.active || enrollment.status !== "ACTIVE") {
     await audit({
       instituteId: classGroup.instituteId,
       sessionId: session.id,
@@ -235,7 +270,8 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
       sessionId: session.id,
       studentId: student.id,
       status,
-      source: input.source
+      source: input.source,
+      searchMethod: input.searchMethod ?? (input.source === AttendanceSource.NFC ? "NFC" : input.source === AttendanceSource.QR ? "QR" : "MANUAL_SEARCH")
     }
   });
 
@@ -276,7 +312,8 @@ async function findStudentByNfcUid(instituteId: string, nfcUid: string | undefin
       id: true,
       firstName: true,
       lastName: true,
-      admissionNo: true
+      admissionNo: true,
+      status: true
     }
   });
 
@@ -292,6 +329,7 @@ async function findStudentByNfcUid(instituteId: string, nfcUid: string | undefin
       firstName: true,
       lastName: true,
       admissionNo: true,
+      status: true,
       nfcUid: true
     }
   });
@@ -306,6 +344,7 @@ async function findStudentByNfcUid(instituteId: string, nfcUid: string | undefin
     id: matched.id,
     firstName: matched.firstName,
     lastName: matched.lastName,
-    admissionNo: matched.admissionNo
+    admissionNo: matched.admissionNo,
+    status: matched.status
   };
 }

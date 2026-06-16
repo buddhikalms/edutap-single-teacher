@@ -17,6 +17,7 @@ async function main() {
   await prisma.enrollment.deleteMany();
   await prisma.classGroup.deleteMany();
   await prisma.course.deleteMany();
+  await prisma.grade.deleteMany();
   await prisma.teacher.deleteMany();
   await prisma.parent.deleteMany();
   await prisma.student.deleteMany();
@@ -140,11 +141,42 @@ async function main() {
     data: {
       name: "Central Campus",
       code: "CC",
+      location: "New York",
       address: "1200 Meridian Avenue",
       phone: "+1 555 010 2027",
       instituteId: institute.id
     }
   });
+
+  const defaultGradeNames = [
+    "Pre School",
+    "Grade 1",
+    "Grade 2",
+    "Grade 3",
+    "Grade 4",
+    "Grade 5",
+    "Grade 6",
+    "Grade 7",
+    "Grade 8",
+    "Grade 9",
+    "Grade 10",
+    "Grade 11"
+  ];
+
+  const grades = await Promise.all(
+    defaultGradeNames.map((name, index) =>
+      prisma.grade.create({
+        data: {
+          instituteId: institute.id,
+          name,
+          order: index
+        }
+      })
+    )
+  );
+
+  const grade10 = grades.find((grade) => grade.name === "Grade 10") ?? grades[10];
+  const grade11 = grades.find((grade) => grade.name === "Grade 11") ?? grades[11];
 
   const admin = await prisma.user.create({
     data: {
@@ -219,6 +251,7 @@ async function main() {
         code: "MATH-A",
         subject: "Mathematics",
         grade: "Grade 10",
+        gradeId: grade10.id,
         description: "Premium exam-focused mathematics coaching.",
         fee: "185.00",
         instituteId: institute.id
@@ -230,6 +263,7 @@ async function main() {
         code: "PHY-M",
         subject: "Physics",
         grade: "Grade 11",
+        gradeId: grade11.id,
         description: "Conceptual physics with weekly assessments.",
         fee: "210.00",
         instituteId: institute.id
@@ -240,7 +274,8 @@ async function main() {
         name: "Academic English",
         code: "ENG-A",
         subject: "English",
-        grade: "Scholars",
+        grade: "Grade 10",
+        gradeId: grade10.id,
         description: "Writing, comprehension, and public speaking.",
         fee: "160.00",
         instituteId: institute.id
@@ -256,8 +291,10 @@ async function main() {
         schedule: "Mon, Wed 16:00-18:00",
         room: "Studio 2",
         capacity: 32,
+        monthlyFee: "185.00",
         instituteId: institute.id,
         branchId: branch.id,
+        gradeId: grade10.id,
         courseId: courses[0].id,
         teacherId: teachers[0].id
       }
@@ -269,10 +306,16 @@ async function main() {
         schedule: "Tue, Thu 17:00-19:00",
         room: "Lab 1",
         capacity: 28,
+        monthlyFee: "210.00",
         instituteId: institute.id,
         branchId: branch.id,
+        gradeId: grade11.id,
         courseId: courses[1].id,
-        teacherId: teachers[1].id
+        teacherId: teachers[1].id,
+        classType: "HYBRID",
+        defaultFreePeriodType: "FIRST_WEEK",
+        defaultFreeDays: 7,
+        defaultPaymentDueDay: 10
       }
     }),
     prisma.classGroup.create({
@@ -282,10 +325,13 @@ async function main() {
         schedule: "Sat 09:00-12:00",
         room: "Studio 4",
         capacity: 24,
+        monthlyFee: "160.00",
         instituteId: institute.id,
         branchId: branch.id,
+        gradeId: grade10.id,
         courseId: courses[2].id,
-        teacherId: teachers[2].id
+        teacherId: teachers[2].id,
+        classType: "ONLINE"
       }
     })
   ]);
@@ -379,11 +425,18 @@ async function main() {
     })
   );
 
+  const enrollmentStartDate = new Date();
+  enrollmentStartDate.setHours(0, 0, 0, 0);
+
   for (const [index, student] of students.entries()) {
     await prisma.enrollment.create({
       data: {
         studentId: student.id,
-        classGroupId: classGroups[index % classGroups.length].id
+        classGroupId: classGroups[index % classGroups.length].id,
+        paymentStartDate: enrollmentStartDate,
+        freePeriodType: classGroups[index % classGroups.length].defaultFreePeriodType,
+        freeDays: classGroups[index % classGroups.length].defaultFreeDays,
+        discount: "0.00"
       }
     });
   }

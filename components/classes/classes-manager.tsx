@@ -31,6 +31,7 @@ export type CourseRow = {
   code: string;
   subject: string | null;
   grade: string | null;
+  gradeId: string | null;
   description: string | null;
   fee: number;
   classes: number;
@@ -45,12 +46,18 @@ export type ClassRow = {
   capacity: number;
   branchId: string;
   branch: string;
+  gradeId: string | null;
+  grade: string | null;
   courseId: string;
   course: string;
   subject: string | null;
-  grade: string | null;
   teacherId: string | null;
   teacher: string;
+  classType: "INHOUSE" | "ONLINE" | "HYBRID";
+  fee: number;
+  defaultFreePeriodType: "NONE" | "FIRST_WEEK" | "SECOND_WEEK" | "FIRST_MONTH" | "CUSTOM_DAYS";
+  defaultFreeDays: number;
+  defaultPaymentDueDay: number;
   enrolled: number;
 };
 
@@ -61,6 +68,7 @@ const emptyCourse: CourseInput = {
   code: "",
   subject: undefined,
   grade: undefined,
+  gradeId: "",
   description: undefined,
   fee: 0
 };
@@ -72,20 +80,30 @@ const emptyClass: ClassGroupInput = {
   room: undefined,
   capacity: 30,
   branchId: "",
+  gradeId: "",
   courseId: "",
-  teacherId: undefined
+  teacherId: undefined,
+  classType: "INHOUSE",
+  fee: 0,
+  defaultFreePeriodType: "NONE",
+  defaultFreeDays: 0,
+  defaultPaymentDueDay: 10
 };
 
 export function ClassesManager({
   courses,
   classes,
   branches,
-  teachers
+  grades,
+  teachers,
+  isTeacher
 }: {
   courses: CourseRow[];
   classes: ClassRow[];
   branches: BasicOption[];
+  grades: BasicOption[];
   teachers: BasicOption[];
+  isTeacher: boolean;
 }) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [coursePanel, setCoursePanel] = useState<CourseRow | "new" | null>(null);
@@ -113,7 +131,19 @@ export function ClassesManager({
         cell: ({ row }) => (
           <div>
             <p className="font-medium">{row.original.course}</p>
-            <p className="text-xs text-muted-foreground">{row.original.subject ?? "Subject not set"} · {row.original.grade ?? "Grade not set"}</p>
+            <p className="text-xs text-muted-foreground">
+              {row.original.branch} - {row.original.grade ?? "Grade not set"} - {row.original.subject ?? "Subject not set"}
+            </p>
+          </div>
+        )
+      },
+      {
+        accessorKey: "classType",
+        header: "Type / fee",
+        cell: ({ row }) => (
+          <div>
+            <Badge variant="outline">{row.original.classType.toLowerCase()}</Badge>
+            <p className="mt-1 text-xs font-semibold">{formatCurrency(row.original.fee)}</p>
           </div>
         )
       },
@@ -252,6 +282,7 @@ export function ClassesManager({
       {coursePanel ? (
         <CoursePanel
           course={coursePanel === "new" ? null : coursePanel}
+          grades={grades}
           onClose={() => setCoursePanel(null)}
           onSubmit={(values) => (coursePanel === "new" ? createCourse(values) : updateCourse(coursePanel.id, values))}
         />
@@ -262,7 +293,9 @@ export function ClassesManager({
           classGroup={classPanel === "new" ? null : classPanel}
           branches={branches}
           courses={courses.map((course) => ({ id: course.id, name: course.name }))}
+          grades={grades}
           teachers={teachers}
+          isTeacher={isTeacher}
           onClose={() => setClassPanel(null)}
           onSubmit={(values) => (classPanel === "new" ? createClassGroup(values) : updateClassGroup(classPanel.id, values))}
         />
@@ -291,10 +324,12 @@ export function ClassesManager({
 
 function CoursePanel({
   course,
+  grades,
   onClose,
   onSubmit
 }: {
   course: CourseRow | null;
+  grades: BasicOption[];
   onClose: () => void;
   onSubmit: (values: CourseInput) => Promise<{ ok: boolean; message: string }>;
 }) {
@@ -307,10 +342,11 @@ function CoursePanel({
           code: course.code,
           subject: course.subject ?? undefined,
           grade: course.grade ?? undefined,
+          gradeId: course.gradeId ?? grades[0]?.id ?? "",
           description: course.description ?? undefined,
           fee: course.fee
         }
-      : emptyCourse
+      : { ...emptyCourse, gradeId: grades[0]?.id ?? "" }
   });
 
   function submit(values: CourseInput) {
@@ -342,8 +378,14 @@ function CoursePanel({
               <FormField label="Subject" error={form.formState.errors.subject?.message}>
                 <Input {...form.register("subject")} />
               </FormField>
-              <FormField label="Grade" error={form.formState.errors.grade?.message}>
-                <Input {...form.register("grade")} />
+              <FormField label="Grade" error={form.formState.errors.gradeId?.message}>
+                <Select {...form.register("gradeId")}>
+                  {grades.map((grade) => (
+                    <option key={grade.id} value={grade.id}>
+                      {grade.name}
+                    </option>
+                  ))}
+                </Select>
               </FormField>
             </FieldRow>
             <FormField label="Fee" error={form.formState.errors.fee?.message}>
@@ -364,14 +406,18 @@ function ClassPanel({
   classGroup,
   branches,
   courses,
+  grades,
   teachers,
+  isTeacher,
   onClose,
   onSubmit
 }: {
   classGroup: ClassRow | null;
   branches: BasicOption[];
   courses: BasicOption[];
+  grades: BasicOption[];
   teachers: BasicOption[];
+  isTeacher: boolean;
   onClose: () => void;
   onSubmit: (values: ClassGroupInput) => Promise<{ ok: boolean; message: string }>;
 }) {
@@ -386,10 +432,16 @@ function ClassPanel({
           room: classGroup.room ?? undefined,
           capacity: classGroup.capacity,
           branchId: classGroup.branchId,
+          gradeId: classGroup.gradeId ?? grades[0]?.id ?? "",
           courseId: classGroup.courseId,
-          teacherId: classGroup.teacherId ?? undefined
+          teacherId: classGroup.teacherId ?? undefined,
+          classType: classGroup.classType,
+          fee: classGroup.fee,
+          defaultFreePeriodType: classGroup.defaultFreePeriodType,
+          defaultFreeDays: classGroup.defaultFreeDays,
+          defaultPaymentDueDay: classGroup.defaultPaymentDueDay
         }
-      : { ...emptyClass, branchId: branches[0]?.id ?? "", courseId: courses[0]?.id ?? "" }
+      : { ...emptyClass, branchId: branches[0]?.id ?? "", gradeId: grades[0]?.id ?? "", courseId: courses[0]?.id ?? "" }
   });
 
   function submit(values: ClassGroupInput) {
@@ -407,7 +459,7 @@ function ClassPanel({
   return (
     <SidePanel title={classGroup ? "Edit class" : "Add class"} onClose={onClose}>
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-        <FormShell title="Class details" description="Assign course, branch, teacher, timetable, room, and capacity.">
+        <FormShell title="Class details" description="Build the institute -> branch -> grade -> course -> class hierarchy.">
           <div className="space-y-4">
             <FieldRow>
               <FormField label="Class name" error={form.formState.errors.name?.message}>
@@ -418,16 +470,7 @@ function ClassPanel({
               </FormField>
             </FieldRow>
             <FieldRow>
-              <FormField label="Course" error={form.formState.errors.courseId?.message}>
-                <Select {...form.register("courseId")}>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="Branch" error={form.formState.errors.branchId?.message}>
+              <FormField label="Branch / location" error={form.formState.errors.branchId?.message}>
                 <Select {...form.register("branchId")}>
                   {branches.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -436,28 +479,87 @@ function ClassPanel({
                   ))}
                 </Select>
               </FormField>
-            </FieldRow>
-            <FieldRow>
-              <FormField label="Teacher" error={form.formState.errors.teacherId?.message}>
-                <Select {...form.register("teacherId")}>
-                  <option value="">Unassigned</option>
-                  {teachers.map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.name}
+              <FormField label="Grade" error={form.formState.errors.gradeId?.message}>
+                <Select {...form.register("gradeId")}>
+                  {grades.map((grade) => (
+                    <option key={grade.id} value={grade.id}>
+                      {grade.name}
                     </option>
                   ))}
                 </Select>
               </FormField>
+            </FieldRow>
+            <FieldRow>
+              <FormField label="Subject / course" error={form.formState.errors.courseId?.message}>
+                <Select {...form.register("courseId")}>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Class type" error={form.formState.errors.classType?.message}>
+                <Select {...form.register("classType")}>
+                  <option value="INHOUSE">Inhouse</option>
+                  <option value="ONLINE">Online</option>
+                  <option value="HYBRID">Hybrid</option>
+                </Select>
+              </FormField>
+            </FieldRow>
+            {!isTeacher ? (
+              <FieldRow>
+                <FormField label="Teacher" error={form.formState.errors.teacherId?.message}>
+                  <Select {...form.register("teacherId")}>
+                    <option value="">Unassigned</option>
+                    {teachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Capacity" error={form.formState.errors.capacity?.message}>
+                  <Input type="number" {...form.register("capacity")} />
+                </FormField>
+              </FieldRow>
+            ) : (
               <FormField label="Capacity" error={form.formState.errors.capacity?.message}>
                 <Input type="number" {...form.register("capacity")} />
               </FormField>
-            </FieldRow>
+            )}
             <FieldRow>
               <FormField label="Room" error={form.formState.errors.room?.message}>
                 <Input {...form.register("room")} />
               </FormField>
               <FormField label="Timetable" error={form.formState.errors.schedule?.message}>
-                <Input placeholder="Mon, Wed 16:00-18:00" {...form.register("schedule")} />
+                <Input placeholder="Sunday 08:00-10:00" {...form.register("schedule")} />
+              </FormField>
+            </FieldRow>
+          </div>
+        </FormShell>
+        <FormShell title="Payment rules" description="Defaults copied into each new enrollment and used by due calculation.">
+          <div className="space-y-4">
+            <FieldRow>
+              <FormField label="Monthly fee" error={form.formState.errors.fee?.message}>
+                <Input type="number" step="0.01" {...form.register("fee")} />
+              </FormField>
+              <FormField label="Due day of month" error={form.formState.errors.defaultPaymentDueDay?.message}>
+                <Input type="number" min={1} max={28} {...form.register("defaultPaymentDueDay")} />
+              </FormField>
+            </FieldRow>
+            <FieldRow>
+              <FormField label="Free period" error={form.formState.errors.defaultFreePeriodType?.message}>
+                <Select {...form.register("defaultFreePeriodType")}>
+                  <option value="NONE">No free period</option>
+                  <option value="FIRST_WEEK">First week free</option>
+                  <option value="SECOND_WEEK">Second week free</option>
+                  <option value="FIRST_MONTH">First month free</option>
+                  <option value="CUSTOM_DAYS">Custom free days</option>
+                </Select>
+              </FormField>
+              <FormField label="Custom free days" error={form.formState.errors.defaultFreeDays?.message}>
+                <Input type="number" min={0} {...form.register("defaultFreeDays")} />
               </FormField>
             </FieldRow>
           </div>

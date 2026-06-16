@@ -7,6 +7,7 @@ import type { RootStackParamList } from "@/navigation/types";
 import { LoginScreen } from "@/screens/LoginScreen";
 import { DashboardScreen } from "@/screens/DashboardScreen";
 import { ClassSelectionScreen } from "@/screens/ClassSelectionScreen";
+import { NfcCardSetupScreen } from "@/screens/NfcCardSetupScreen";
 import { NfcAttendanceScreen } from "@/screens/NfcAttendanceScreen";
 import { QrAttendanceScreen } from "@/screens/QrAttendanceScreen";
 import { ManualAttendanceScreen } from "@/screens/ManualAttendanceScreen";
@@ -40,6 +41,7 @@ export function AppNavigator() {
           <>
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="ClassSelection" component={ClassSelectionScreen} />
+            <Stack.Screen name="NfcCardSetup" component={NfcCardSetupScreen} />
             <Stack.Screen name="NfcAttendance" component={NfcAttendanceScreen} />
             <Stack.Screen name="QrAttendance" component={QrAttendanceScreen} />
             <Stack.Screen name="ManualAttendance" component={ManualAttendanceScreen} />

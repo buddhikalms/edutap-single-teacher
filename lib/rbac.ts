@@ -2,6 +2,7 @@ export const roleAccess = {
   dashboard: ["SUPER_ADMIN", "INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   students: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   teachers: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "STAFF"],
+  grades: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   classes: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   enrollment: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "STAFF"],
   attendance: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],

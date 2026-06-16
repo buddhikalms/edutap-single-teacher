@@ -74,6 +74,7 @@ export default async function AttendancePage() {
       where: { instituteId },
       include: {
         course: true,
+        branch: true,
         teacher: true,
         enrollments: {
           where: { active: true },
@@ -132,6 +133,9 @@ export default async function AttendancePage() {
   const classData: AttendanceClass[] = classes.map((classGroup) => ({
     id: classGroup.id,
     name: classGroup.name,
+    branchId: classGroup.branchId,
+    branch: classGroup.branch.name,
+    classType: classGroup.classType,
     course: classGroup.course.name,
     teacher: classGroup.teacher?.name ?? "Unassigned",
     activeSession: classGroup.attendanceSessions[0] ? sessionView(classGroup.attendanceSessions[0]) : null,

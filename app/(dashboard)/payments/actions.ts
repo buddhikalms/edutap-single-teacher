@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { PaymentMethod, PaymentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createReceiptNotification } from "@/lib/notifications";
-import { nextInvoiceNo, nextReceiptNo, paymentStatus } from "@/lib/payments";
+import { nextInvoiceNo, nextReceiptNo, paymentDueDate, paymentStatus } from "@/lib/payments";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
 import { duePaymentSchema, paymentSchema, type DuePaymentInput, type PaymentInput } from "@/lib/validations";
 
@@ -129,8 +129,17 @@ export async function markDuePayment(input: DuePaymentInput): Promise<ActionStat
       where: { id: parsed.classGroupId, instituteId },
       include: { course: true }
     });
-    const dueDate = new Date(`${parsed.month}-10T00:00:00.000`);
-    const amount = Number(classGroup.course.fee);
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        studentId_classGroupId: {
+          studentId: parsed.studentId,
+          classGroupId: parsed.classGroupId
+        }
+      },
+      select: { monthlyFeeOverride: true, discount: true }
+    });
+    const dueDate = paymentDueDate(parsed.month, classGroup.defaultPaymentDueDay);
+    const amount = Number(enrollment?.monthlyFeeOverride ?? classGroup.monthlyFee ?? classGroup.course.fee);
     const computed = paymentStatus(amount, parsed.discount, parsed.paidAmount, dueDate);
 
     const existing = await prisma.payment.findFirst({

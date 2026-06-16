@@ -57,11 +57,27 @@ export const teacherSchema = z.object({
   classGroupIds: z.array(z.string()).optional().default([])
 });
 
+export const gradeSchema = z.object({
+  name: z.string().trim().min(1, "Grade name is required."),
+  order: z.coerce.number().int().min(0, "Order must be zero or more."),
+  isActive: z.boolean().default(true)
+});
+
+export const branchSchema = z.object({
+  name: z.string().trim().min(1, "Branch name is required."),
+  code: z.string().trim().min(1, "Branch code is required."),
+  location: optionalText,
+  address: optionalText,
+  phone: optionalText,
+  isActive: z.boolean().default(true)
+});
+
 export const courseSchema = z.object({
   name: z.string().trim().min(1, "Course name is required."),
   code: z.string().trim().min(1, "Course code is required."),
   subject: optionalText,
   grade: optionalText,
+  gradeId: z.string().min(1, "Grade is required."),
   description: optionalText,
   fee: z.coerce.number().min(0, "Fee must be zero or more.")
 });
@@ -73,25 +89,44 @@ export const classGroupSchema = z.object({
   room: optionalText,
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1."),
   branchId: z.string().min(1, "Branch is required."),
+  gradeId: z.string().min(1, "Grade is required."),
   courseId: z.string().min(1, "Course is required."),
-  teacherId: optionalText
+  teacherId: optionalText,
+  classType: z.enum(["INHOUSE", "ONLINE", "HYBRID"]),
+  fee: z.coerce.number().min(0, "Fee must be zero or more."),
+  defaultFreePeriodType: z.enum(["NONE", "FIRST_WEEK", "SECOND_WEEK", "FIRST_MONTH", "CUSTOM_DAYS"]),
+  defaultFreeDays: z.coerce.number().int().min(0, "Free days must be zero or more.").default(0),
+  defaultPaymentDueDay: z.coerce.number().int().min(1, "Due day must be between 1 and 28.").max(28, "Due day must be between 1 and 28.")
 });
 
 export const enrollmentSchema = z.object({
   studentId: z.string().min(1, "Student is required."),
   classGroupId: z.string().min(1, "Class is required."),
-  active: z.boolean().default(true)
+  active: z.boolean().default(true),
+  status: z.enum(["ACTIVE", "INACTIVE", "LOCKED", "DELETED"]).default("ACTIVE"),
+  paymentStartDate: optionalText,
+  freePeriodType: z.enum(["NONE", "FIRST_WEEK", "SECOND_WEEK", "FIRST_MONTH", "CUSTOM_DAYS"]).default("NONE"),
+  freeDays: z.coerce.number().int().min(0, "Free days must be zero or more.").default(0),
+  monthlyFeeOverride: z.coerce.number().min(0, "Monthly fee must be zero or more.").optional(),
+  discount: z.coerce.number().min(0, "Discount must be zero or more.").default(0)
 });
 
 export const bulkEnrollmentSchema = z.object({
   studentIds: z.array(z.string()).min(1, "Select at least one student."),
   classGroupId: z.string().min(1, "Class is required."),
-  active: z.boolean().default(true)
+  active: z.boolean().default(true),
+  status: z.enum(["ACTIVE", "INACTIVE", "LOCKED", "DELETED"]).default("ACTIVE"),
+  paymentStartDate: optionalText,
+  freePeriodType: z.enum(["NONE", "FIRST_WEEK", "SECOND_WEEK", "FIRST_MONTH", "CUSTOM_DAYS"]).default("NONE"),
+  freeDays: z.coerce.number().int().min(0, "Free days must be zero or more.").default(0),
+  monthlyFeeOverride: z.coerce.number().min(0, "Monthly fee must be zero or more.").optional(),
+  discount: z.coerce.number().min(0, "Discount must be zero or more.").default(0)
 });
 
 export const attendanceSessionSchema = z.object({
   classGroupId: z.string().min(1, "Class is required."),
   sessionDate: z.string().min(1, "Session date is required."),
+  sessionType: z.enum(["INHOUSE", "ONLINE", "HYBRID"]).default("INHOUSE"),
   notes: optionalText
 });
 
@@ -116,6 +151,24 @@ export const nfcAttendanceSchema = z.object({
   classGroupId: z.string().min(1, "Class is required."),
   nfcUid: z.string().trim().min(1, "NFC UID is required."),
   status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT")
+});
+
+export const assignStudentNfcSchema = z.object({
+  nfcUid: z.string().trim().min(1, "NFC UID is required."),
+  writeMode: z.enum(["UID_ONLY", "NDEF_WRITTEN", "NDEF_UNSUPPORTED"]).optional()
+});
+
+export const attendanceSearchSchema = z.object({
+  classGroupId: z.string().min(1, "Class is required."),
+  query: z.string().trim().min(1, "Search value is required."),
+  method: z.enum(["MANUAL_ID", "MANUAL_SEARCH"]).default("MANUAL_SEARCH")
+});
+
+export const manualIdAttendanceSchema = z.object({
+  classGroupId: z.string().min(1, "Class is required."),
+  studentId: z.string().min(1, "Student is required."),
+  status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT"),
+  method: z.enum(["MANUAL_ID", "MANUAL_SEARCH"]).default("MANUAL_SEARCH")
 });
 
 export const attendanceReportSchema = z.object({
@@ -289,6 +342,8 @@ export const liveClassRecordingSchema = z.object({
 
 export type StudentInput = z.infer<typeof studentSchema>;
 export type TeacherInput = z.infer<typeof teacherSchema>;
+export type GradeInput = z.infer<typeof gradeSchema>;
+export type BranchInput = z.infer<typeof branchSchema>;
 export type CourseInput = z.infer<typeof courseSchema>;
 export type ClassGroupInput = z.infer<typeof classGroupSchema>;
 export type EnrollmentInput = z.infer<typeof enrollmentSchema>;
@@ -297,6 +352,9 @@ export type AttendanceSessionInput = z.infer<typeof attendanceSessionSchema>;
 export type ManualAttendanceInput = z.infer<typeof manualAttendanceSchema>;
 export type QrAttendanceInput = z.infer<typeof qrAttendanceSchema>;
 export type NfcAttendanceInput = z.infer<typeof nfcAttendanceSchema>;
+export type AssignStudentNfcInput = z.infer<typeof assignStudentNfcSchema>;
+export type AttendanceSearchInput = z.infer<typeof attendanceSearchSchema>;
+export type ManualIdAttendanceInput = z.infer<typeof manualIdAttendanceSchema>;
 export type PaymentInput = z.infer<typeof paymentSchema>;
 export type DuePaymentInput = z.infer<typeof duePaymentSchema>;
 export type NoticeInput = z.infer<typeof noticeSchema>;

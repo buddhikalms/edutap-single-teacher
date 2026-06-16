@@ -12,7 +12,7 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
-import { Eye, Loader2, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Radio, Search, Trash2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createStudent, deleteStudent, updateStudent } from "@/app/(dashboard)/students/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
@@ -23,6 +23,22 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { studentSchema, type StudentInput } from "@/lib/validations";
 import { formatCurrency } from "@/lib/utils";
+
+type WebNfcReadingEvent = Event & {
+  serialNumber?: string;
+};
+
+type WebNfcReader = {
+  scan: (options?: { signal?: AbortSignal }) => Promise<void>;
+  onreading: ((event: WebNfcReadingEvent) => void) | null;
+  onreadingerror: (() => void) | null;
+};
+
+declare global {
+  interface Window {
+    NDEFReader?: new () => WebNfcReader;
+  }
+}
 
 export type StudentRow = {
   id: string;
@@ -286,10 +302,54 @@ function StudentPanel({
   onSubmit: (values: StudentInput) => Promise<{ ok: boolean; message: string }>;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [nfcScanning, setNfcScanning] = useState(false);
   const form = useForm<StudentInput>({
     resolver: zodResolver(studentSchema),
     defaultValues
   });
+
+  async function scanWebNfcCard() {
+    if (typeof window === "undefined" || !window.NDEFReader) {
+      toast.error("Web NFC is not available in this browser. Use the mobile app or enter the UID manually.");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
+
+    setNfcScanning(true);
+
+    try {
+      const reader = new window.NDEFReader();
+      await reader.scan({ signal: controller.signal });
+      toast.info("Hold the NFC card near this device.");
+
+      reader.onreading = (event) => {
+        window.clearTimeout(timeout);
+        controller.abort();
+        setNfcScanning(false);
+
+        if (!event.serialNumber) {
+          toast.error("Card was read, but the browser did not expose a serial number.");
+          return;
+        }
+
+        form.setValue("nfcUid", event.serialNumber, { shouldDirty: true, shouldValidate: true });
+        toast.success("NFC UID captured.");
+      };
+
+      reader.onreadingerror = () => {
+        window.clearTimeout(timeout);
+        controller.abort();
+        setNfcScanning(false);
+        toast.error("Could not read NFC card. Try again or enter the UID manually.");
+      };
+    } catch (error) {
+      window.clearTimeout(timeout);
+      setNfcScanning(false);
+      toast.error(error instanceof Error ? error.message : "Could not start Web NFC scan.");
+    }
+  }
 
   function submit(values: StudentInput) {
     startTransition(async () => {
@@ -365,7 +425,13 @@ function StudentPanel({
               </FieldRow>
               <FieldRow>
                 <FormField label="NFC UID" error={form.formState.errors.nfcUid?.message}>
-                  <Input placeholder="04:A1:..." {...form.register("nfcUid")} />
+                  <div className="flex gap-2">
+                    <Input placeholder="04:A1:..." {...form.register("nfcUid")} />
+                    <Button type="button" variant="outline" onClick={scanWebNfcCard} disabled={nfcScanning}>
+                      {nfcScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
+                      Read
+                    </Button>
+                  </div>
                 </FormField>
                 <FormField label="QR code" error={form.formState.errors.qrCode?.message}>
                   <Input placeholder="QR-STUDENT-1001" {...form.register("qrCode")} />

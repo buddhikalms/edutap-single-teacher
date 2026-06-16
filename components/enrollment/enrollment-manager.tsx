@@ -34,6 +34,12 @@ export type EnrollmentRow = {
   course: string;
   teacher: string;
   active: boolean;
+  status: "ACTIVE" | "INACTIVE" | "LOCKED" | "DELETED";
+  paymentStartDate: string;
+  freePeriodType: "NONE" | "FIRST_WEEK" | "SECOND_WEEK" | "FIRST_MONTH" | "CUSTOM_DAYS";
+  freeDays: number;
+  monthlyFeeOverride: number | null;
+  discount: number;
   enrolledAt: string;
 };
 
@@ -41,7 +47,23 @@ export type EnrollmentOption = {
   id: string;
   name: string;
   meta?: string;
+  monthlyFee?: number;
+  defaultFreePeriodType?: "NONE" | "FIRST_WEEK" | "SECOND_WEEK" | "FIRST_MONTH" | "CUSTOM_DAYS";
+  defaultFreeDays?: number;
 };
+
+function todayInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function classDefaults(classes: EnrollmentOption[], classGroupId: string) {
+  const selected = classes.find((classGroup) => classGroup.id === classGroupId);
+  return {
+    monthlyFeeOverride: selected?.monthlyFee ?? 0,
+    freePeriodType: selected?.defaultFreePeriodType ?? "NONE",
+    freeDays: selected?.defaultFreeDays ?? 0
+  };
+}
 
 export function EnrollmentManager({
   enrollments,
@@ -91,11 +113,20 @@ export function EnrollmentManager({
         )
       },
       { accessorKey: "teacher", header: "Teacher" },
-      { accessorKey: "enrolledAt", header: "Enrolled" },
       {
-        accessorKey: "active",
+        accessorKey: "paymentStartDate",
+        header: "Payment start",
+        cell: ({ row }) => (
+          <div>
+            <p className="font-semibold">{row.original.paymentStartDate || "Today"}</p>
+            <p className="text-xs text-muted-foreground">{row.original.freePeriodType.toLowerCase().replaceAll("_", " ")}</p>
+          </div>
+        )
+      },
+      {
+        accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => <Badge variant={row.original.active ? "success" : "outline"}>{row.original.active ? "active" : "inactive"}</Badge>
+        cell: ({ row }) => <Badge variant={row.original.status === "ACTIVE" ? "success" : "outline"}>{row.original.status.toLowerCase()}</Badge>
       },
       {
         id: "actions",
@@ -222,14 +253,21 @@ export function EnrollmentManager({
 
 function SingleEnrollmentPanel({ students, classes, onClose }: { students: EnrollmentOption[]; classes: EnrollmentOption[]; onClose: () => void }) {
   const [isPending, startTransition] = useTransition();
+  const initialClassId = classes[0]?.id ?? "";
+  const defaults = classDefaults(classes, initialClassId);
   const form = useForm<EnrollmentInput>({
     resolver: zodResolver(enrollmentSchema),
     defaultValues: {
       studentId: students[0]?.id ?? "",
-      classGroupId: classes[0]?.id ?? "",
-      active: true
+      classGroupId: initialClassId,
+      active: true,
+      status: "ACTIVE",
+      paymentStartDate: todayInput(),
+      ...defaults,
+      discount: 0
     }
   });
+  const selectedClassId = useWatch({ control: form.control, name: "classGroupId" });
 
   function submit(values: EnrollmentInput) {
     startTransition(async () => {
@@ -259,7 +297,16 @@ function SingleEnrollmentPanel({ students, classes, onClose }: { students: Enrol
                 </Select>
               </FormField>
               <FormField label="Class" error={form.formState.errors.classGroupId?.message}>
-                <Select {...form.register("classGroupId")}>
+                <Select
+                  {...form.register("classGroupId")}
+                  onChange={(event) => {
+                    form.register("classGroupId").onChange(event);
+                    const nextDefaults = classDefaults(classes, event.target.value);
+                    form.setValue("monthlyFeeOverride", nextDefaults.monthlyFeeOverride);
+                    form.setValue("freePeriodType", nextDefaults.freePeriodType);
+                    form.setValue("freeDays", nextDefaults.freeDays);
+                  }}
+                >
                   {classes.map((classGroup) => (
                     <option key={classGroup.id} value={classGroup.id}>
                       {classGroup.name}
@@ -268,6 +315,44 @@ function SingleEnrollmentPanel({ students, classes, onClose }: { students: Enrol
                 </Select>
               </FormField>
             </FieldRow>
+            <FieldRow>
+              <FormField label="Status" error={form.formState.errors.status?.message}>
+                <Select {...form.register("status")}>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="LOCKED">Locked</option>
+                  <option value="DELETED">Deleted</option>
+                </Select>
+              </FormField>
+              <FormField label="Payment start date" error={form.formState.errors.paymentStartDate?.message}>
+                <Input type="date" {...form.register("paymentStartDate")} />
+              </FormField>
+            </FieldRow>
+            <FieldRow>
+              <FormField label="Free period" error={form.formState.errors.freePeriodType?.message}>
+                <Select {...form.register("freePeriodType")}>
+                  <option value="NONE">No free period</option>
+                  <option value="FIRST_WEEK">First week free</option>
+                  <option value="SECOND_WEEK">Second week free</option>
+                  <option value="FIRST_MONTH">First month free</option>
+                  <option value="CUSTOM_DAYS">Custom free days</option>
+                </Select>
+              </FormField>
+              <FormField label="Free days" error={form.formState.errors.freeDays?.message}>
+                <Input type="number" min={0} {...form.register("freeDays")} />
+              </FormField>
+            </FieldRow>
+            <FieldRow>
+              <FormField label="Monthly fee override" error={form.formState.errors.monthlyFeeOverride?.message}>
+                <Input type="number" step="0.01" {...form.register("monthlyFeeOverride")} />
+              </FormField>
+              <FormField label="Discount" error={form.formState.errors.discount?.message}>
+                <Input type="number" step="0.01" {...form.register("discount")} />
+              </FormField>
+            </FieldRow>
+            <p className="text-xs text-muted-foreground">
+              Class default fee: {classes.find((classGroup) => classGroup.id === selectedClassId)?.monthlyFee ?? 0}
+            </p>
             <label className="flex items-center gap-3 rounded-xl border bg-white/70 p-4">
               <Checkbox defaultChecked {...form.register("active")} />
               <span className="text-sm font-semibold">Set enrollment active</span>
@@ -282,12 +367,18 @@ function SingleEnrollmentPanel({ students, classes, onClose }: { students: Enrol
 
 function BulkEnrollmentPanel({ students, classes, onClose }: { students: EnrollmentOption[]; classes: EnrollmentOption[]; onClose: () => void }) {
   const [isPending, startTransition] = useTransition();
+  const initialClassId = classes[0]?.id ?? "";
+  const defaults = classDefaults(classes, initialClassId);
   const form = useForm<BulkEnrollmentInput>({
     resolver: zodResolver(bulkEnrollmentSchema),
     defaultValues: {
       studentIds: [],
-      classGroupId: classes[0]?.id ?? "",
-      active: true
+      classGroupId: initialClassId,
+      active: true,
+      status: "ACTIVE",
+      paymentStartDate: todayInput(),
+      ...defaults,
+      discount: 0
     }
   });
   const selected = useWatch({ control: form.control, name: "studentIds" }) ?? [];
@@ -314,7 +405,16 @@ function BulkEnrollmentPanel({ students, classes, onClose }: { students: Enrollm
         <FormShell title="Bulk assignment" description="Choose one class and assign multiple students at once.">
           <div className="space-y-4">
             <FormField label="Class" error={form.formState.errors.classGroupId?.message}>
-              <Select {...form.register("classGroupId")}>
+              <Select
+                {...form.register("classGroupId")}
+                onChange={(event) => {
+                  form.register("classGroupId").onChange(event);
+                  const nextDefaults = classDefaults(classes, event.target.value);
+                  form.setValue("monthlyFeeOverride", nextDefaults.monthlyFeeOverride);
+                  form.setValue("freePeriodType", nextDefaults.freePeriodType);
+                  form.setValue("freeDays", nextDefaults.freeDays);
+                }}
+              >
                 {classes.map((classGroup) => (
                   <option key={classGroup.id} value={classGroup.id}>
                     {classGroup.name}
@@ -322,6 +422,41 @@ function BulkEnrollmentPanel({ students, classes, onClose }: { students: Enrollm
                 ))}
               </Select>
             </FormField>
+            <FieldRow>
+              <FormField label="Status" error={form.formState.errors.status?.message}>
+                <Select {...form.register("status")}>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="LOCKED">Locked</option>
+                  <option value="DELETED">Deleted</option>
+                </Select>
+              </FormField>
+              <FormField label="Payment start date" error={form.formState.errors.paymentStartDate?.message}>
+                <Input type="date" {...form.register("paymentStartDate")} />
+              </FormField>
+            </FieldRow>
+            <FieldRow>
+              <FormField label="Free period" error={form.formState.errors.freePeriodType?.message}>
+                <Select {...form.register("freePeriodType")}>
+                  <option value="NONE">No free period</option>
+                  <option value="FIRST_WEEK">First week free</option>
+                  <option value="SECOND_WEEK">Second week free</option>
+                  <option value="FIRST_MONTH">First month free</option>
+                  <option value="CUSTOM_DAYS">Custom free days</option>
+                </Select>
+              </FormField>
+              <FormField label="Free days" error={form.formState.errors.freeDays?.message}>
+                <Input type="number" min={0} {...form.register("freeDays")} />
+              </FormField>
+            </FieldRow>
+            <FieldRow>
+              <FormField label="Monthly fee override" error={form.formState.errors.monthlyFeeOverride?.message}>
+                <Input type="number" step="0.01" {...form.register("monthlyFeeOverride")} />
+              </FormField>
+              <FormField label="Discount" error={form.formState.errors.discount?.message}>
+                <Input type="number" step="0.01" {...form.register("discount")} />
+              </FormField>
+            </FieldRow>
             <div className="grid max-h-[360px] gap-3 overflow-y-auto pr-1">
               {students.map((student) => (
                 <label key={student.id} className="flex items-center justify-between gap-4 rounded-xl border bg-white/70 p-4">

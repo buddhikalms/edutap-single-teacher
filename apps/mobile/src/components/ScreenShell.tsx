@@ -55,6 +55,7 @@ export function ScreenShell({ title, eyebrow, right, children, scroll = true }: 
 
 function routeGroup(routeName: string) {
   if (routeName.includes("Attendance")) return "ClassSelection";
+  if (routeName === "NfcCardSetup") return "ClassSelection";
   if (routeName === "StudentQuickView") return "ClassSelection";
   return routeName;
 }

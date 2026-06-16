@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
 
 export default async function ClassesPage() {
-  const { instituteId } = await getTenantContext();
+  const { instituteId, role } = await getTenantContext();
 
-  const [courses, classes, branches, teachers] = await Promise.all([
+  const [courses, classes, branches, grades, teachers] = await Promise.all([
     prisma.course.findMany({
       where: { instituteId },
-      include: { _count: { select: { classGroups: true } } },
+      include: { gradeLevel: true, _count: { select: { classGroups: true } } },
       orderBy: { createdAt: "desc" }
     }),
     prisma.classGroup.findMany({
@@ -16,12 +16,14 @@ export default async function ClassesPage() {
       include: {
         branch: true,
         course: true,
+        gradeLevel: true,
         teacher: true,
         _count: { select: { enrollments: true } }
       },
       orderBy: { createdAt: "desc" }
     }),
-    prisma.branch.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.branch.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.grade.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true }, orderBy: [{ order: "asc" }, { name: "asc" }] }),
     prisma.teacher.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } })
   ]);
 
@@ -30,7 +32,8 @@ export default async function ClassesPage() {
     name: course.name,
     code: course.code,
     subject: course.subject,
-    grade: course.grade,
+    grade: course.gradeLevel?.name ?? course.grade,
+    gradeId: course.gradeId,
     description: course.description,
     fee: Number(course.fee),
     classes: course._count.classGroups
@@ -45,14 +48,20 @@ export default async function ClassesPage() {
     capacity: classGroup.capacity,
     branchId: classGroup.branchId,
     branch: classGroup.branch.name,
+    gradeId: classGroup.gradeId,
+    grade: classGroup.gradeLevel?.name ?? classGroup.course.grade,
     courseId: classGroup.courseId,
     course: classGroup.course.name,
     subject: classGroup.course.subject,
-    grade: classGroup.course.grade,
     teacherId: classGroup.teacherId,
     teacher: classGroup.teacher?.name ?? "Unassigned",
+    classType: classGroup.classType,
+    fee: Number(classGroup.monthlyFee ?? classGroup.course.fee),
+    defaultFreePeriodType: classGroup.defaultFreePeriodType,
+    defaultFreeDays: classGroup.defaultFreeDays,
+    defaultPaymentDueDay: classGroup.defaultPaymentDueDay,
     enrolled: classGroup._count.enrollments
   }));
 
-  return <ClassesManager courses={courseRows} classes={classRows} branches={branches} teachers={teachers} />;
+  return <ClassesManager courses={courseRows} classes={classRows} branches={branches} grades={grades} teachers={teachers} isTeacher={role === "TEACHER"} />;
 }

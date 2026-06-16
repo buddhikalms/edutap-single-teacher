@@ -46,6 +46,43 @@ export function monthLabel(month: string | null) {
   });
 }
 
+export function firstPayableDate(input: {
+  paymentStartDate: Date | null;
+  enrolledAt: Date;
+  freePeriodType: string;
+  freeDays: number;
+}) {
+  const start = new Date(input.paymentStartDate ?? input.enrolledAt);
+  start.setHours(0, 0, 0, 0);
+
+  if (input.freePeriodType === "FIRST_WEEK") {
+    start.setDate(start.getDate() + 7);
+  } else if (input.freePeriodType === "SECOND_WEEK") {
+    start.setDate(start.getDate() + 14);
+  } else if (input.freePeriodType === "FIRST_MONTH") {
+    start.setMonth(start.getMonth() + 1, 1);
+  } else if (input.freePeriodType === "CUSTOM_DAYS") {
+    start.setDate(start.getDate() + input.freeDays);
+  }
+
+  return start;
+}
+
+export function monthStart(month: string) {
+  return new Date(`${month}-01T00:00:00.000`);
+}
+
+export function paymentDueDate(month: string, dueDay: number) {
+  const safeDay = Math.min(28, Math.max(1, dueDay));
+  return new Date(`${month}-${String(safeDay).padStart(2, "0")}T00:00:00.000`);
+}
+
+export function shouldGenerateDueForMonth(month: string, firstPayableAt: Date) {
+  const nextMonth = monthStart(month);
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  return firstPayableAt < nextMonth;
+}
+
 export function csvEscape(value: unknown) {
   const text = String(value ?? "");
   if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
