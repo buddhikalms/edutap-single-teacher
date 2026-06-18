@@ -40,6 +40,10 @@ type SettingsFormProps = {
     classEndedSendToLate: boolean;
     classEndedSendToAbsent: boolean;
     classEndedMessageTemplate: string | null;
+    notificationMobilePushEnabled: boolean;
+    notificationWebPushEnabled: boolean;
+    notificationInAppEnabled: boolean;
+    notificationIncludeDueDates: boolean;
     currency: string;
     themeColor: string;
     logoPlaceholder: string | null;
@@ -144,6 +148,21 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
       </section>
 
       <section className="grid gap-5 xl:grid-cols-3">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BellRing className="h-5 w-5" />
+              Notification channels
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle name="notificationMobilePushEnabled" title="Enable mobile push" description="Send Expo push alerts to parent mobile apps." checked={settings.notificationMobilePushEnabled} />
+            <Toggle name="notificationWebPushEnabled" title="Enable web push" description="Send browser push alerts to installed EduTap web apps." checked={settings.notificationWebPushEnabled} />
+            <Toggle name="notificationInAppEnabled" title="Enable in-app alerts" description="Keep notifications in the parent portal inbox." checked={settings.notificationInAppEnabled} />
+            <Toggle name="notificationIncludeDueDates" title="Include due dates" description="Add nearest due dates to payment-aware alerts." checked={settings.notificationIncludeDueDates} />
+          </CardContent>
+        </Card>
+
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Attendance rules</CardTitle>

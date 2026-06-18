@@ -75,8 +75,13 @@ export const studentSelfRegistrationSchema = z.object({
   dateOfBirth: optionalText,
   password: z.string().min(8, "Password must be at least 8 characters."),
   parentName: z.string().trim().min(1, "Parent or guardian name is required."),
+  parentRelationship: z.enum(["Father", "Mother", "Guardian", "Other"]),
   parentEmail: optionalEmail,
   parentPhone: z.string().trim().min(1, "Parent or guardian phone is required."),
+  parentNic: optionalText,
+  parentAddress: optionalText,
+  parentAppLogin: z.string().trim().min(1, "Parent app login mobile or email is required."),
+  emergencyContactNumber: z.string().trim().min(1, "Emergency contact number is required."),
   parentOccupation: optionalText
 });
 
@@ -93,8 +98,13 @@ export const studentSchema = z.object({
   qrCode: optionalText,
   branchId: z.string().min(1, "Branch is required."),
   parentName: z.string().trim().min(1, "Guardian name is required."),
+  parentRelationship: z.enum(["Father", "Mother", "Guardian", "Other"]),
   parentEmail: optionalEmail,
   parentPhone: z.string().trim().min(1, "Guardian phone is required."),
+  parentNic: optionalText,
+  parentAddress: optionalText,
+  parentAppLogin: z.string().trim().min(1, "Parent app login mobile or email is required."),
+  emergencyContactNumber: z.string().trim().min(1, "Emergency contact number is required."),
   parentOccupation: optionalText
 });
 

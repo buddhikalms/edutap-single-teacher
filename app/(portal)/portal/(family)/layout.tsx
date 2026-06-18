@@ -1,4 +1,6 @@
 import { PortalNav } from "@/components/portal/portal-nav";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
+import { WebPushPermissionCard } from "@/components/pwa/web-push-permission-card";
 import { getPortalContext } from "@/lib/portal";
 import { prisma } from "@/lib/prisma";
 
@@ -25,7 +27,13 @@ export default async function FamilyPortalLayout({ children }: { children: React
           </div>
         </div>
       </header>
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+      <div className="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <InstallAppButton />
+          <WebPushPermissionCard />
+        </div>
+        {children}
+      </div>
     </main>
   );
 }

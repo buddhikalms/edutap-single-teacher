@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
@@ -11,7 +11,24 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "EduTap",
-  description: "Premium student management SaaS for modern institutes."
+  description: "Premium student management SaaS for modern institutes.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "EduTap",
+    statusBarStyle: "default"
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.svg", sizes: "192x192", type: "image/svg+xml" },
+      { url: "/icons/icon-512.svg", sizes: "512x512", type: "image/svg+xml" }
+    ],
+    apple: [{ url: "/icons/icon-192.svg", sizes: "192x192", type: "image/svg+xml" }]
+  }
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2563eb"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

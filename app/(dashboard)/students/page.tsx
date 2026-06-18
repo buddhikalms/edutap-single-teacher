@@ -49,8 +49,13 @@ export default async function StudentsPage() {
     branch: student.branch.name,
     classes: student.enrollments.map((enrollment) => enrollment.classGroup.name).join(", ") || "Not enrolled",
     parentName: student.parents[0]?.name ?? "",
+    parentRelationship: (student.parents[0]?.relationship as StudentRow["parentRelationship"] | null) ?? "Guardian",
     parentEmail: student.parents[0]?.email ?? null,
     parentPhone: student.parents[0]?.phone ?? "",
+    parentNic: student.parents[0]?.nic ?? null,
+    parentAddress: student.parents[0]?.address ?? null,
+    parentAppLogin: student.parents[0]?.appLoginIdentifier ?? student.parents[0]?.email ?? student.parents[0]?.phone ?? "",
+    emergencyContactNumber: student.parents[0]?.emergencyContactNumber ?? student.parents[0]?.phone ?? "",
     parentOccupation: student.parents[0]?.occupation ?? null,
     pendingAmount: student.payments
       .filter((payment) => payment.status !== "PAID" && payment.status !== "CANCELLED")

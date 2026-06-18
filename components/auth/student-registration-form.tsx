@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { studentSelfRegistrationSchema, type StudentSelfRegistrationInput } from "@/lib/validations";
 
 type InstituteOption = {
@@ -43,8 +44,13 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
       dateOfBirth: undefined,
       password: "",
       parentName: "",
+      parentRelationship: "Guardian",
       parentEmail: undefined,
       parentPhone: "",
+      parentNic: undefined,
+      parentAddress: undefined,
+      parentAppLogin: "",
+      emergencyContactNumber: "",
       parentOccupation: undefined
     }
   });
@@ -88,8 +94,13 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
       dateOfBirth: undefined,
       password: "",
       parentName: "",
+      parentRelationship: "Guardian",
       parentEmail: undefined,
       parentPhone: "",
+      parentNic: undefined,
+      parentAddress: undefined,
+      parentAppLogin: "",
+      emergencyContactNumber: "",
       parentOccupation: undefined
     });
   }
@@ -110,6 +121,9 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           Create your student account and submit parent or guardian details for institute review.
         </p>
+        <div className="mt-4">
+          <InstallAppButton />
+        </div>
       </div>
 
       {registered ? (
@@ -186,18 +200,42 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
               <Field label="Guardian name" error={form.formState.errors.parentName?.message}>
                 <Input {...form.register("parentName")} />
               </Field>
+              <Field label="Relationship" error={form.formState.errors.parentRelationship?.message}>
+                <Select {...form.register("parentRelationship")}>
+                  <option value="Father">Father</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Guardian">Guardian</option>
+                  <option value="Other">Other</option>
+                </Select>
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Guardian phone" error={form.formState.errors.parentPhone?.message}>
                 <Input {...form.register("parentPhone")} />
+              </Field>
+              <Field label="Emergency contact number" error={form.formState.errors.emergencyContactNumber?.message}>
+                <Input {...form.register("emergencyContactNumber")} />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Guardian email" error={form.formState.errors.parentEmail?.message}>
                 <Input type="email" {...form.register("parentEmail")} />
               </Field>
+              <Field label="Parent app login mobile/email" error={form.formState.errors.parentAppLogin?.message}>
+                <Input {...form.register("parentAppLogin")} />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Parent NIC" error={form.formState.errors.parentNic?.message}>
+                <Input {...form.register("parentNic")} />
+              </Field>
               <Field label="Occupation" error={form.formState.errors.parentOccupation?.message}>
                 <Input {...form.register("parentOccupation")} />
               </Field>
             </div>
+            <Field label="Parent address" error={form.formState.errors.parentAddress?.message}>
+              <Input {...form.register("parentAddress")} />
+            </Field>
           </div>
         </div>
 

@@ -57,8 +57,13 @@ export type StudentRow = {
   branch: string;
   classes: string;
   parentName: string;
+  parentRelationship: "Father" | "Mother" | "Guardian" | "Other";
   parentEmail: string | null;
   parentPhone: string;
+  parentNic: string | null;
+  parentAddress: string | null;
+  parentAppLogin: string;
+  emergencyContactNumber: string;
   parentOccupation: string | null;
   pendingAmount: number;
   paidAmount: number;
@@ -83,8 +88,13 @@ const emptyStudent: StudentInput = {
   qrCode: undefined,
   branchId: "",
   parentName: "",
+  parentRelationship: "Guardian",
   parentEmail: undefined,
   parentPhone: "",
+  parentNic: undefined,
+  parentAddress: undefined,
+  parentAppLogin: "",
+  emergencyContactNumber: "",
   parentOccupation: undefined
 };
 
@@ -102,8 +112,13 @@ function rowToInput(row: StudentRow): StudentInput {
     qrCode: row.qrCode ?? undefined,
     branchId: row.branchId,
     parentName: row.parentName,
+    parentRelationship: row.parentRelationship,
     parentEmail: row.parentEmail ?? undefined,
     parentPhone: row.parentPhone,
+    parentNic: row.parentNic ?? undefined,
+    parentAddress: row.parentAddress ?? undefined,
+    parentAppLogin: row.parentAppLogin,
+    emergencyContactNumber: row.emergencyContactNumber,
     parentOccupation: row.parentOccupation ?? undefined
   };
 }
@@ -449,18 +464,42 @@ function StudentPanel({
                 <FormField label="Guardian name" error={form.formState.errors.parentName?.message}>
                   <Input {...form.register("parentName")} />
                 </FormField>
+                <FormField label="Relationship" error={form.formState.errors.parentRelationship?.message}>
+                  <Select {...form.register("parentRelationship")}>
+                    <option value="Father">Father</option>
+                    <option value="Mother">Mother</option>
+                    <option value="Guardian">Guardian</option>
+                    <option value="Other">Other</option>
+                  </Select>
+                </FormField>
+              </FieldRow>
+              <FieldRow>
                 <FormField label="Guardian phone" error={form.formState.errors.parentPhone?.message}>
                   <Input {...form.register("parentPhone")} />
+                </FormField>
+                <FormField label="Emergency contact" error={form.formState.errors.emergencyContactNumber?.message}>
+                  <Input {...form.register("emergencyContactNumber")} />
                 </FormField>
               </FieldRow>
               <FieldRow>
                 <FormField label="Guardian email" error={form.formState.errors.parentEmail?.message}>
                   <Input type="email" {...form.register("parentEmail")} />
                 </FormField>
+                <FormField label="Parent app login mobile/email" error={form.formState.errors.parentAppLogin?.message}>
+                  <Input {...form.register("parentAppLogin")} />
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Parent NIC" error={form.formState.errors.parentNic?.message}>
+                  <Input {...form.register("parentNic")} />
+                </FormField>
                 <FormField label="Occupation" error={form.formState.errors.parentOccupation?.message}>
                   <Input {...form.register("parentOccupation")} />
                 </FormField>
               </FieldRow>
+              <FormField label="Parent address" error={form.formState.errors.parentAddress?.message}>
+                <Input {...form.register("parentAddress")} />
+              </FormField>
             </div>
           </FormShell>
 

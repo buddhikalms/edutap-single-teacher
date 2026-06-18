@@ -7,6 +7,7 @@ import { actionError, type ActionState, getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { studentSchema, type StudentInput } from "@/lib/validations";
 import { normalizeNfcUid } from "@/lib/nfc";
+import { findOrCreateParent } from "@/lib/parent-registration";
 
 function toDate(value?: string) {
   return value ? new Date(value) : null;
@@ -80,17 +81,19 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
     await assertUniqueNfcUid(instituteId, parsed.nfcUid);
 
     await prisma.$transaction(async (tx) => {
-      const parent = await tx.parent.create({
-        data: {
-          name: parsed.parentName,
-          email: parsed.parentEmail ?? null,
-          phone: parsed.parentPhone,
-          occupation: parsed.parentOccupation ?? null,
-          instituteId
-        }
+      const parent = await findOrCreateParent(tx, instituteId, {
+        name: parsed.parentName,
+        relationship: parsed.parentRelationship,
+        email: parsed.parentEmail,
+        phone: parsed.parentPhone,
+        nic: parsed.parentNic,
+        address: parsed.parentAddress,
+        appLogin: parsed.parentAppLogin,
+        emergencyContactNumber: parsed.emergencyContactNumber,
+        occupation: parsed.parentOccupation
       });
 
-      await tx.student.create({
+      const student = await tx.student.create({
         data: {
           ...studentData(parsed, instituteId),
           attendanceToken: randomUUID(),
@@ -98,6 +101,12 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
             connect: { id: parent.id }
           }
         }
+      });
+
+      await tx.parentStudent.upsert({
+        where: { parentId_studentId: { parentId: parent.id, studentId: student.id } },
+        create: { parentId: parent.id, studentId: student.id, relation: parsed.parentRelationship },
+        update: { relation: parsed.parentRelationship }
       });
     });
 
@@ -134,42 +143,32 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
     }
 
     await prisma.$transaction(async (tx) => {
-      const parentId = existing.parents[0]?.id;
-
-      if (parentId) {
-        await tx.parent.update({
-          where: { id: parentId },
-          data: {
-            name: parsed.parentName,
-            email: parsed.parentEmail ?? null,
-            phone: parsed.parentPhone,
-            occupation: parsed.parentOccupation ?? null
-          }
-        });
-      } else {
-        const parent = await tx.parent.create({
-          data: {
-            name: parsed.parentName,
-            email: parsed.parentEmail ?? null,
-            phone: parsed.parentPhone,
-            occupation: parsed.parentOccupation ?? null,
-            instituteId
-          }
-        });
-
-        await tx.student.update({
-          where: { id },
-          data: {
-            parents: {
-              connect: { id: parent.id }
-            }
-          }
-        });
-      }
+      const parent = await findOrCreateParent(tx, instituteId, {
+        name: parsed.parentName,
+        relationship: parsed.parentRelationship,
+        email: parsed.parentEmail,
+        phone: parsed.parentPhone,
+        nic: parsed.parentNic,
+        address: parsed.parentAddress,
+        appLogin: parsed.parentAppLogin,
+        emergencyContactNumber: parsed.emergencyContactNumber,
+        occupation: parsed.parentOccupation
+      });
 
       await tx.student.update({
         where: { id },
-        data: studentData(parsed, instituteId)
+        data: {
+          ...studentData(parsed, instituteId),
+          parents: {
+            connect: { id: parent.id }
+          }
+        }
+      });
+
+      await tx.parentStudent.upsert({
+        where: { parentId_studentId: { parentId: parent.id, studentId: id } },
+        create: { parentId: parent.id, studentId: id, relation: parsed.parentRelationship },
+        update: { relation: parsed.parentRelationship }
       });
     });
 

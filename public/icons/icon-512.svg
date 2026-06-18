@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="EduTap">
+  <rect width="512" height="512" rx="108" fill="#2563eb"/>
+  <path d="M101 188 256 106l155 82-155 82-155-82Z" fill="#fff"/>
+  <path d="M165 237v76c0 37 41 67 91 67s91-30 91-67v-76l-91 48-91-48Z" fill="#dbeafe"/>
+  <path d="M400 207v103" stroke="#fbbf24" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="400" cy="347" r="28" fill="#fbbf24"/>
+</svg>

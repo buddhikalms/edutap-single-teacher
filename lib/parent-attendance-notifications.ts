@@ -7,6 +7,7 @@ import {
   Prisma
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { sendWebPushMessages } from "@/lib/web-push";
 
 type AttendanceNotificationInput = {
   instituteId: string;
@@ -258,7 +259,7 @@ export async function sendParentAttendanceNotification(input: AttendanceNotifica
     settings?.attendanceParentIncludePaymentSummary === false
       ? ""
       : paymentSummary.pendingTotal > 0
-        ? `Pending payment: ${pendingTotalLabel}. Next due date: ${nearestDueDateLabel}.`
+        ? `Pending payment: ${pendingTotalLabel}.${settings?.notificationIncludeDueDates === false ? "" : ` Next due date: ${nearestDueDateLabel}.`}`
         : "Payments are up to date.";
   const title = "Student arrived at class";
   const body = renderTemplate(settings?.attendanceParentMessageTemplate || DEFAULT_TEMPLATE, {
@@ -397,6 +398,20 @@ export async function sendParentAttendanceNotification(input: AttendanceNotifica
             error: result.error ?? null,
             sentAt: result.ok ? new Date() : null
           }))
+        });
+      }
+
+      if (settings?.notificationWebPushEnabled !== false) {
+        await sendWebPushMessages({
+          instituteId: input.instituteId,
+          userId: parent.userId,
+          parentId: parent.id,
+          studentId: student.id,
+          notificationId: notification.id,
+          type: NotificationType.STUDENT_ARRIVED,
+          title,
+          body,
+          data: { ...payload, actionUrl: "/portal/attendance" }
         });
       }
 
@@ -557,7 +572,7 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
       settings?.classEndedIncludePaymentSummary === false
         ? ""
         : paymentSummary.pendingTotal > 0
-          ? `Pending payment: ${pendingTotalLabel}. Nearest due date: ${nearestDueDateLabel}.`
+          ? `Pending payment: ${pendingTotalLabel}.${settings?.notificationIncludeDueDates === false ? "" : ` Nearest due date: ${nearestDueDateLabel}.`}`
           : "Payments are up to date.";
     const title = "Class has ended";
     const body = renderTemplate(settings?.classEndedMessageTemplate || CLASS_ENDED_TEMPLATE, {
@@ -695,6 +710,20 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
               error: result.error ?? null,
               sentAt: result.ok ? new Date() : null
             }))
+          });
+        }
+
+        if (settings?.notificationWebPushEnabled !== false) {
+          await sendWebPushMessages({
+            instituteId: input.instituteId,
+            userId: parent.userId,
+            parentId: parent.id,
+            studentId: record.studentId,
+            notificationId: notification.id,
+            type: NotificationType.CLASS_ENDED,
+            title,
+            body,
+            data: { ...payload, actionUrl: "/portal/attendance" }
           });
         }
 

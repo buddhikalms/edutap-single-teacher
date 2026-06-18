@@ -1,5 +1,6 @@
 import { NotificationChannel, NotificationStatus, NotificationType, NoticeAudience, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { sendWebPushMessages } from "@/lib/web-push";
 
 type NotificationRecipient = {
   userId?: string | null;
@@ -7,6 +8,196 @@ type NotificationRecipient = {
   parentId?: string | null;
   target?: string | null;
 };
+
+function isExpoPushToken(token: string | null | undefined) {
+  return Boolean(token && /^(Expo|Exponent)PushToken\[[^\]]+\]$/.test(token));
+}
+
+async function sendExpoPushMessages(messages: Array<{ to: string; title: string; body: string; data: Record<string, unknown> }>) {
+  const results: Array<{ token: string; ok: boolean; providerRef?: string; error?: string }> = [];
+
+  for (let index = 0; index < messages.length; index += 100) {
+    const chunk = messages.slice(index, index + 100);
+
+    try {
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(chunk)
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { data?: Array<{ status?: string; id?: string; message?: string; details?: { error?: string } }> }
+        | null;
+      const data = Array.isArray(payload?.data) ? payload.data : [];
+
+      chunk.forEach((message, offset) => {
+        const receipt = data[offset];
+        results.push({
+          token: message.to,
+          ok: response.ok && receipt?.status !== "error",
+          providerRef: receipt?.id,
+          error: response.ok ? receipt?.message ?? receipt?.details?.error : response.statusText
+        });
+      });
+    } catch (error) {
+      chunk.forEach((message) => {
+        results.push({
+          token: message.to,
+          ok: false,
+          error: error instanceof Error ? error.message : "Expo push request failed."
+        });
+      });
+    }
+  }
+
+  return results;
+}
+
+export async function sendParentNotification(input: {
+  instituteId: string;
+  parentId: string;
+  studentId?: string | null;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  actionUrl?: string;
+}) {
+  const [settings, parent, devices] = await Promise.all([
+    prisma.instituteSettings.findUnique({ where: { instituteId: input.instituteId } }),
+    prisma.parent.findFirst({
+      where: { id: input.parentId, instituteId: input.instituteId },
+      include: { user: { select: { id: true } } }
+    }),
+    prisma.studentDevice.findMany({
+      where: {
+        instituteId: input.instituteId,
+        parentId: input.parentId,
+        isActive: true,
+        OR: [{ expoPushToken: { not: null } }, { pushToken: { not: null } }]
+      }
+    })
+  ]);
+
+  if (!parent) {
+    return { ok: false, inApp: false, mobilePush: 0, webPush: 0, reason: "Parent was not found." };
+  }
+
+  const data = {
+    ...input.data,
+    actionUrl: input.actionUrl ?? "/portal/notifications"
+  };
+  const notification =
+    settings?.notificationInAppEnabled === false
+      ? null
+      : await prisma.notification.create({
+          data: {
+            instituteId: input.instituteId,
+            userId: parent.userId,
+            parentId: parent.id,
+            studentId: input.studentId ?? null,
+            title: input.title,
+            body: input.body,
+            message: input.body,
+            type: input.type,
+            actionUrl: input.actionUrl ?? "/portal/notifications",
+            dataJson: data as Prisma.InputJsonObject,
+            metadata: data as Prisma.InputJsonObject
+          }
+        });
+
+  if (notification) {
+    await prisma.notificationLog.create({
+      data: {
+        instituteId: input.instituteId,
+        userId: parent.userId,
+        parentId: parent.id,
+        studentId: input.studentId ?? null,
+        notificationId: notification.id,
+        type: input.type,
+        channel: NotificationChannel.IN_APP,
+        status: NotificationStatus.SENT,
+        title: input.title,
+        body: input.body,
+        message: input.body,
+        recipientType: "PARENT",
+        recipientId: parent.id,
+        payloadJson: data as Prisma.InputJsonObject,
+        metadata: data as Prisma.InputJsonObject,
+        sentAt: new Date()
+      }
+    });
+  }
+
+  const expoTokens = devices
+    .map((device) => device.expoPushToken ?? device.pushToken)
+    .filter((token, index, all): token is string => isExpoPushToken(token) && all.indexOf(token) === index);
+  const mobilePushResults =
+    settings?.notificationMobilePushEnabled === false
+      ? []
+      : await sendExpoPushMessages(
+          expoTokens.map((token) => ({
+            to: token,
+            title: input.title,
+            body: input.body,
+            data
+          }))
+        );
+
+  if (mobilePushResults.length > 0) {
+    await prisma.notificationLog.createMany({
+      data: mobilePushResults.map((result) => ({
+        instituteId: input.instituteId,
+        userId: parent.userId,
+        parentId: parent.id,
+        studentId: input.studentId ?? null,
+        notificationId: notification?.id ?? null,
+        type: input.type,
+        channel: NotificationChannel.MOBILE_PUSH,
+        status: result.ok ? NotificationStatus.SENT : NotificationStatus.FAILED,
+        title: input.title,
+        body: input.body,
+        message: input.body,
+        target: result.token,
+        provider: "expo",
+        providerRef: result.providerRef ?? null,
+        recipientType: "PARENT",
+        recipientId: parent.id,
+        payloadJson: data as Prisma.InputJsonObject,
+        metadata: data as Prisma.InputJsonObject,
+        errorMessage: result.error ?? null,
+        error: result.error ?? null,
+        sentAt: result.ok ? new Date() : null
+      }))
+    });
+  }
+
+  const webPushResult =
+    settings?.notificationWebPushEnabled === false
+      ? { sent: 0, failed: 0, skipped: true }
+      : await sendWebPushMessages({
+          instituteId: input.instituteId,
+          userId: parent.userId,
+          parentId: parent.id,
+          studentId: input.studentId ?? null,
+          notificationId: notification?.id ?? null,
+          type: input.type,
+          title: input.title,
+          body: input.body,
+          data
+        });
+
+  return {
+    ok: true,
+    notificationId: notification?.id ?? null,
+    inApp: Boolean(notification),
+    mobilePush: mobilePushResults.filter((result) => result.ok).length,
+    webPush: webPushResult.sent
+  };
+}
 
 export async function createNotificationLogs(input: {
   instituteId: string;

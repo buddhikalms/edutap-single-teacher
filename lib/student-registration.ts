@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { studentSelfRegistrationSchema, type StudentSelfRegistrationInput } from "@/lib/validations";
+import { findOrCreateParent } from "@/lib/parent-registration";
 
 function toDate(value?: string) {
   return value ? new Date(value) : null;
@@ -69,17 +70,19 @@ export async function registerStudent(input: StudentSelfRegistrationInput) {
         }
       });
 
-      const parent = await tx.parent.create({
-        data: {
-          name: parsed.parentName,
-          email: parsed.parentEmail?.toLowerCase() ?? null,
-          phone: parsed.parentPhone,
-          occupation: parsed.parentOccupation ?? null,
-          instituteId: institute.id
-        }
+      const parent = await findOrCreateParent(tx, institute.id, {
+        name: parsed.parentName,
+        relationship: parsed.parentRelationship,
+        email: parsed.parentEmail,
+        phone: parsed.parentPhone,
+        nic: parsed.parentNic,
+        address: parsed.parentAddress,
+        appLogin: parsed.parentAppLogin,
+        emergencyContactNumber: parsed.emergencyContactNumber,
+        occupation: parsed.parentOccupation
       });
 
-      return tx.student.create({
+      const student = await tx.student.create({
         data: {
           admissionNo,
           firstName: parsed.firstName,
@@ -104,6 +107,14 @@ export async function registerStudent(input: StudentSelfRegistrationInput) {
           phone: true
         }
       });
+
+      await tx.parentStudent.upsert({
+        where: { parentId_studentId: { parentId: parent.id, studentId: student.id } },
+        create: { parentId: parent.id, studentId: student.id, relation: parsed.parentRelationship },
+        update: { relation: parsed.parentRelationship }
+      });
+
+      return student;
     });
 
     return {

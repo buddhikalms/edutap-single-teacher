@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CourseCard, ClassCard, PricingCard, TeacherCard } from "@/components/public/public-cards";
 import { PublicShell, SectionHeading } from "@/components/public/site-shell";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { heroStats, publicClasses, publicCourses, publicFeatures, publicPlans, publicTeachers } from "@/lib/public-site";
 
 export default function HomePage() {
@@ -35,6 +36,7 @@ export default function HomePage() {
                   <PlayCircle className="h-4 w-4" />
                 </Link>
               </Button>
+              <InstallAppButton variant="button" />
             </div>
           </div>
           <div className="grid gap-3 pb-2 sm:grid-cols-2">

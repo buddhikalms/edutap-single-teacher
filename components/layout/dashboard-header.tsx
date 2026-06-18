@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sidebar } from "@/components/layout/sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 export function DashboardHeader({
   instituteName,
@@ -31,6 +32,9 @@ export function DashboardHeader({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="h-11 bg-white pl-9" placeholder="Search students, receipts, classes..." />
           </div>
+        </div>
+        <div className="ml-3 hidden items-center gap-3 xl:flex">
+          <InstallAppButton variant="button" />
         </div>
         <UserMenu name={user.name} email={user.email} role={user.role} />
       </header>

@@ -108,6 +108,7 @@ enum NoticeAudience {
 enum NotificationType {
   NOTICE
   PAYMENT_DUE
+  PAYMENT_OVERDUE
   ABSENT_ALERT
   CLASS_NOTICE
   RECEIPT
@@ -116,11 +117,18 @@ enum NotificationType {
   STUDENT_ARRIVED
   CLASS_ENDED
   PAYMENT_REMINDER
+  HOMEWORK_ASSIGNED
+  HOMEWORK_REVIEWED
+  QUIZ_ASSIGNED
+  LIVE_CLASS_REMINDER
+  COURSE_RESOURCE_UPLOADED
 }
 
 enum NotificationChannel {
   IN_APP
   PUSH
+  MOBILE_PUSH
+  WEB_PUSH
   SMS
   WHATSAPP
   EMAIL
@@ -275,45 +283,46 @@ enum IntegrationProvider {
 }
 
 model Institute {
-  id                         String                      @id @default(cuid())
-  name                       String
-  slug                       String                      @unique
-  email                      String
-  phone                      String?
-  address                    String?
-  logoUrl                    String?
-  active                     Boolean                     @default(true)
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  branches                   Branch[]
-  grades                     Grade[]
-  users                      User[]
-  students                   Student[]
-  parents                    Parent[]
-  teachers                   Teacher[]
-  courses                    Course[]
-  classGroups                ClassGroup[]
-  payments                   Payment[]
-  receipts                   Receipt[]
-  auditLogs                  AttendanceAuditLog[]
-  notices                    Notice[]
-  notifications              NotificationLog[]
-  settings                   InstituteSettings?
-  subscription               InstituteSubscription?
-  homework                   Homework[]
-  homeworkSubmissions        HomeworkSubmission[]
-  quizzes                    Quiz[]
-  quizAttempts               QuizAttempt[]
-  notificationsV2            Notification[]
-  courseMaterials            CourseMaterial[]
-  studentDevices             StudentDevice[]
-  liveClasses                LiveClass[]
-  liveClassAttendances       LiveClassAttendance[]
-  liveClassRecordings        LiveClassRecording[]
-  integrationAccounts        IntegrationAccount[]
-  providerCredentials        ProviderCredential[]
-  attendanceNotificationLogs AttendanceNotificationLog[]
-  classEndNotificationLogs   ClassEndNotificationLog[]
+  id                          String                       @id @default(cuid())
+  name                        String
+  slug                        String                       @unique
+  email                       String
+  phone                       String?
+  address                     String?
+  logoUrl                     String?
+  active                      Boolean                      @default(true)
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  branches                    Branch[]
+  grades                      Grade[]
+  users                       User[]
+  students                    Student[]
+  parents                     Parent[]
+  teachers                    Teacher[]
+  courses                     Course[]
+  classGroups                 ClassGroup[]
+  payments                    Payment[]
+  receipts                    Receipt[]
+  auditLogs                   AttendanceAuditLog[]
+  notices                     Notice[]
+  notifications               NotificationLog[]
+  settings                    InstituteSettings?
+  subscription                InstituteSubscription?
+  homework                    Homework[]
+  homeworkSubmissions         HomeworkSubmission[]
+  quizzes                     Quiz[]
+  quizAttempts                QuizAttempt[]
+  notificationsV2             Notification[]
+  webPushSubscriptions        WebPushSubscription[]
+  courseMaterials             CourseMaterial[]
+  studentDevices              StudentDevice[]
+  liveClasses                 LiveClass[]
+  liveClassAttendances        LiveClassAttendance[]
+  liveClassRecordings         LiveClassRecording[]
+  integrationAccounts         IntegrationAccount[]
+  providerCredentials         ProviderCredential[]
+  attendanceNotificationLogs  AttendanceNotificationLog[]
+  classEndNotificationLogs    ClassEndNotificationLog[]
   teacherRegistrationRequests TeacherRegistrationRequest[]
 }
 
@@ -341,6 +350,11 @@ model InstituteSettings {
   classEndedSendToLate                       Boolean   @default(true)
   classEndedSendToAbsent                     Boolean   @default(false)
   classEndedMessageTemplate                  String?   @db.Text
+  notificationMobilePushEnabled              Boolean   @default(true)
+  notificationWebPushEnabled                 Boolean   @default(true)
+  notificationInAppEnabled                   Boolean   @default(true)
+  notificationIncludeDueDates                Boolean   @default(true)
+  notificationCustomTemplates                Json?
   branchSettings                             Json?
   createdAt                                  DateTime  @default(now())
   updatedAt                                  DateTime  @updatedAt
@@ -348,29 +362,29 @@ model InstituteSettings {
 }
 
 model InstituteSubscription {
-  id                         String              @id @default(cuid())
-  instituteId                String              @unique
-  plan                       SubscriptionPlanKey @default(INSTITUTE_STARTER)
-  planId                     String?
-  status                     SubscriptionStatus  @default(TRIAL)
-  startedAt                  DateTime            @default(now())
-  currentPeriodEnd           DateTime?
-  monthlyPrice               Decimal             @default(79) @db.Decimal(10, 2)
-  yearlyPrice                Decimal?            @db.Decimal(10, 2)
-  studentLimit               Int
-  teacherLimit               Int
-  branchLimit                Int
-  classLimit                 Int                 @default(30)
-  courseLimit                Int                 @default(20)
-  storageLimitMb             Int                 @default(1024)
-  smsCredits                 Int
-  liveClassAccess            Boolean             @default(false)
-  parentNotificationAccess   Boolean             @default(false)
-  customBrandingAccess       Boolean             @default(false)
-  createdAt                  DateTime            @default(now())
-  updatedAt                  DateTime            @updatedAt
-  institute                  Institute           @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  planRecord                 SubscriptionPlan?   @relation(fields: [planId], references: [id], onDelete: SetNull)
+  id                       String              @id @default(cuid())
+  instituteId              String              @unique
+  plan                     SubscriptionPlanKey @default(INSTITUTE_STARTER)
+  planId                   String?
+  status                   SubscriptionStatus  @default(TRIAL)
+  startedAt                DateTime            @default(now())
+  currentPeriodEnd         DateTime?
+  monthlyPrice             Decimal             @default(79) @db.Decimal(10, 2)
+  yearlyPrice              Decimal?            @db.Decimal(10, 2)
+  studentLimit             Int
+  teacherLimit             Int
+  branchLimit              Int
+  classLimit               Int                 @default(30)
+  courseLimit              Int                 @default(20)
+  storageLimitMb           Int                 @default(1024)
+  smsCredits               Int
+  liveClassAccess          Boolean             @default(false)
+  parentNotificationAccess Boolean             @default(false)
+  customBrandingAccess     Boolean             @default(false)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  institute                Institute           @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  planRecord               SubscriptionPlan?   @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([plan])
   @@index([planId])
@@ -470,19 +484,19 @@ model Grade {
 }
 
 model User {
-  id                     String            @id @default(cuid())
+  id                     String                @id @default(cuid())
   name                   String
-  email                  String            @unique
+  email                  String                @unique
   passwordHash           String
-  role                   UserRole          @default(STAFF)
+  role                   UserRole              @default(STAFF)
   image                  String?
   emailVerified          DateTime?
   instituteId            String?
   branchId               String?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  institute              Institute?        @relation(fields: [instituteId], references: [id], onDelete: SetNull)
-  branch                 Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  institute              Institute?            @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  branch                 Branch?               @relation(fields: [branchId], references: [id], onDelete: SetNull)
   teacher                Teacher?
   parent                 Parent?
   student                Student?
@@ -491,10 +505,11 @@ model User {
   noticesCreated         Notice[]
   notifications          NotificationLog[]
   notificationsV2        Notification[]
-  homeworkCreated        Homework[]        @relation("HomeworkCreatedBy")
-  quizzesCreated         Quiz[]            @relation("QuizCreatedBy")
-  courseMaterialsCreated CourseMaterial[]  @relation("CourseMaterialCreatedBy")
-  liveClassesCreated     LiveClass[]       @relation("LiveClassCreatedBy")
+  webPushSubscriptions   WebPushSubscription[]
+  homeworkCreated        Homework[]            @relation("HomeworkCreatedBy")
+  quizzesCreated         Quiz[]                @relation("QuizCreatedBy")
+  courseMaterialsCreated CourseMaterial[]      @relation("CourseMaterialCreatedBy")
+  liveClassesCreated     LiveClass[]           @relation("LiveClassCreatedBy")
 
   @@index([instituteId])
   @@index([branchId])
@@ -562,6 +577,11 @@ model Parent {
   name                       String
   email                      String?
   phone                      String
+  relationship               String?                     @default("Guardian")
+  nic                        String?
+  address                    String?                     @db.Text
+  appLoginIdentifier         String?
+  emergencyContactNumber     String?
   occupation                 String?
   userId                     String?                     @unique
   instituteId                String
@@ -575,10 +595,35 @@ model Parent {
   noticeRecipients           NoticeRecipient[]
   notifications              NotificationLog[]
   notificationsV2            Notification[]
+  webPushSubscriptions       WebPushSubscription[]
   attendanceNotificationLogs AttendanceNotificationLog[]
   classEndNotificationLogs   ClassEndNotificationLog[]
 
   @@index([instituteId])
+}
+
+model WebPushSubscription {
+  id           String    @id @default(cuid())
+  instituteId  String
+  userId       String
+  parentId     String?
+  endpoint     String    @db.Text
+  endpointHash String    @unique
+  p256dh       String    @db.Text
+  auth         String    @db.Text
+  userAgent    String?   @db.Text
+  platform     String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  institute    Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       Parent?   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([instituteId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([isActive])
 }
 
 model ParentStudent {
