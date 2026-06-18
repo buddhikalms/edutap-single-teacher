@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useActionState, useEffect } from "react";
-import { Building2, Palette, ReceiptText, Upload } from "lucide-react";
+import { BellRing, Building2, Palette, ReceiptText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { updateInstituteSettings } from "@/app/(dashboard)/settings/actions";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,19 @@ type SettingsFormProps = {
     paymentDueDay: number;
     attendanceLateAfterMins: number;
     attendanceAutoAbsent: boolean;
+    attendanceParentArrivalNotificationEnabled: boolean;
+    attendanceParentIncludePaymentSummary: boolean;
+    attendanceParentIncludeOverdueAmount: boolean;
+    attendanceParentSendOncePerSession: boolean;
+    attendanceParentSendOnPresent: boolean;
+    attendanceParentSendOnLate: boolean;
+    attendanceParentMessageTemplate: string | null;
+    classEndedNotificationEnabled: boolean;
+    classEndedIncludePaymentSummary: boolean;
+    classEndedSendToPresent: boolean;
+    classEndedSendToLate: boolean;
+    classEndedSendToAbsent: boolean;
+    classEndedMessageTemplate: string | null;
     currency: string;
     themeColor: string;
     logoPlaceholder: string | null;
@@ -130,7 +143,7 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
         </Card>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-5 xl:grid-cols-3">
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Attendance rules</CardTitle>
@@ -154,6 +167,120 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
                 <span className="mt-1 block text-muted-foreground">Use this rule when closing attendance sessions.</span>
               </span>
             </label>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BellRing className="h-5 w-5" />
+              Class over notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle
+              name="classEndedNotificationEnabled"
+              title="Enable class over notification"
+              description="Allow teachers and admins to notify parents after a class ends."
+              checked={settings.classEndedNotificationEnabled}
+            />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <Toggle
+                name="classEndedIncludePaymentSummary"
+                title="Include payment summary"
+                description="Attach pending totals, due items, and nearest due date."
+                checked={settings.classEndedIncludePaymentSummary}
+              />
+              <Toggle
+                name="classEndedSendToPresent"
+                title="Send to present students"
+                description="Notify parents of students marked present."
+                checked={settings.classEndedSendToPresent}
+              />
+              <Toggle
+                name="classEndedSendToLate"
+                title="Send to late students"
+                description="Notify parents of students marked late."
+                checked={settings.classEndedSendToLate}
+              />
+              <Toggle
+                name="classEndedSendToAbsent"
+                title="Send to absent students"
+                description="Optional: include students marked absent."
+                checked={settings.classEndedSendToAbsent}
+              />
+            </div>
+            <Field label="Class over message template" htmlFor="classEndedMessageTemplate">
+              <Textarea
+                id="classEndedMessageTemplate"
+                name="classEndedMessageTemplate"
+                defaultValue={settings.classEndedMessageTemplate ?? ""}
+                placeholder="{{className}} at {{branchName}} has ended at {{endTime}}. {{studentName}} attended the class today. {{paymentSummary}}"
+              />
+            </Field>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Variables: {"{{studentName}}"}, {"{{className}}"}, {"{{branchName}}"}, {"{{teacherName}}"}, {"{{endTime}}"}, {"{{attendanceStatus}}"}, {"{{pendingTotal}}"}, {"{{nearestDueDate}}"}.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BellRing className="h-5 w-5" />
+              Parent arrival notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle
+              name="attendanceParentArrivalNotificationEnabled"
+              title="Send arrival notification"
+              description="Notify linked parent app accounts when attendance is marked."
+              checked={settings.attendanceParentArrivalNotificationEnabled}
+            />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <Toggle
+                name="attendanceParentIncludePaymentSummary"
+                title="Include pending payments"
+                description="Add pending totals, due items, and nearest due date."
+                checked={settings.attendanceParentIncludePaymentSummary}
+              />
+              <Toggle
+                name="attendanceParentIncludeOverdueAmount"
+                title="Include overdue amount"
+                description="Show overdue totals in the notification payload."
+                checked={settings.attendanceParentIncludeOverdueAmount}
+              />
+              <Toggle
+                name="attendanceParentSendOncePerSession"
+                title="Send only once per session"
+                description="Keep one parent alert for each attendance record."
+                checked={settings.attendanceParentSendOncePerSession}
+              />
+              <Toggle
+                name="attendanceParentSendOnPresent"
+                title="Send on present"
+                description="Trigger alerts for students marked present."
+                checked={settings.attendanceParentSendOnPresent}
+              />
+              <Toggle
+                name="attendanceParentSendOnLate"
+                title="Send on late"
+                description="Trigger alerts for students marked late."
+                checked={settings.attendanceParentSendOnLate}
+              />
+            </div>
+            <Field label="Custom message template" htmlFor="attendanceParentMessageTemplate">
+              <Textarea
+                id="attendanceParentMessageTemplate"
+                name="attendanceParentMessageTemplate"
+                defaultValue={settings.attendanceParentMessageTemplate ?? ""}
+                placeholder="{{studentName}} has arrived for {{className}} at {{branchName}} today at {{attendanceTime}}. {{paymentSummary}}"
+              />
+            </Field>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Variables: {"{{studentName}}"}, {"{{className}}"}, {"{{branchName}}"}, {"{{teacherName}}"}, {"{{attendanceTime}}"}, {"{{pendingTotal}}"}, {"{{nearestDueDate}}"}.
+            </p>
           </CardContent>
         </Card>
 
@@ -203,5 +330,17 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
+  );
+}
+
+function Toggle({ name, title, description, checked }: { name: string; title: string; description: string; checked: boolean }) {
+  return (
+    <label className="flex items-start gap-3 rounded-xl border bg-white/70 p-4 text-sm">
+      <Checkbox name={name} defaultChecked={checked} />
+      <span>
+        <span className="block font-semibold">{title}</span>
+        <span className="mt-1 block text-muted-foreground">{description}</span>
+      </span>
+    </label>
   );
 }

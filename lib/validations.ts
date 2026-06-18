@@ -30,6 +30,56 @@ const optionalEmail = z
   .transform((value) => (value ? value : undefined))
   .pipe(z.string().email("Enter a valid email.").optional());
 
+export const publicTeacherRegistrationSchema = z.object({
+  fullName: z.string().trim().min(2, "Full name is required."),
+  email: z.string().trim().email("Enter a valid email."),
+  phone: z.string().trim().min(6, "Phone number is required."),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+  profilePhotoUrl: optionalText,
+  subject: z.string().trim().min(2, "Subject is required."),
+  gradesTaught: z.string().trim().min(2, "Grades taught are required."),
+  teachingMode: z.enum(["ONLINE", "PHYSICAL", "BOTH"]),
+  experience: z.string().trim().min(1, "Experience is required."),
+  qualifications: z.string().trim().min(2, "Qualifications are required."),
+  bio: z.string().trim().min(20, "Bio must be at least 20 characters."),
+  preferredPackage: z.enum(["SINGLE_TEACHER", "INSTITUTE_STARTER", "INSTITUTE_PRO", "ENTERPRISE"]),
+  agreement: z.boolean().refine((value) => value, "You must accept the agreement.")
+});
+
+export const publicInstituteRegistrationSchema = z.object({
+  instituteName: z.string().trim().min(2, "Institute name is required."),
+  ownerName: z.string().trim().min(2, "Owner name is required."),
+  email: z.string().trim().email("Enter a valid email."),
+  phone: z.string().trim().min(6, "Phone number is required."),
+  branchCount: z.coerce.number().int().min(1, "At least one branch is required."),
+  studentCount: z.coerce.number().int().min(0, "Student count must be zero or more."),
+  preferredPackage: z.enum(["SINGLE_TEACHER", "INSTITUTE_STARTER", "INSTITUTE_PRO", "ENTERPRISE"]),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+  address: z.string().trim().min(3, "Address is required."),
+  logoUrl: optionalText
+});
+
+export const studentSelfRegistrationSchema = z.object({
+  instituteSlug: z
+    .string()
+    .trim()
+    .min(3, "Workspace slug is required.")
+    .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, and hyphens only."),
+  branchId: optionalText,
+  branchCode: optionalText,
+  admissionNo: optionalText,
+  firstName: z.string().trim().min(1, "First name is required."),
+  lastName: z.string().trim().min(1, "Last name is required."),
+  email: z.string().trim().email("Enter a valid student email."),
+  phone: optionalText,
+  dateOfBirth: optionalText,
+  password: z.string().min(8, "Password must be at least 8 characters."),
+  parentName: z.string().trim().min(1, "Parent or guardian name is required."),
+  parentEmail: optionalEmail,
+  parentPhone: z.string().trim().min(1, "Parent or guardian phone is required."),
+  parentOccupation: optionalText
+});
+
 export const studentSchema = z.object({
   admissionNo: z.string().trim().min(1, "Admission number is required."),
   firstName: z.string().trim().min(1, "First name is required."),
@@ -341,6 +391,9 @@ export const liveClassRecordingSchema = z.object({
 });
 
 export type StudentInput = z.infer<typeof studentSchema>;
+export type PublicTeacherRegistrationInput = z.infer<typeof publicTeacherRegistrationSchema>;
+export type PublicInstituteRegistrationInput = z.infer<typeof publicInstituteRegistrationSchema>;
+export type StudentSelfRegistrationInput = z.infer<typeof studentSelfRegistrationSchema>;
 export type TeacherInput = z.infer<typeof teacherSchema>;
 export type GradeInput = z.infer<typeof gradeSchema>;
 export type BranchInput = z.infer<typeof branchSchema>;

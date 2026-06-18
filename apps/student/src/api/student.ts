@@ -1,11 +1,35 @@
 import { apiFormRequest, apiRequest } from "@/api/client";
 import type { DashboardResponse, HomeworkItem, LiveClassesResponse, ProfileResponse, QuizItem, StudentSession } from "@/types/api";
 
+export type StudentRegistrationInput = {
+  instituteSlug: string;
+  branchCode?: string;
+  admissionNo?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string;
+  password: string;
+  parentName: string;
+  parentEmail?: string;
+  parentPhone: string;
+  parentOccupation?: string;
+};
+
 export function loginStudent(apiUrl: string, identifier: string, password: string) {
   return apiRequest<{ ok: true; token: string; student: StudentSession["student"] }>("/api/student-mobile/auth/login", {
     method: "POST",
     apiUrl,
     body: { identifier, password, platform: "expo" }
+  });
+}
+
+export function registerStudent(apiUrl: string, input: StudentRegistrationInput) {
+  return apiRequest<{ ok: true; message: string; student: { admissionNo: string; name: string } }>("/api/student-mobile/auth/register", {
+    method: "POST",
+    apiUrl,
+    body: input
   });
 }
 

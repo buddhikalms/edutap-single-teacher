@@ -2,6 +2,7 @@ import { AttendanceSource, AttendanceStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MobileAuthError, requireOperationalMobileUser } from "@/lib/mobile-auth";
+import { sendParentAttendanceNotification } from "@/lib/parent-attendance-notifications";
 import { manualAttendanceSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
@@ -46,8 +47,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "One or more students are not enrolled in this class." }, { status: 403 });
     }
 
+    const notificationJobs: Array<{ attendanceRecordId: string; studentId: string; status: AttendanceStatus; markedAt: Date }> = [];
+
     await prisma.$transaction(async (tx) => {
       for (const record of parsed.data.records) {
+        const existing = await tx.attendanceRecord.findUnique({
+          where: {
+            sessionId_studentId: {
+              sessionId: session.id,
+              studentId: record.studentId
+            }
+          },
+          select: { id: true }
+        });
+
         const saved = await tx.attendanceRecord.upsert({
           where: {
             sessionId_studentId: {
@@ -82,8 +95,29 @@ export async function POST(request: Request) {
             message: "Manual attendance saved from mobile."
           }
         });
+
+        if (!existing) {
+          notificationJobs.push({ attendanceRecordId: saved.id, studentId: record.studentId, status: saved.status, markedAt: saved.markedAt });
+        }
       }
     });
+
+    await Promise.all(
+      notificationJobs
+        .filter((job) => job.status === AttendanceStatus.PRESENT || job.status === AttendanceStatus.LATE)
+        .map((job) =>
+          sendParentAttendanceNotification({
+            instituteId: user.instituteId,
+            attendanceRecordId: job.attendanceRecordId,
+            studentId: job.studentId,
+            classGroupId: session.classGroupId,
+            branchId: session.classGroup.branchId,
+            markedAt: job.markedAt
+          }).catch((error) => {
+            console.error("Parent attendance notification failed", error);
+          })
+        )
+    );
 
     return NextResponse.json({ ok: true, message: "Manual attendance saved." });
   } catch (error) {

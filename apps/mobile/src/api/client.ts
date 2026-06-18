@@ -46,7 +46,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   } catch (error) {
     const message =
       error instanceof Error && error.name === "AbortError"
-        ? `Could not reach ClassCard backend at ${apiUrl}. Check the Backend URL and Wi-Fi network.`
+        ? `Could not reach EduTap backend at ${apiUrl}. Check the Backend URL and Wi-Fi network.`
         : `Network request failed for ${apiUrl}. Check the Backend URL and Wi-Fi network.`;
     throw new ApiError(message, 0, error);
   } finally {

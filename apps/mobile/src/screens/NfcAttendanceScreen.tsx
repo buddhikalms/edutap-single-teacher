@@ -147,7 +147,7 @@ export function NfcAttendanceScreen({ navigation, route }: Props) {
           <Ionicons name="card" color={colors.gold} size={52} />
         </View>
         <Text style={styles.tapTitle}>{listening ? "Listening for card" : "Tap student card"}</Text>
-        <Text style={styles.tapSub}>Hold the NFC card near the device. The UID is sent to ClassCard Pro instantly.</Text>
+        <Text style={styles.tapSub}>Hold the NFC card near the device. The UID is sent to EduTap instantly.</Text>
         {supported === null ? <ActivityIndicator color={colors.gold} /> : null}
         {supported === false ? <Text style={styles.error}>NFC is not available on this device or build.</Text> : null}
         {lastReadUid ? <Text style={styles.uid}>Last UID {lastReadUid}</Text> : null}

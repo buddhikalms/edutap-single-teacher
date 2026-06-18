@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
 import { classGroupSchema, courseSchema, type ClassGroupInput, type CourseInput } from "@/lib/validations";
+import { assertCanCreateWithinLimit, packageLimitMessage } from "@/lib/usage-limits";
 
 function duplicateMessage(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -44,10 +45,30 @@ async function teacherIdForClass(inputTeacherId: string | undefined, context: Aw
   return teacher.id;
 }
 
+async function teacherIdForCourse(context: Awaited<ReturnType<typeof getTenantContext>>) {
+  if (context.role !== "TEACHER") {
+    return null;
+  }
+
+  const teacher = await prisma.teacher.findFirst({
+    where: { userId: context.userId, instituteId: context.instituteId },
+    select: { id: true }
+  });
+
+  if (!teacher) {
+    throw new Error("Your teacher account is not linked to a teacher profile.");
+  }
+
+  return teacher.id;
+}
+
 export async function createCourse(input: CourseInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const context = await getTenantContext();
+    const { instituteId } = context;
     const parsed = courseSchema.parse(input);
+    const teacherId = await teacherIdForCourse(context);
+    await assertCanCreateWithinLimit(instituteId, "courses");
     const grade = await prisma.grade.findFirst({ where: { id: parsed.gradeId, instituteId, isActive: true }, select: { id: true, name: true } });
 
     if (!grade) {
@@ -61,6 +82,7 @@ export async function createCourse(input: CourseInput): Promise<ActionState> {
         subject: parsed.subject ?? null,
         grade: grade.name,
         gradeId: grade.id,
+        teacherId,
         description: parsed.description ?? null,
         fee: parsed.fee,
         instituteId
@@ -70,6 +92,11 @@ export async function createCourse(input: CourseInput): Promise<ActionState> {
     revalidatePath("/classes");
     return { ok: true, message: "Course added successfully." };
   } catch (error) {
+    const limit = packageLimitMessage(error);
+    if (limit) {
+      return { ok: false, message: limit };
+    }
+
     const duplicate = duplicateMessage(error);
     if (duplicate) {
       return { ok: false, message: duplicate };
@@ -125,6 +152,7 @@ export async function createClassGroup(input: ClassGroupInput): Promise<ActionSt
     const { instituteId } = context;
     const parsed = classGroupSchema.parse(input);
     const teacherId = await teacherIdForClass(parsed.teacherId, context);
+    await assertCanCreateWithinLimit(instituteId, "classes");
     await assertClassRelations(instituteId, { ...parsed, teacherId: teacherId ?? undefined });
 
     await prisma.classGroup.create({
@@ -151,6 +179,11 @@ export async function createClassGroup(input: ClassGroupInput): Promise<ActionSt
     revalidatePath("/teachers");
     return { ok: true, message: "Class added successfully." };
   } catch (error) {
+    const limit = packageLimitMessage(error);
+    if (limit) {
+      return { ok: false, message: limit };
+    }
+
     const duplicate = duplicateMessage(error);
     if (duplicate) {
       return { ok: false, message: duplicate };

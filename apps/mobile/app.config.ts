@@ -1,9 +1,9 @@
 import type { ExpoConfig } from "expo/config";
 
 const config: ExpoConfig = {
-  name: "ClassCard Pro",
-  slug: "classcard-pro-mobile",
-  scheme: "classcardpro",
+  name: "EduTap",
+  slug: "edutap-mobile",
+  scheme: "edutap",
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
@@ -12,14 +12,14 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: "com.classcardpro.mobile",
+    bundleIdentifier: "com.edutap.mobile",
     infoPlist: {
-      NSCameraUsageDescription: "ClassCard Pro uses the camera to scan student attendance QR codes.",
-      NFCReaderUsageDescription: "ClassCard Pro uses NFC to read student attendance cards."
+      NSCameraUsageDescription: "EduTap uses the camera to scan student attendance QR codes.",
+      NFCReaderUsageDescription: "EduTap uses NFC to read student attendance cards."
     }
   },
   android: {
-    package: "com.classcardpro.mobile",
+    package: "com.edutap.mobile",
     adaptiveIcon: {
       backgroundColor: "#07111f"
     },
@@ -31,7 +31,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow ClassCard Pro to scan student QR attendance codes."
+        cameraPermission: "Allow EduTap to scan student QR attendance codes."
       }
     ]
   ],

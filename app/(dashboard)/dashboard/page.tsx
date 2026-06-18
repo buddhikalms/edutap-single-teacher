@@ -30,7 +30,7 @@ export default async function DashboardPage() {
   endOfToday.setDate(endOfToday.getDate() + 1);
   const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
 
-  const [totalStudents, todayRecords, presentToday, pendingPayments, monthlyIncome, recentPayments, recentAttendance, classGroups] =
+  const [totalStudents, todayRecords, presentToday, pendingPayments, monthlyIncome, recentPayments, recentAttendance, classGroups, settings] =
     await Promise.all([
       prisma.student.count({ where: { instituteId } }),
       prisma.attendanceRecord.count({
@@ -98,14 +98,16 @@ export default async function DashboardPage() {
           }
         },
         take: 4
-      })
+      }),
+      prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
     ]);
+  const currency = settings?.currency ?? "USD";
 
   const attendanceRate = todayRecords === 0 ? "0%" : `${Math.round((presentToday / todayRecords) * 100)}%`;
   const activities = [
     ...recentPayments.map((payment) => ({
       title: `${payment.student.firstName} ${payment.student.lastName} invoice ${payment.invoiceNo}`,
-      detail: `${payment.status.toLowerCase()} payment of ${formatCurrency(payment.amount.toString())}`,
+      detail: `${payment.status.toLowerCase()} payment of ${formatCurrency(payment.amount.toString(), currency)}`,
       tone: payment.status === PaymentStatus.PAID ? ("success" as const) : ("warning" as const)
     })),
     ...recentAttendance.map((record) => ({
@@ -144,12 +146,12 @@ export default async function DashboardPage() {
         <StatCard title="Today attendance" value={attendanceRate} helper={`${presentToday} present from ${todayRecords} marks`} icon={CalendarCheck2} tone="teal" />
         <StatCard
           title="Pending payments"
-          value={formatCurrency(pendingPayments._sum.amount?.toString() ?? 0)}
+          value={formatCurrency(pendingPayments._sum.amount?.toString() ?? 0, currency)}
           helper={`${pendingPayments._count._all} invoices need attention`}
           icon={CreditCard}
           tone="gold"
         />
-        <StatCard title="Monthly income" value={formatCurrency(monthlyIncome._sum.amount?.toString() ?? 0)} helper="Collected this month" icon={DollarSign} tone="rose" />
+        <StatCard title="Monthly income" value={formatCurrency(monthlyIncome._sum.amount?.toString() ?? 0, currency)} helper="Collected this month" icon={DollarSign} tone="rose" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">

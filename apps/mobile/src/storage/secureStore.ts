@@ -2,9 +2,9 @@ import * as SecureStore from "expo-secure-store";
 import { defaultApiUrl } from "@/config/env";
 import type { ApiUser } from "@/types/api";
 
-const TOKEN_KEY = "classcard.mobile.token";
-const USER_KEY = "classcard.mobile.user";
-const API_URL_KEY = "classcard.mobile.apiUrl";
+const TOKEN_KEY = "edutap.mobile.token";
+const USER_KEY = "edutap.mobile.user";
+const API_URL_KEY = "edutap.mobile.apiUrl";
 
 export async function saveSession(token: string, user: ApiUser) {
   await SecureStore.setItemAsync(TOKEN_KEY, token);

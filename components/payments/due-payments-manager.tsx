@@ -45,7 +45,7 @@ export type DueClassOption = {
   name: string;
 };
 
-export function DuePaymentsManager({ rows, classes, month }: { rows: DueRow[]; classes: DueClassOption[]; month: string }) {
+export function DuePaymentsManager({ rows, classes, month, currency }: { rows: DueRow[]; classes: DueClassOption[]; month: string; currency: string }) {
   const router = useRouter();
   const [globalFilter, setGlobalFilter] = useState("");
   const [classFilter, setClassFilter] = useState("ALL");
@@ -162,14 +162,14 @@ export function DuePaymentsManager({ rows, classes, month }: { rows: DueRow[]; c
       {
         accessorKey: "fee",
         header: "Fee",
-        cell: ({ row }) => formatCurrency(row.original.fee)
+        cell: ({ row }) => formatCurrency(row.original.fee, currency)
       },
       {
         accessorKey: "balance",
         header: "Balance",
         cell: ({ row }) => (
           <div>
-            <p className="font-semibold">{formatCurrency(row.original.balance)}</p>
+            <p className="font-semibold">{formatCurrency(row.original.balance, currency)}</p>
             <Badge variant={row.original.status === "PAID" ? "success" : row.original.status === "OVERDUE" ? "warning" : "outline"}>
               {row.original.status.toLowerCase()}
             </Badge>

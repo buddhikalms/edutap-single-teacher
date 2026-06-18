@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { assertCanCreateWithinLimit, packageLimitMessage } from "@/lib/usage-limits";
 import { teacherSchema, type TeacherInput } from "@/lib/validations";
 
 async function assertTeacherRelations(instituteId: string, input: TeacherInput) {
@@ -39,6 +40,7 @@ export async function createTeacher(input: TeacherInput): Promise<ActionState> {
   try {
     const { instituteId } = await getTenantContext();
     const parsed = teacherSchema.parse(input);
+    await assertCanCreateWithinLimit(instituteId, "teachers");
     await assertTeacherRelations(instituteId, parsed);
 
     const teacher = await prisma.teacher.create({
@@ -63,6 +65,11 @@ export async function createTeacher(input: TeacherInput): Promise<ActionState> {
     revalidatePath("/classes");
     return { ok: true, message: "Teacher added successfully." };
   } catch (error) {
+    const limit = packageLimitMessage(error);
+    if (limit) {
+      return { ok: false, message: limit };
+    }
+
     const duplicate = duplicateMessage(error);
     if (duplicate) {
       return { ok: false, message: duplicate };

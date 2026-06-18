@@ -5,7 +5,7 @@ import { getTenantContext } from "@/lib/session";
 export default async function StudentsPage() {
   const { instituteId } = await getTenantContext();
 
-  const [students, branches] = await Promise.all([
+  const [students, branches, settings] = await Promise.all([
     prisma.student.findMany({
       where: { instituteId },
       include: {
@@ -25,6 +25,10 @@ export default async function StudentsPage() {
       where: { instituteId },
       select: { id: true, name: true },
       orderBy: { name: "asc" }
+    }),
+    prisma.instituteSettings.findUnique({
+      where: { instituteId },
+      select: { currency: true }
     })
   ]);
 
@@ -60,5 +64,5 @@ export default async function StudentsPage() {
         : Math.round((student.attendance.filter((record) => record.status === "PRESENT").length / student.attendance.length) * 100)
   }));
 
-  return <StudentsTable data={rows} branches={branches} />;
+  return <StudentsTable data={rows} branches={branches} currency={settings?.currency ?? "USD"} />;
 }

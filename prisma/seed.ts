@@ -1,4 +1,4 @@
-import { PrismaClient, AttendanceStatus, PaymentMethod, PaymentStatus, SubscriptionPlan, SubscriptionStatus, UserRole } from "@prisma/client";
+import { PrismaClient, AttendanceStatus, PaymentMethod, PaymentStatus, SubscriptionPlanKey, SubscriptionStatus, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 
@@ -25,12 +25,12 @@ async function main() {
   await prisma.branch.deleteMany();
   await prisma.institute.deleteMany();
 
-  const passwordHash = await bcrypt.hash("ClassCard@2026", 12);
+  const passwordHash = await bcrypt.hash("EduTap@2026", 12);
 
   const superAdmin = await prisma.user.create({
     data: {
       name: "Ariana Wells",
-      email: "super@classcard.test",
+      email: "super@edutap.test",
       passwordHash,
       role: UserRole.SUPER_ADMIN
     }
@@ -38,9 +38,9 @@ async function main() {
 
   const institute = await prisma.institute.create({
     data: {
-      name: "ClassCard Demo Academy",
-      slug: "classcard-demo",
-      email: "hello@classcard.test",
+      name: "EduTap Demo Academy",
+      slug: "edutap-demo",
+      email: "hello@edutap.test",
       phone: "+1 555 010 2026",
       address: "1200 Meridian Avenue, Suite 18, New York"
     }
@@ -50,7 +50,7 @@ async function main() {
     data: {
       instituteId: institute.id,
       receiptPrefix: "CCD",
-      receiptFooter: "Thank you for choosing ClassCard Demo Academy.",
+      receiptFooter: "Thank you for choosing EduTap Demo Academy.",
       paymentDueDay: 10,
       attendanceLateAfterMins: 15,
       attendanceAutoAbsent: true,
@@ -63,7 +63,7 @@ async function main() {
   await prisma.instituteSubscription.create({
     data: {
       instituteId: institute.id,
-      plan: SubscriptionPlan.SMALL_INSTITUTE,
+      plan: SubscriptionPlanKey.INSTITUTE_STARTER,
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: new Date(Date.now() + 24 * 24 * 60 * 60 * 1000),
       monthlyPrice: "79.00",
@@ -93,7 +93,7 @@ async function main() {
         },
         subscription: {
           create: {
-            plan: SubscriptionPlan.TEACHER,
+            plan: SubscriptionPlanKey.SINGLE_TEACHER,
             status: SubscriptionStatus.TRIAL,
             currentPeriodEnd: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000),
             monthlyPrice: "29.00",
@@ -123,7 +123,7 @@ async function main() {
         },
         subscription: {
           create: {
-            plan: SubscriptionPlan.PREMIUM_INSTITUTE,
+            plan: SubscriptionPlanKey.INSTITUTE_PRO,
             status: SubscriptionStatus.SUSPENDED,
             currentPeriodEnd: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
             monthlyPrice: "199.00",
@@ -181,7 +181,7 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       name: "Maya Bennett",
-      email: "admin@classcard.test",
+      email: "admin@edutap.test",
       passwordHash,
       role: UserRole.INSTITUTE_ADMIN,
       instituteId: institute.id,
@@ -191,9 +191,9 @@ async function main() {
 
   const teacherUsers = await Promise.all(
     [
-      ["Elena Brooks", "elena@classcard.test"],
-      ["Noah Hart", "noah@classcard.test"],
-      ["Priya Raman", "priya@classcard.test"]
+      ["Elena Brooks", "elena@edutap.test"],
+      ["Noah Hart", "noah@edutap.test"],
+      ["Priya Raman", "priya@edutap.test"]
     ].map(([name, email]) =>
       prisma.user.create({
         data: {
@@ -212,7 +212,7 @@ async function main() {
     prisma.teacher.create({
       data: {
         name: "Elena Brooks",
-        email: "elena@classcard.test",
+        email: "elena@edutap.test",
         phone: "+1 555 011 0101",
         specialty: "Mathematics",
         userId: teacherUsers[0].id,
@@ -223,7 +223,7 @@ async function main() {
     prisma.teacher.create({
       data: {
         name: "Noah Hart",
-        email: "noah@classcard.test",
+        email: "noah@edutap.test",
         phone: "+1 555 011 0102",
         specialty: "Physics",
         userId: teacherUsers[1].id,
@@ -234,7 +234,7 @@ async function main() {
     prisma.teacher.create({
       data: {
         name: "Priya Raman",
-        email: "priya@classcard.test",
+        email: "priya@edutap.test",
         phone: "+1 555 011 0103",
         specialty: "English Literature",
         userId: teacherUsers[2].id,
@@ -339,7 +339,7 @@ async function main() {
   const parentOne = await prisma.parent.create({
     data: {
       name: "Avery Collins",
-      email: "avery.parent@classcard.test",
+      email: "avery.parent@edutap.test",
       phone: "+1 555 012 0001",
       occupation: "Architect",
       instituteId: institute.id
@@ -349,7 +349,7 @@ async function main() {
   const parentTwo = await prisma.parent.create({
     data: {
       name: "Jordan Lee",
-      email: "jordan.parent@classcard.test",
+      email: "jordan.parent@edutap.test",
       phone: "+1 555 012 0002",
       occupation: "Consultant",
       instituteId: institute.id
@@ -360,7 +360,7 @@ async function main() {
     prisma.user.create({
       data: {
         name: parentOne.name,
-        email: parentOne.email ?? "avery.parent@classcard.test",
+        email: parentOne.email ?? "avery.parent@edutap.test",
         passwordHash,
         role: UserRole.PARENT,
         instituteId: institute.id,
@@ -370,7 +370,7 @@ async function main() {
     prisma.user.create({
       data: {
         name: parentTwo.name,
-        email: parentTwo.email ?? "jordan.parent@classcard.test",
+        email: parentTwo.email ?? "jordan.parent@edutap.test",
         passwordHash,
         role: UserRole.PARENT,
         instituteId: institute.id,
@@ -519,7 +519,7 @@ async function main() {
 
   const welcomeNotice = await prisma.notice.create({
     data: {
-      title: "Welcome to the ClassCard family portal",
+      title: "Welcome to the EduTap family portal",
       body: "Attendance, payment history, receipts, and class notices are now available in one secure parent-friendly portal.",
       audience: "INSTITUTE",
       type: "NOTICE",
@@ -549,9 +549,9 @@ async function main() {
   console.log("Seed complete");
   console.log(`Super admin: ${superAdmin.email}`);
   console.log(`Demo admin: ${admin.email}`);
-  console.log("Demo parent: avery.parent@classcard.test");
+  console.log("Demo parent: avery.parent@edutap.test");
   console.log("Demo student: sofia.collins@student.test");
-  console.log("Demo password: ClassCard@2026");
+  console.log("Demo password: EduTap@2026");
 }
 
 main()

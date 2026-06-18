@@ -1,8 +1,8 @@
-# ClassCard Pro Product Guide and User Guide
+# EduTap Product Guide and User Guide
 
 ## Overview
 
-ClassCard Pro is a premium student management SaaS platform for tuition centers, schools, academies, and training institutes. It combines institute administration, student records, teacher management, class scheduling, enrollment, attendance, payments, learning tools, notifications, reports, parent/student access, and mobile attendance workflows in one system.
+EduTap is a premium student management SaaS platform for tuition centers, schools, academies, and training institutes. It combines institute administration, student records, teacher management, class scheduling, enrollment, attendance, payments, learning tools, notifications, reports, parent/student access, and mobile attendance workflows in one system.
 
 The platform is built for multi-branch institutes that need a structured way to manage daily operations, reduce manual work, improve fee collection visibility, and give students, parents, teachers, and administrators a clear digital experience.
 
@@ -207,8 +207,8 @@ The platform can serve as a foundation for a commercial SaaS product with subscr
 Demo login after seed data:
 
 ```text
-Email: admin@classcard.test
-Password: ClassCard@2026
+Email: admin@edutap.test
+Password: EduTap@2026
 ```
 
 ### 2. Register a New Institute
@@ -567,7 +567,7 @@ cp .env.example .env
 Set the main values:
 
 ```env
-DATABASE_URL="mysql://root:password@localhost:3306/classcard_pro"
+DATABASE_URL="mysql://root:password@localhost:3306/edutap"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 ```
@@ -575,7 +575,7 @@ NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 ### Create the Database
 
 ```sql
-CREATE DATABASE classcard_pro CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE edutap CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 ### Prepare Prisma and Seed Data

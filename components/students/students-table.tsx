@@ -108,7 +108,7 @@ function rowToInput(row: StudentRow): StudentInput {
   };
 }
 
-export function StudentsTable({ data, branches }: { data: StudentRow[]; branches: BranchOption[] }) {
+export function StudentsTable({ data, branches, currency }: { data: StudentRow[]; branches: BranchOption[]; currency: string }) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [editing, setEditing] = useState<StudentRow | null>(null);
@@ -151,7 +151,7 @@ export function StudentsTable({ data, branches }: { data: StudentRow[]; branches
         header: "Payments",
         cell: ({ row }) => (
           <div>
-            <p className="font-semibold">{formatCurrency(row.original.pendingAmount)}</p>
+            <p className="font-semibold">{formatCurrency(row.original.pendingAmount, currency)}</p>
             <p className="text-xs text-muted-foreground">pending</p>
           </div>
         )
@@ -181,7 +181,7 @@ export function StudentsTable({ data, branches }: { data: StudentRow[]; branches
         )
       }
     ],
-    []
+    [currency]
   );
 
   // TanStack Table intentionally returns function-heavy instances that React Compiler cannot memoize.

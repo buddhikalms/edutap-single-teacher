@@ -25,14 +25,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(20,184,166,0.16),_transparent_28%),linear-gradient(180deg,#f8fafc_0%,#f3f6f9_100%)]">
-      <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <Sidebar className="sticky top-0 hidden h-screen lg:flex" role={session.user.role} />
+      <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <Sidebar className="sticky top-0 hidden self-start lg:flex" role={session.user.role} />
         <div className="min-w-0">
           <DashboardHeader
-            instituteName={institute?.name ?? "ClassCard Workspace"}
+            instituteName={institute?.name ?? "EduTap Workspace"}
             user={{
-              name: session.user.name ?? "ClassCard User",
-              email: session.user.email ?? "user@classcard.test",
+              name: session.user.name ?? "EduTap User",
+              email: session.user.email ?? "user@edutap.test",
               role: session.user.role
             }}
           />

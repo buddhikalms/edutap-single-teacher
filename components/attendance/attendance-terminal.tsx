@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarCheck2,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   Loader2,
   QrCode,
   Radio,
+  Send,
   Search,
   ScanLine,
   ShieldAlert,
@@ -49,10 +51,13 @@ export type AttendanceSessionView = {
   id: string;
   classGroupId: string;
   className: string;
+  branchName: string;
+  teacherName: string;
   sessionDate: string;
   status: "ACTIVE" | "ENDED";
   startsAt: string | null;
   endsAt: string | null;
+  classEndNotificationCount: number;
   present: number;
   absent: number;
   late: number;
@@ -125,6 +130,8 @@ export function AttendanceTerminal({
   const [isPending, startTransition] = useTransition();
   const [isScanning, startScanTransition] = useTransition();
   const [isSearching, startSearchTransition] = useTransition();
+  const [isSendingClassOver, startClassOverTransition] = useTransition();
+  const router = useRouter();
 
   const branchOptions = useMemo(
     () => Array.from(new Map(classes.map((classGroup) => [classGroup.branchId, { id: classGroup.branchId, name: classGroup.branch }])).values()),
@@ -136,6 +143,7 @@ export function AttendanceTerminal({
   );
   const selectedClass = filteredClasses.find((classGroup) => classGroup.id === selectedClassId) ?? filteredClasses[0] ?? classes[0];
   const activeSession = selectedClass?.activeSession ?? null;
+  const canScan = activeSession?.status === "ACTIVE";
   function startSession() {
     if (!selectedClass) {
       toast.error("Select a class first.");
@@ -151,6 +159,7 @@ export function AttendanceTerminal({
       });
       if (result.ok) {
         toast.success(result.message);
+        router.refresh();
       } else {
         toast.error(result.message);
       }
@@ -167,9 +176,43 @@ export function AttendanceTerminal({
       const result = await endAttendanceSession(activeSession.id);
       if (result.ok) {
         toast.success(result.message);
+        router.refresh();
       } else {
         toast.error(result.message);
       }
+    });
+  }
+
+  function sendClassOverNotification() {
+    if (!activeSession || activeSession.status !== "ENDED") {
+      toast.error("End the class before sending class over notifications.");
+      return;
+    }
+
+    startClassOverTransition(async () => {
+      const response = await fetch(`/api/attendance-sessions/${activeSession.id}/send-class-ended-notification`, {
+        method: "POST"
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        sentCount?: number;
+        skippedDuplicates?: number;
+        failedCount?: number;
+      };
+
+      if (!response.ok || !payload.ok) {
+        toast.error(payload.message ?? "Could not send class over notifications.");
+        return;
+      }
+
+      if ((payload.sentCount ?? 0) > 0) {
+        toast.success(`Class over notifications sent to ${payload.sentCount} parent${payload.sentCount === 1 ? "" : "s"}.`);
+      } else {
+        toast.info(payload.message ?? "Class over notification already sent.");
+      }
+
+      router.refresh();
     });
   }
 
@@ -351,12 +394,23 @@ export function AttendanceTerminal({
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}
                 Start attendance session
               </Button>
-              <Button variant="outline" onClick={endSession} disabled={isPending || !activeSession}>
+              <Button variant="outline" onClick={endSession} disabled={isPending || !activeSession || activeSession.status !== "ACTIVE"}>
                 <Clock className="h-4 w-4" />
-                End session
+                End Class
               </Button>
             </div>
             <ActiveSessionCard session={activeSession} />
+            {activeSession?.status === "ENDED" ? (
+              <Button
+                className="w-full"
+                variant={activeSession.classEndNotificationCount > 0 ? "outline" : "default"}
+                onClick={sendClassOverNotification}
+                disabled={isSendingClassOver || activeSession.classEndNotificationCount > 0}
+              >
+                {isSendingClassOver ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {activeSession.classEndNotificationCount > 0 ? "Already sent" : "Send Class Over Notification"}
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -373,7 +427,7 @@ export function AttendanceTerminal({
                 </div>
                 <div className="flex gap-2">
                   <Input value={nfcUid} onChange={(event) => setNfcUid(event.target.value)} placeholder="Tap or enter NFC UID" />
-                  <Button onClick={scanNfc} disabled={isScanning || !activeSession}>
+                  <Button onClick={scanNfc} disabled={isScanning || !canScan}>
                     {isScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
                     Mark
                   </Button>
@@ -386,7 +440,7 @@ export function AttendanceTerminal({
                 </div>
                 <div className="flex gap-2">
                   <Input value={qrToken} onChange={(event) => setQrToken(event.target.value)} placeholder="Paste scanned secure token" />
-                  <Button variant="outline" onClick={scanQr} disabled={isScanning || !activeSession}>
+                  <Button variant="outline" onClick={scanQr} disabled={isScanning || !canScan}>
                     <QrCode className="h-4 w-4" />
                     Scan
                   </Button>
@@ -408,7 +462,7 @@ export function AttendanceTerminal({
                     }}
                     placeholder="Student ID, name, phone, or card number"
                   />
-                  <Button variant="outline" onClick={searchEnrolledStudents} disabled={isSearching || !activeSession}>
+                  <Button variant="outline" onClick={searchEnrolledStudents} disabled={isSearching || !canScan}>
                     {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     Search
                   </Button>
@@ -445,7 +499,7 @@ export function AttendanceTerminal({
                         <option value="EXCUSED">Excused</option>
                       </Select>
                     </div>
-                    <Button className="mt-3 w-full" onClick={() => markManualStudent()} disabled={isScanning || !activeSession}>
+                    <Button className="mt-3 w-full" onClick={() => markManualStudent()} disabled={isScanning || !canScan}>
                       Mark selected student
                     </Button>
                   </div>
@@ -474,14 +528,22 @@ function ActiveSessionCard({ session }: { session: AttendanceSessionView | null 
     );
   }
 
+  const isEnded = session.status === "ENDED";
+
   return (
-    <div className="rounded-xl border bg-emerald-50 p-5 text-emerald-900">
-      <div className="flex items-center justify-between gap-4">
+    <div className={`rounded-xl border p-5 ${isEnded ? "bg-slate-50 text-slate-950" : "bg-emerald-50 text-emerald-950"}`}>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
-          <p className="font-semibold">Active session</p>
-          <p className="mt-1 text-sm text-emerald-800">{session.className} · {session.sessionDate}</p>
+          <p className="text-sm font-semibold text-muted-foreground">Class Status</p>
+          <h3 className="mt-1 text-lg font-semibold">{session.className}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{session.branchName}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Teacher: {session.teacherName}</p>
         </div>
-        <Badge variant="success">active</Badge>
+        <Badge variant={isEnded ? "secondary" : "success"}>{isEnded ? "ended" : "active"}</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+        <TimeDetail label="Started" value={session.startsAt ? new Date(session.startsAt).toLocaleTimeString() : "Not recorded"} />
+        <TimeDetail label="Ended" value={session.endsAt ? new Date(session.endsAt).toLocaleTimeString() : "Not ended"} />
       </div>
       <div className="mt-4 grid grid-cols-4 gap-2 text-center text-sm">
         <StatPill label="Present" value={session.present} />
@@ -489,6 +551,20 @@ function ActiveSessionCard({ session }: { session: AttendanceSessionView | null 
         <StatPill label="Absent" value={session.absent} />
         <StatPill label="Excused" value={session.excused} />
       </div>
+      {isEnded && session.classEndNotificationCount > 0 ? (
+        <p className="mt-4 rounded-lg border bg-white/80 px-3 py-2 text-sm font-semibold text-muted-foreground">
+          Class over notification already sent.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TimeDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-white/70 p-3">
+      <p className="text-xs font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="mt-1 font-semibold">{value}</p>
     </div>
   );
 }
@@ -565,7 +641,7 @@ function FeedbackCard({ feedback }: { feedback: AttendanceMarkResult | null }) {
       {feedback.student ? (
         <div className="mt-6 space-y-3">
           <p className="text-2xl font-semibold">{feedback.student.name}</p>
-          <p className="text-sm">{feedback.student.admissionNo} · {feedback.status?.toLowerCase()}</p>
+          <p className="text-sm">{feedback.student.admissionNo} - {feedback.status?.toLowerCase()}</p>
           <div className="flex flex-wrap gap-2">
             <Badge variant={feedback.payment?.status === "clear" ? "success" : "warning"}>
               <CreditCard className="mr-1 h-3 w-3" />

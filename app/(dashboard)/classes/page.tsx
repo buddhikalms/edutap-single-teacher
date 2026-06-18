@@ -3,16 +3,22 @@ import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
 
 export default async function ClassesPage() {
-  const { instituteId, role } = await getTenantContext();
+  const { instituteId, role, userId } = await getTenantContext();
+  const teacherProfile = role === "TEACHER"
+    ? await prisma.teacher.findFirst({ where: { instituteId, userId }, select: { id: true } })
+    : null;
+  const teacherId = teacherProfile?.id;
+  const courseWhere = teacherId ? { instituteId, OR: [{ teacherId }, { classGroups: { some: { teacherId } } }] } : { instituteId };
+  const classWhere = teacherId ? { instituteId, teacherId } : { instituteId };
 
-  const [courses, classes, branches, grades, teachers] = await Promise.all([
+  const [courses, classes, branches, grades, teachers, settings] = await Promise.all([
     prisma.course.findMany({
-      where: { instituteId },
+      where: courseWhere,
       include: { gradeLevel: true, _count: { select: { classGroups: true } } },
       orderBy: { createdAt: "desc" }
     }),
     prisma.classGroup.findMany({
-      where: { instituteId },
+      where: classWhere,
       include: {
         branch: true,
         course: true,
@@ -24,7 +30,8 @@ export default async function ClassesPage() {
     }),
     prisma.branch.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.grade.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true }, orderBy: [{ order: "asc" }, { name: "asc" }] }),
-    prisma.teacher.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } })
+    prisma.teacher.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
   ]);
 
   const courseRows: CourseRow[] = courses.map((course) => ({
@@ -63,5 +70,15 @@ export default async function ClassesPage() {
     enrolled: classGroup._count.enrollments
   }));
 
-  return <ClassesManager courses={courseRows} classes={classRows} branches={branches} grades={grades} teachers={teachers} isTeacher={role === "TEACHER"} />;
+  return (
+    <ClassesManager
+      courses={courseRows}
+      classes={classRows}
+      branches={branches}
+      grades={grades}
+      teachers={teachers}
+      isTeacher={role === "TEACHER"}
+      currency={settings?.currency ?? "USD"}
+    />
+  );
 }

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   BellRing,
@@ -19,62 +22,98 @@ import { canAccess, roleAccess } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 const tenantNavItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, area: "dashboard" },
-  { href: "/students", label: "Students", icon: UsersRound, area: "students" },
-  { href: "/teachers", label: "Teachers", icon: GraduationCap, area: "teachers" },
-  { href: "/grades", label: "Grades", icon: BookOpenCheck, area: "grades" },
-  { href: "/classes", label: "Classes", icon: BookOpen, area: "classes" },
-  { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment" },
-  { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance" },
-  { href: "/payments", label: "Payments", icon: CreditCard, area: "payments" },
-  { href: "/homework", label: "Homework", icon: BookOpenCheck, area: "homework" },
-  { href: "/quizzes", label: "Quizzes", icon: Trophy, area: "quizzes" },
-  { href: "/live-classes", label: "Live Classes", icon: Video, area: "liveClasses" },
-  { href: "/reports", label: "Reports", icon: BarChart3, area: "reports" },
-  { href: "/notifications", label: "Notifications", icon: BellRing, area: "notifications" },
-  { href: "/settings", label: "Settings", icon: Settings2, area: "settings" },
-  { href: "/billing", label: "Billing", icon: CreditCard, area: "billing" }
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, area: "dashboard", group: "Main" },
+  { href: "/students", label: "Students", icon: UsersRound, area: "students", group: "People" },
+  { href: "/teachers", label: "Teachers", icon: GraduationCap, area: "teachers", group: "People" },
+  { href: "/grades", label: "Grades", icon: BookOpenCheck, area: "grades", group: "Academics" },
+  { href: "/classes", label: "Classes", icon: BookOpen, area: "classes", group: "Academics" },
+  { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment", group: "Academics" },
+  { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance", group: "Operations" },
+  { href: "/payments", label: "Payments", icon: CreditCard, area: "payments", group: "Operations" },
+  { href: "/homework", label: "Homework", icon: BookOpenCheck, area: "homework", group: "Learning" },
+  { href: "/quizzes", label: "Quizzes", icon: Trophy, area: "quizzes", group: "Learning" },
+  { href: "/live-classes", label: "Live Classes", icon: Video, area: "liveClasses", group: "Learning" },
+  { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", group: "Insights" },
+  { href: "/notifications", label: "Notifications", icon: BellRing, area: "notifications", group: "Insights" },
+  { href: "/settings", label: "Settings", icon: Settings2, area: "settings", group: "Workspace" },
+  { href: "/billing", label: "Billing", icon: CreditCard, area: "billing", group: "Workspace" }
 ];
 
 const superAdminNavItems = [
-  { href: "/admin", label: "Super admin", icon: ShieldCheck, area: "admin" }
+  { href: "/admin", label: "Super admin", icon: ShieldCheck, area: "admin", group: "Platform" }
 ];
 
 export function Sidebar({ className, role }: { className?: string; role?: string }) {
+  const pathname = usePathname();
   const navItems = (role === "SUPER_ADMIN" ? superAdminNavItems : tenantNavItems).filter((item) =>
     canAccess(role, item.area as keyof typeof roleAccess)
   );
+  const groupedItems = navItems.reduce<Record<string, typeof navItems>>((groups, item) => {
+    groups[item.group] = [...(groups[item.group] ?? []), item];
+    return groups;
+  }, {});
 
   return (
-    <aside className={cn("flex h-full flex-col border-r border-white/70 bg-primary text-white", className)}>
-      <div className="flex h-20 items-center gap-3 px-6">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-primary shadow-glow">
-          <GraduationCap className="h-6 w-6" />
-        </div>
-        <div>
-          <p className="text-lg font-bold">ClassCard Pro</p>
-          <p className="text-xs text-white/60">Premium command center</p>
+    <aside
+      className={cn(
+        "flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden border-r border-white/10 bg-primary text-white shadow-[18px_0_50px_-34px_rgba(15,23,42,0.7)]",
+        className
+      )}
+    >
+      <div className="shrink-0 border-b border-white/10 px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-glow">
+            <GraduationCap className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-lg font-bold">EduTap</p>
+            <p className="text-xs text-white/60">Premium command center</p>
+          </div>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-4 py-5">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white/75 transition hover:bg-white/10 hover:text-white"
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Link>
+      <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        {Object.entries(groupedItems).map(([group, items]) => (
+          <div key={group} className="pb-5 last:pb-1">
+            <p className="px-3 pb-2 text-[11px] font-semibold uppercase text-white/40">{group}</p>
+            <div className="space-y-1">
+              {items.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-white/72 transition",
+                      "hover:bg-white/10 hover:text-white",
+                      active && "bg-white text-primary shadow-glow hover:bg-white hover:text-primary"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/72 transition group-hover:bg-white/15 group-hover:text-white",
+                        active && "bg-primary/10 text-primary group-hover:bg-primary/10 group-hover:text-primary"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
 
-      <div className="m-4 rounded-xl border border-white/10 bg-white/10 p-4">
-        <p className="text-sm font-semibold">Growth pulse</p>
-        <p className="mt-2 text-xs leading-5 text-white/60">
-          Attendance, payments, and enrollment insight are ready for your next workflow.
-        </p>
+      <div className="shrink-0 border-t border-white/10 p-4">
+        <div className="rounded-xl border border-white/10 bg-white/[0.08] p-4">
+          <p className="text-sm font-semibold">Growth pulse</p>
+          <p className="mt-2 text-xs leading-5 text-white/60">
+            Attendance, payments, and enrollment insight are ready for your next workflow.
+          </p>
+        </div>
       </div>
     </aside>
   );

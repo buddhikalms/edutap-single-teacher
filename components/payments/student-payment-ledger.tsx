@@ -43,11 +43,13 @@ export type PaymentClassOption = {
 export function StudentPaymentLedger({
   student,
   classes,
-  payments
+  payments,
+  currency
 }: {
   student: { id: string; name: string; admissionNo: string };
   classes: PaymentClassOption[];
   payments: StudentPaymentRow[];
+  currency: string;
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -131,8 +133,8 @@ export function StudentPaymentLedger({
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
-        <Summary title="Total paid" value={formatCurrency(totals.paid)} tone="success" />
-        <Summary title="Outstanding balance" value={formatCurrency(totals.balance)} tone={totals.balance > 0 ? "warning" : "success"} />
+        <Summary title="Total paid" value={formatCurrency(totals.paid, currency)} tone="success" />
+        <Summary title="Outstanding balance" value={formatCurrency(totals.balance, currency)} tone={totals.balance > 0 ? "warning" : "success"} />
       </section>
 
       {showForm ? (
@@ -188,7 +190,7 @@ export function StudentPaymentLedger({
                 <Input type="number" step="0.01" {...form.register("paidAmount")} />
               </FormField>
               <FormField label="Balance">
-                <Input value={formatCurrency(balance)} readOnly />
+                <Input value={formatCurrency(balance, currency)} readOnly />
               </FormField>
             </FieldRow>
             <FieldRow>
@@ -236,9 +238,9 @@ export function StudentPaymentLedger({
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Amount label="Amount" value={payment.amount} />
-                    <Amount label="Paid" value={payment.paidAmount} />
-                    <Amount label="Balance" value={payment.balance} />
+                    <Amount label="Amount" value={payment.amount} currency={currency} />
+                    <Amount label="Paid" value={payment.paidAmount} currency={currency} />
+                    <Amount label="Balance" value={payment.balance} currency={currency} />
                     <Badge variant={payment.status === "PAID" ? "success" : payment.status === "OVERDUE" ? "warning" : "outline"}>
                       {payment.status.toLowerCase()}
                     </Badge>
@@ -282,11 +284,11 @@ function Summary({ title, value, tone }: { title: string; value: string; tone: "
   );
 }
 
-function Amount({ label, value }: { label: string; value: number }) {
+function Amount({ label, value, currency }: { label: string; value: number; currency: string }) {
   return (
     <div className="min-w-20">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-semibold">{formatCurrency(value)}</p>
+      <p className="font-semibold">{formatCurrency(value, currency)}</p>
     </div>
   );
 }

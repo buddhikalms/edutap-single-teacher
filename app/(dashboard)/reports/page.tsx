@@ -68,7 +68,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const endDate = parseDate(to, true);
   const dateRange = startDate || endDate ? { gte: startDate, lte: endDate } : undefined;
 
-  const [classes, students] = await Promise.all([
+  const [classes, students, settings] = await Promise.all([
     prisma.classGroup.findMany({
       where: { instituteId },
       select: { id: true, name: true },
@@ -78,8 +78,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       where: { instituteId },
       select: { id: true, admissionNo: true, firstName: true, lastName: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }]
-    })
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
   ]);
+  const currency = settings?.currency ?? "USD";
 
   const [attendanceRecords, payments, studentRows, teacherRows, classRows] = await Promise.all([
     prisma.attendanceRecord.findMany({
@@ -304,7 +306,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               Server-filtered attendance, payments, dues, students, teachers, and classes with export-ready operational detail.
             </p>
           </div>
-          <CsvExportButton filename="classcard-advanced-reports.csv" csv={csv} />
+          <CsvExportButton filename="edutap-advanced-reports.csv" csv={csv} />
         </div>
       </section>
 
@@ -320,8 +322,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <ReportMetricCard title="Attendance rate" value={`${attendanceRate}%`} helper={`${presentCount} present from ${attendanceRecords.length} records`} icon={CalendarCheck2} />
-        <ReportMetricCard title="Collected" value={formatCurrency(paidTotal)} helper={`${payments.length} payment records in this view`} icon={CreditCard} />
-        <ReportMetricCard title="Due payments" value={formatCurrency(dueTotal)} helper={`${duePayments.length} invoices with remaining balances`} icon={BarChart3} />
+        <ReportMetricCard title="Collected" value={formatCurrency(paidTotal, currency)} helper={`${payments.length} payment records in this view`} icon={CreditCard} />
+        <ReportMetricCard title="Due payments" value={formatCurrency(dueTotal, currency)} helper={`${duePayments.length} invoices with remaining balances`} icon={BarChart3} />
         <ReportMetricCard title="Students covered" value={String(studentReport.length)} helper={`${teacherReport.length} teachers and ${classReport.length} classes matched`} icon={UsersRound} />
       </section>
 
@@ -351,8 +353,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           { key: "invoice", label: "Invoice", render: (row) => row.invoiceNo },
           { key: "student", label: "Student", render: (row) => `${row.student.firstName} ${row.student.lastName}` },
           { key: "class", label: "Class", render: (row) => row.classGroup?.name ?? "General" },
-          { key: "paid", label: "Paid", align: "right", render: (row) => formatCurrency(row.paidAmount.toString()) },
-          { key: "balance", label: "Balance", align: "right", render: (row) => formatCurrency(row.balance.toString()) },
+          { key: "paid", label: "Paid", align: "right", render: (row) => formatCurrency(row.paidAmount.toString(), currency) },
+          { key: "balance", label: "Balance", align: "right", render: (row) => formatCurrency(row.balance.toString(), currency) },
           { key: "status", label: "Status", render: (row) => row.status }
         ]}
       />
@@ -365,7 +367,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           { key: "student", label: "Student", render: (row) => `${row.student.firstName} ${row.student.lastName}` },
           { key: "class", label: "Class", render: (row) => row.classGroup?.name ?? "General" },
           { key: "dueDate", label: "Due date", render: (row) => formatDate(row.dueDate) },
-          { key: "balance", label: "Balance", align: "right", render: (row) => formatCurrency(row.balance.toString()) },
+          { key: "balance", label: "Balance", align: "right", render: (row) => formatCurrency(row.balance.toString(), currency) },
           { key: "status", label: "Status", render: (row) => row.status }
         ]}
       />

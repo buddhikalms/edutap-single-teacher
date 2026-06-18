@@ -64,7 +64,7 @@ export async function requireStudentMobileUser(request: Request) {
     }
   });
 
-  if (!savedToken || savedToken.expiresAt < new Date()) {
+  if (!savedToken || !savedToken.studentId || !savedToken.student || !savedToken.expiresAt || savedToken.expiresAt < new Date()) {
     throw new StudentMobileAuthError("Your student session has expired. Please sign in again.");
   }
 

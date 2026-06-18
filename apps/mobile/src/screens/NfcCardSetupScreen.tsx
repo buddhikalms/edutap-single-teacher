@@ -8,7 +8,7 @@ import { PremiumButton } from "@/components/PremiumButton";
 import { PremiumCard } from "@/components/PremiumCard";
 import { ScreenShell } from "@/components/ScreenShell";
 import { StatusPill } from "@/components/StatusPill";
-import { writeClassCardStudentTag, type NfcWriteMode } from "@/lib/nfc";
+import { writeEduTapStudentTag, type NfcWriteMode } from "@/lib/nfc";
 import { colors } from "@/theme/colors";
 import type { RootStackParamList } from "@/navigation/types";
 import type { RosterStudent } from "@/types/api";
@@ -59,7 +59,7 @@ export function NfcCardSetupScreen({ route }: Props) {
     setSuccess("");
 
     try {
-      const card = await writeClassCardStudentTag({
+      const card = await writeEduTapStudentTag({
         studentId: selectedStudent.id,
         admissionNo: selectedStudent.admissionNo,
         name: selectedStudent.name

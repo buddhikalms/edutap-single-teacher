@@ -84,13 +84,13 @@ export default async function PortalReceiptPage({ params }: ReceiptPageProps) {
             </div>
             <div className="flex items-center justify-between pt-3">
               <span className="text-lg font-bold">Amount received</span>
-              <span className="text-2xl font-bold">{formatCurrency(Number(receipt.amount))}</span>
+              <span className="text-2xl font-bold">{formatCurrency(Number(receipt.amount), context.currency)}</span>
             </div>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <Badge variant="success">Paid</Badge>
-            <p className="text-sm text-muted-foreground">Received by {receipt.receivedBy ?? receipt.payment.receivedBy ?? "ClassCard staff"}</p>
+            <p className="text-sm text-muted-foreground">Received by {receipt.receivedBy ?? receipt.payment.receivedBy ?? "EduTap staff"}</p>
           </div>
         </CardContent>
       </Card>

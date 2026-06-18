@@ -1,4 +1,4 @@
-# ClassCard Pro
+# EduTap
 
 Premium student management SaaS foundation built with Next.js App Router, TypeScript, Tailwind CSS, shadcn-style components, Prisma, MySQL, NextAuth, Zod, Recharts, and TanStack Table.
 
@@ -73,13 +73,13 @@ cp .env.example .env
 3. Create a MySQL database:
 
 ```sql
-CREATE DATABASE classcard_pro CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE edutap CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 4. Update `DATABASE_URL`:
 
 ```env
-DATABASE_URL="mysql://root:password@localhost:3306/classcard_pro"
+DATABASE_URL="mysql://root:password@localhost:3306/edutap"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 ```
@@ -101,8 +101,8 @@ npm run dev
 Demo login after seeding:
 
 ```text
-Email: admin@classcard.test
-Password: ClassCard@2026
+Email: admin@edutap.test
+Password: EduTap@2026
 ```
 
 ## Prisma Commands

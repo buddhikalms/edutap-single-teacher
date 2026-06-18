@@ -11,7 +11,7 @@ export async function getTenantContext() {
 
   return {
     userId: session.user.id,
-    userName: session.user.name ?? "ClassCard User",
+    userName: session.user.name ?? "EduTap User",
     instituteId: session.user.instituteId,
     branchId: session.user.branchId,
     role: session.user.role

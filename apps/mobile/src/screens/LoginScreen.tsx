@@ -10,8 +10,8 @@ import { colors } from "@/theme/colors";
 
 export function LoginScreen() {
   const { signIn, apiUrl: savedApiUrl } = useAuth();
-  const [email, setEmail] = useState("admin@classcard.test");
-  const [password, setPassword] = useState("ClassCard@2026");
+  const [email, setEmail] = useState("admin@edutap.test");
+  const [password, setPassword] = useState("EduTap@2026");
   const [apiUrl, setApiUrl] = useState(savedApiUrl?.includes("localhost") ? defaultApiUrl : savedApiUrl || defaultApiUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -36,7 +36,7 @@ export function LoginScreen() {
             <View style={styles.logo}>
               <Ionicons name="card" color={colors.gold} size={28} />
             </View>
-            <Text style={styles.brandTitle}>ClassCard Pro</Text>
+            <Text style={styles.brandTitle}>EduTap</Text>
             <Text style={styles.brandSub}>Premium attendance terminal for teachers and staff.</Text>
           </View>
 

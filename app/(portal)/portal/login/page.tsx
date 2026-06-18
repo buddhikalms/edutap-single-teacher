@@ -19,7 +19,7 @@ export default async function PortalLoginPage() {
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center">
         <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_460px]">
           <div className="max-w-xl text-white">
-            <p className="text-sm font-semibold uppercase tracking-normal text-white/60">ClassCard Pro</p>
+            <p className="text-sm font-semibold uppercase tracking-normal text-white/60">EduTap</p>
             <h2 className="mt-4 text-4xl font-bold tracking-normal sm:text-5xl">A calm, premium window into student progress.</h2>
             <p className="mt-5 text-base leading-7 text-white/70">
               Parents and students can review attendance, dues, receipts, class updates, and notices from one secure portal.

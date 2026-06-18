@@ -1,4 +1,4 @@
-# ClassCard Pro Mobile
+# EduTap Mobile
 
 React Native attendance terminal for teachers and staff. This app uses Expo Dev Build, not Expo Go, because NFC requires native support through `react-native-nfc-manager`.
 

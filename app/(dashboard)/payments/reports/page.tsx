@@ -23,14 +23,18 @@ export default async function PaymentReportsPage() {
   const { instituteId } = await getTenantContext();
   const { start, end } = todayRange();
 
-  const payments = await prisma.payment.findMany({
-    where: { instituteId, status: { not: "CANCELLED" } },
-    include: {
-      student: true,
-      classGroup: { include: { course: true } }
-    },
-    orderBy: { createdAt: "desc" }
-  });
+  const [payments, settings] = await Promise.all([
+    prisma.payment.findMany({
+      where: { instituteId, status: { not: "CANCELLED" } },
+      include: {
+        student: true,
+        classGroup: { include: { course: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+  ]);
+  const currency = settings?.currency ?? "USD";
 
   const daily = payments.filter((payment) => payment.paidAt && payment.paidAt >= start && payment.paidAt < end);
   const monthlyMap = new Map<string, number>();
@@ -91,14 +95,14 @@ export default async function PaymentReportsPage() {
             <h2 className="mt-4 text-3xl font-semibold">Payment reports</h2>
             <p className="mt-2 text-sm text-muted-foreground">Daily collections, monthly income, class-wise income, and student-wise due reports.</p>
           </div>
-          <CsvExportButton filename="classcard-payments.csv" csv={csv} />
+          <CsvExportButton filename="edutap-payments.csv" csv={csv} />
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <ReportMetric title="Daily collection" value={formatCurrency(daily.reduce((total, payment) => total + Number(payment.paidAmount), 0))} />
-        <ReportMetric title="Monthly income" value={formatCurrency(monthly.at(-1)?.income ?? 0)} />
-        <ReportMetric title="Student dues" value={formatCurrency(studentWiseDue.reduce((total, item) => total + item.due, 0))} />
+        <ReportMetric title="Daily collection" value={formatCurrency(daily.reduce((total, payment) => total + Number(payment.paidAmount), 0), currency)} />
+        <ReportMetric title="Monthly income" value={formatCurrency(monthly.at(-1)?.income ?? 0, currency)} />
+        <ReportMetric title="Student dues" value={formatCurrency(studentWiseDue.reduce((total, item) => total + item.due, 0), currency)} />
       </section>
 
       <Card className="glass-panel">
@@ -114,17 +118,17 @@ export default async function PaymentReportsPage() {
         <ReportList title="Daily collection report" items={daily.map((payment) => ({
           label: `${payment.student.firstName} ${payment.student.lastName}`,
           detail: payment.invoiceNo,
-          value: formatCurrency(payment.paidAmount.toString())
+          value: formatCurrency(payment.paidAmount.toString(), currency)
         }))} />
         <ReportList title="Class-wise income" items={classWise.map((item) => ({
           label: item.className,
           detail: "Collected",
-          value: formatCurrency(item.income)
+          value: formatCurrency(item.income, currency)
         }))} />
         <ReportList title="Student-wise due report" items={studentWiseDue.map((item) => ({
           label: item.name,
           detail: item.admissionNo,
-          value: formatCurrency(item.due)
+          value: formatCurrency(item.due, currency)
         }))} />
       </section>
     </div>

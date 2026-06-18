@@ -70,7 +70,7 @@ export async function POST(request: Request, context: RouteContext) {
       ok: true,
       message:
         parsed.data.writeMode === "NDEF_WRITTEN"
-          ? "NFC card linked and ClassCard payload written."
+          ? "NFC card linked and EduTap payload written."
           : "NFC card linked to student.",
       student: {
         id: student.id,

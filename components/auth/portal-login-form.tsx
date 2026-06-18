@@ -22,8 +22,8 @@ export function PortalLoginForm() {
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "avery.parent@classcard.test",
-      password: "ClassCard@2026"
+      email: "avery.parent@edutap.test",
+      password: "EduTap@2026"
     }
   });
 
@@ -44,7 +44,7 @@ export function PortalLoginForm() {
       return;
     }
 
-    toast.success("Welcome to your ClassCard portal");
+    toast.success("Welcome to your EduTap portal");
     router.push(result?.url ?? "/portal");
     router.refresh();
   }

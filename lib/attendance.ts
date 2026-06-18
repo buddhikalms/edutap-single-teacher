@@ -1,6 +1,7 @@
 import { AttendanceSource, AttendanceStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { nfcUidCandidates, normalizeNfcUid } from "@/lib/nfc";
+import { sendParentAttendanceNotification } from "@/lib/parent-attendance-notifications";
 import { formatCurrency } from "@/lib/utils";
 
 export type AttendanceMarkResult = {
@@ -44,14 +45,18 @@ function todayRange() {
   return { start, end };
 }
 
-async function getPaymentStatus(studentId: string, classGroupId: string) {
-  const payments = await prisma.payment.findMany({
-    where: {
-      studentId,
-      OR: [{ classGroupId }, { classGroupId: null }],
-      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] }
-    }
-  });
+async function getPaymentStatus(studentId: string, classGroupId: string, instituteId: string) {
+  const [payments, settings] = await Promise.all([
+    prisma.payment.findMany({
+      where: {
+        studentId,
+        OR: [{ classGroupId }, { classGroupId: null }],
+        status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIAL, PaymentStatus.OVERDUE] }
+      }
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+  ]);
+  const currency = settings?.currency ?? "USD";
 
   const amountDue = payments.reduce((total, payment) => total + Number(payment.balance), 0);
   const hasOverdue = payments.some((payment) => payment.status === PaymentStatus.OVERDUE || payment.dueDate < new Date());
@@ -67,7 +72,7 @@ async function getPaymentStatus(studentId: string, classGroupId: string) {
 
   return {
     status: hasOverdue ? ("overdue" as const) : hasPartial ? ("partial" as const) : ("pending" as const),
-    label: `${hasOverdue ? "Overdue" : hasPartial ? "Partial" : "Pending"} ${formatCurrency(amountDue)}`,
+    label: `${hasOverdue ? "Overdue" : hasPartial ? "Partial" : "Pending"} ${formatCurrency(amountDue, currency)}`,
     amountDue
   };
 }
@@ -104,7 +109,7 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
 
   const classGroup = await prisma.classGroup.findUnique({
     where: { id: input.classGroupId },
-    select: { id: true, instituteId: true, name: true }
+    select: { id: true, instituteId: true, name: true, branchId: true }
   });
 
   if (!classGroup) {
@@ -233,7 +238,7 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
     select: { id: true, markedAt: true, status: true }
   });
 
-  const payment = await getPaymentStatus(student.id, input.classGroupId);
+  const payment = await getPaymentStatus(student.id, input.classGroupId, classGroup.instituteId);
   const studentPayload = {
     id: student.id,
     name: `${student.firstName} ${student.lastName}`,
@@ -285,6 +290,19 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
     success: true,
     message: "Attendance marked successfully."
   });
+
+  try {
+    await sendParentAttendanceNotification({
+      instituteId: classGroup.instituteId,
+      attendanceRecordId: record.id,
+      studentId: student.id,
+      classGroupId: classGroup.id,
+      branchId: classGroup.branchId,
+      markedAt: record.markedAt
+    });
+  } catch (error) {
+    console.error("Parent attendance notification failed", error);
+  }
 
   return {
     ok: true,

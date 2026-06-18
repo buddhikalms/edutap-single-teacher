@@ -37,10 +37,17 @@ export async function getPortalContext() {
 
   return {
     userId: session.user.id,
-    userName: session.user.name ?? "ClassCard Portal",
+    userName: session.user.name ?? "EduTap Portal",
     userEmail: session.user.email ?? "",
     role: session.user.role,
     instituteId: session.user.instituteId,
+    currency:
+      (
+        await prisma.instituteSettings.findUnique({
+          where: { instituteId: session.user.instituteId },
+          select: { currency: true }
+        })
+      )?.currency ?? "USD",
     parent,
     students,
     studentIds: students.map((item) => item.id)

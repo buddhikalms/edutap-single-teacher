@@ -60,7 +60,7 @@ export default async function PortalClassesPage() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{enrollment.classGroup.branch.name}</Badge>
                 <Badge variant="outline">{enrollment.classGroup.course.grade ?? "All grades"}</Badge>
-                <Badge variant="outline">{formatCurrency(Number(enrollment.classGroup.course.fee))}/month</Badge>
+                <Badge variant="outline">{formatCurrency(Number(enrollment.classGroup.course.fee), context.currency)}/month</Badge>
                 <Badge variant="outline">{enrollment.classGroup._count.enrollments} enrolled</Badge>
               </div>
             </CardContent>

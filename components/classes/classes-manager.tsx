@@ -96,7 +96,8 @@ export function ClassesManager({
   branches,
   grades,
   teachers,
-  isTeacher
+  isTeacher,
+  currency
 }: {
   courses: CourseRow[];
   classes: ClassRow[];
@@ -104,6 +105,7 @@ export function ClassesManager({
   grades: BasicOption[];
   teachers: BasicOption[];
   isTeacher: boolean;
+  currency: string;
 }) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [coursePanel, setCoursePanel] = useState<CourseRow | "new" | null>(null);
@@ -143,7 +145,7 @@ export function ClassesManager({
         cell: ({ row }) => (
           <div>
             <Badge variant="outline">{row.original.classType.toLowerCase()}</Badge>
-            <p className="mt-1 text-xs font-semibold">{formatCurrency(row.original.fee)}</p>
+            <p className="mt-1 text-xs font-semibold">{formatCurrency(row.original.fee, currency)}</p>
           </div>
         )
       },
@@ -184,7 +186,7 @@ export function ClassesManager({
         )
       }
     ],
-    []
+    [currency]
   );
 
   // TanStack Table intentionally returns function-heavy instances that React Compiler cannot memoize.
@@ -254,7 +256,7 @@ export function ClassesManager({
                 <p className="mt-1 text-sm text-muted-foreground">{course.subject ?? "Subject not set"} · {course.grade ?? "Grade not set"}</p>
                 <div className="mt-5 flex items-center justify-between rounded-xl border bg-white/70 p-3">
                   <span className="text-sm text-muted-foreground">{course.code}</span>
-                  <span className="font-semibold">{formatCurrency(course.fee)}</span>
+                  <span className="font-semibold">{formatCurrency(course.fee, currency)}</span>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">{course.classes} active classes</p>
               </CardContent>

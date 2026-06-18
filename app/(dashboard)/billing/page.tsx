@@ -1,5 +1,5 @@
 import { Check, CreditCard, Crown, Gauge, MessageSquareText, UsersRound } from "lucide-react";
-import { SubscriptionPlan } from "@prisma/client";
+import { SubscriptionPlanKey } from "@prisma/client";
 import { changeSubscriptionPlan } from "@/app/(dashboard)/billing/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ export default async function BillingPage() {
     prisma.branch.count({ where: { instituteId } })
   ]);
 
-  const currentPlan = getPlanDefinition(subscription?.plan ?? SubscriptionPlan.SMALL_INSTITUTE);
+  const currentPlan = getPlanDefinition(subscription?.plan ?? SubscriptionPlanKey.INSTITUTE_STARTER);
   const limits = {
     Students: { used: students, limit: subscription?.studentLimit ?? currentPlan.studentLimit, icon: UsersRound },
     Teachers: { used: teachers, limit: subscription?.teacherLimit ?? currentPlan.teacherLimit, icon: Crown },

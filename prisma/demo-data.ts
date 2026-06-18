@@ -8,7 +8,7 @@ import {
   PrismaClient,
   QuizQuestionType,
   QuizStatus,
-  SubscriptionPlan,
+  SubscriptionPlanKey,
   SubscriptionStatus,
   UserRole
 } from "@prisma/client";
@@ -16,7 +16,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 
 const prisma = new PrismaClient();
-const demoPassword = "ClassCard@2026";
+const demoPassword = "EduTap@2026";
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -116,24 +116,24 @@ async function main() {
 
   const superAdmin = await upsertUser({
     name: "Ariana Wells",
-    email: "super@classcard.test",
+    email: "super@edutap.test",
     passwordHash,
     role: UserRole.SUPER_ADMIN
   });
 
   const institute = await prisma.institute.upsert({
-    where: { slug: "classcard-demo" },
+    where: { slug: "edutap-demo" },
     create: {
-      name: "ClassCard Demo Academy",
-      slug: "classcard-demo",
-      email: "hello@classcard.test",
+      name: "EduTap Demo Academy",
+      slug: "edutap-demo",
+      email: "hello@edutap.test",
       phone: "+1 555 010 2026",
       address: "1200 Meridian Avenue, Suite 18, New York",
       active: true
     },
     update: {
-      name: "ClassCard Demo Academy",
-      email: "hello@classcard.test",
+      name: "EduTap Demo Academy",
+      email: "hello@edutap.test",
       phone: "+1 555 010 2026",
       address: "1200 Meridian Avenue, Suite 18, New York",
       active: true
@@ -145,7 +145,7 @@ async function main() {
     create: {
       instituteId: institute.id,
       receiptPrefix: "CCD",
-      receiptFooter: "Thank you for choosing ClassCard Demo Academy.",
+      receiptFooter: "Thank you for choosing EduTap Demo Academy.",
       paymentDueDay: 10,
       attendanceLateAfterMins: 15,
       attendanceAutoAbsent: true,
@@ -155,7 +155,7 @@ async function main() {
     },
     update: {
       receiptPrefix: "CCD",
-      receiptFooter: "Thank you for choosing ClassCard Demo Academy.",
+      receiptFooter: "Thank you for choosing EduTap Demo Academy.",
       paymentDueDay: 10,
       attendanceLateAfterMins: 15,
       attendanceAutoAbsent: true,
@@ -169,7 +169,7 @@ async function main() {
     where: { instituteId: institute.id },
     create: {
       instituteId: institute.id,
-      plan: SubscriptionPlan.SMALL_INSTITUTE,
+      plan: SubscriptionPlanKey.INSTITUTE_STARTER,
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: addDays(today, 24),
       monthlyPrice: "79.00",
@@ -179,7 +179,7 @@ async function main() {
       smsCredits: 2500
     },
     update: {
-      plan: SubscriptionPlan.SMALL_INSTITUTE,
+      plan: SubscriptionPlanKey.INSTITUTE_STARTER,
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: addDays(today, 24),
       monthlyPrice: "79.00",
@@ -203,7 +203,7 @@ async function main() {
         settings: { create: { receiptPrefix: "NST", currency: "USD", paymentDueDay: 7, themeColor: "#2563eb" } },
         subscription: {
           create: {
-            plan: SubscriptionPlan.TEACHER,
+            plan: SubscriptionPlanKey.SINGLE_TEACHER,
             status: SubscriptionStatus.TRIAL,
             currentPeriodEnd: addDays(today, 9),
             monthlyPrice: "29.00",
@@ -228,7 +228,7 @@ async function main() {
         settings: { create: { receiptPrefix: "SLH", currency: "USD", paymentDueDay: 5, themeColor: "#be123c" } },
         subscription: {
           create: {
-            plan: SubscriptionPlan.PREMIUM_INSTITUTE,
+            plan: SubscriptionPlanKey.INSTITUTE_PRO,
             status: SubscriptionStatus.SUSPENDED,
             currentPeriodEnd: addDays(today, -5),
             monthlyPrice: "199.00",
@@ -279,7 +279,7 @@ async function main() {
 
   const admin = await upsertUser({
     name: "Maya Bennett",
-    email: "admin@classcard.test",
+    email: "admin@edutap.test",
     passwordHash,
     role: UserRole.INSTITUTE_ADMIN,
     instituteId: institute.id,
@@ -287,11 +287,11 @@ async function main() {
   });
 
   const teacherSeeds = [
-    ["Elena Brooks", "elena@classcard.test", "+1 555 011 0101", "Mathematics", centralBranch.id],
-    ["Noah Hart", "noah@classcard.test", "+1 555 011 0102", "Physics", centralBranch.id],
-    ["Priya Raman", "priya@classcard.test", "+1 555 011 0103", "English Literature", northviewBranch.id],
-    ["Marcus Chen", "marcus@classcard.test", "+1 555 011 0104", "Chemistry", northviewBranch.id],
-    ["Ivy Carter", "ivy@classcard.test", "+1 555 011 0105", "Biology", centralBranch.id]
+    ["Elena Brooks", "elena@edutap.test", "+1 555 011 0101", "Mathematics", centralBranch.id],
+    ["Noah Hart", "noah@edutap.test", "+1 555 011 0102", "Physics", centralBranch.id],
+    ["Priya Raman", "priya@edutap.test", "+1 555 011 0103", "English Literature", northviewBranch.id],
+    ["Marcus Chen", "marcus@edutap.test", "+1 555 011 0104", "Chemistry", northviewBranch.id],
+    ["Ivy Carter", "ivy@edutap.test", "+1 555 011 0105", "Biology", centralBranch.id]
   ] as const;
 
   const teachers = await Promise.all(
@@ -352,7 +352,7 @@ async function main() {
   const parents = await Promise.all([
     upsertParent({
       name: "Avery Collins",
-      email: "avery.parent@classcard.test",
+      email: "avery.parent@edutap.test",
       phone: "+1 555 012 0001",
       occupation: "Architect",
       instituteId: institute.id,
@@ -361,7 +361,7 @@ async function main() {
     }),
     upsertParent({
       name: "Jordan Lee",
-      email: "jordan.parent@classcard.test",
+      email: "jordan.parent@edutap.test",
       phone: "+1 555 012 0002",
       occupation: "Consultant",
       instituteId: institute.id,
@@ -370,7 +370,7 @@ async function main() {
     }),
     upsertParent({
       name: "Nadia Patel",
-      email: "nadia.parent@classcard.test",
+      email: "nadia.parent@edutap.test",
       phone: "+1 555 012 0003",
       occupation: "Product Manager",
       instituteId: institute.id,
@@ -379,7 +379,7 @@ async function main() {
     }),
     upsertParent({
       name: "Daniel Wright",
-      email: "daniel.parent@classcard.test",
+      email: "daniel.parent@edutap.test",
       phone: "+1 555 012 0004",
       occupation: "Civil Engineer",
       instituteId: institute.id,
@@ -612,12 +612,12 @@ async function main() {
           title: `${classGroup.name} revision pack`,
           description: "Demo course material for the student app.",
           type: "LINK",
-          url: `https://classcard.test/materials/${classGroup.code.toLowerCase()}`
+          url: `https://edutap.test/materials/${classGroup.code.toLowerCase()}`
         },
         update: {
           title: `${classGroup.name} revision pack`,
           description: "Demo course material for the student app.",
-          url: `https://classcard.test/materials/${classGroup.code.toLowerCase()}`
+          url: `https://edutap.test/materials/${classGroup.code.toLowerCase()}`
         }
       })
     )
@@ -665,7 +665,7 @@ async function main() {
           classGroupId: seed.classGroup.id,
           courseId: seed.course.id,
           createdById: admin.id,
-          externalLinks: [`https://classcard.test/homework/${seed.classGroup.code.toLowerCase()}`],
+          externalLinks: [`https://edutap.test/homework/${seed.classGroup.code.toLowerCase()}`],
           attachments: {
             create: [{ name: "Worksheet placeholder", url: `worksheet-${seed.classGroup.code.toLowerCase()}.pdf` }]
           }
@@ -817,9 +817,9 @@ async function main() {
 
   console.log("Demo data added");
   console.log(`Super admin: ${superAdmin.email}`);
-  console.log("Institute admin: admin@classcard.test");
-  console.log("Teacher: elena@classcard.test");
-  console.log("Parent: avery.parent@classcard.test");
+  console.log("Institute admin: admin@edutap.test");
+  console.log("Teacher: elena@edutap.test");
+  console.log("Parent: avery.parent@edutap.test");
   console.log("Student: sofia.collins@student.test");
   console.log(`Password for demo users: ${demoPassword}`);
 }

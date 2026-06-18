@@ -54,7 +54,7 @@ export async function readNfcUid(alertMessage = "Hold the student NFC card near 
   }
 }
 
-export async function writeClassCardStudentTag(student: StudentCardPayload) {
+export async function writeEduTapStudentTag(student: StudentCardPayload) {
   await ensureNfcReady();
 
   try {
@@ -73,7 +73,7 @@ export async function writeClassCardStudentTag(student: StudentCardPayload) {
     }
 
     const payload = JSON.stringify({
-      app: "ClassCard Pro",
+      app: "EduTap",
       type: "student-card",
       studentId: student.studentId,
       admissionNo: student.admissionNo,
@@ -83,7 +83,7 @@ export async function writeClassCardStudentTag(student: StudentCardPayload) {
 
     const bytes = Ndef.encodeMessage([
       Ndef.textRecord(payload),
-      Ndef.uriRecord(`classcard://students/${student.studentId}`)
+      Ndef.uriRecord(`edutap://students/${student.studentId}`)
     ]);
 
     await NfcManager.ndefHandler.writeNdefMessage(bytes, { reconnectAfterWrite: true });

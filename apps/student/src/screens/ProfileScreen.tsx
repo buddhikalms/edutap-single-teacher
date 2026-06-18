@@ -29,7 +29,7 @@ export function ProfileScreen() {
 
   const qrValue = useMemo(() => {
     const value = student?.qrCode || student?.admissionNo || student?.id;
-    return value?.trim() || "classcard-student";
+    return value?.trim() || "edutap-student";
   }, [student]);
 
   if (!student && !failed) {

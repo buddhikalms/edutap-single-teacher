@@ -13,26 +13,28 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   const { instituteId } = await getTenantContext();
   const { studentId } = await params;
 
-  const student = await prisma.student.findFirst({
-    where: { id: studentId, instituteId },
-    include: {
-      branch: true,
-      parents: true,
-      payments: { orderBy: { dueDate: "desc" }, take: 6 },
-      attendance: { include: { session: { include: { classGroup: true } } }, orderBy: { markedAt: "desc" }, take: 8 },
-      enrollments: {
-        include: {
-          classGroup: {
-            include: {
-              course: true,
-              teacher: true
+  const [student, settings] = await Promise.all([
+    prisma.student.findFirst({
+      where: { id: studentId, instituteId },
+      include: {
+        branch: true,
+        parents: true,
+        payments: { orderBy: { dueDate: "desc" }, take: 6 },
+        attendance: { include: { session: { include: { classGroup: true } } }, orderBy: { markedAt: "desc" }, take: 8 },
+        enrollments: {
+          include: {
+            classGroup: {
+              include: {
+                course: true,
+                teacher: true
+              }
             }
           }
-        },
-        orderBy: { enrolledAt: "desc" }
+        }
       }
-    }
-  });
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+  ]);
 
   if (!student) {
     notFound();
@@ -40,6 +42,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
 
   const pending = student.payments.filter((payment) => payment.status !== "PAID" && payment.status !== "CANCELLED");
   const paid = student.payments.filter((payment) => payment.status === "PAID");
+  const currency = settings?.currency ?? "USD";
   const attendanceRate =
     student.attendance.length === 0
       ? 0
@@ -85,7 +88,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             <SummaryCard title="Attendance" value={`${attendanceRate}%`} icon={CalendarCheck2} />
             <SummaryCard
               title="Pending fees"
-              value={formatCurrency(pending.reduce((total, payment) => total + Number(payment.amount), 0))}
+              value={formatCurrency(pending.reduce((total, payment) => total + Number(payment.amount), 0), currency)}
               icon={CreditCard}
             />
           </div>
@@ -159,11 +162,11 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-xl border bg-white/70 p-4">
                 <p className="text-sm text-muted-foreground">Paid</p>
-                <p className="mt-2 text-2xl font-semibold">{formatCurrency(paid.reduce((total, payment) => total + Number(payment.amount), 0))}</p>
+                <p className="mt-2 text-2xl font-semibold">{formatCurrency(paid.reduce((total, payment) => total + Number(payment.amount), 0), currency)}</p>
               </div>
               <div className="rounded-xl border bg-white/70 p-4">
                 <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="mt-2 text-2xl font-semibold">{formatCurrency(pending.reduce((total, payment) => total + Number(payment.amount), 0))}</p>
+                <p className="mt-2 text-2xl font-semibold">{formatCurrency(pending.reduce((total, payment) => total + Number(payment.amount), 0), currency)}</p>
               </div>
             </div>
             {student.payments.map((payment) => (
@@ -173,7 +176,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                   <p className="text-sm text-muted-foreground">{payment.dueDate.toLocaleDateString()}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold">{formatCurrency(payment.amount.toString())}</p>
+                  <p className="font-semibold">{formatCurrency(payment.amount.toString(), currency)}</p>
                   <Badge variant={payment.status === "PAID" ? "success" : "warning"}>{payment.status.toLowerCase()}</Badge>
                 </div>
               </div>

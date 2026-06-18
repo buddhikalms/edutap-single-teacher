@@ -21,8 +21,8 @@ export function LoginForm() {
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "admin@classcard.test",
-      password: "ClassCard@2026"
+      email: "admin@edutap.test",
+      password: "EduTap@2026"
     }
   });
 
@@ -43,7 +43,7 @@ export function LoginForm() {
       return;
     }
 
-    toast.success("Welcome back to ClassCard Pro");
+    toast.success("Welcome back to EduTap");
     router.push(result?.url ?? "/dashboard");
     router.refresh();
   }
@@ -84,6 +84,12 @@ export function LoginForm() {
         New institute?{" "}
         <Link href="/register" className="font-semibold text-primary hover:underline">
           Register workspace
+        </Link>
+      </p>
+      <p className="mt-3 text-center text-sm text-muted-foreground">
+        Student?{" "}
+        <Link href="/student/register" className="font-semibold text-primary hover:underline">
+          Create student account
         </Link>
       </p>
     </div>

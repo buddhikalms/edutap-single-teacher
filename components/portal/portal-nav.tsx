@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { Bell, BookOpen, CalendarCheck, CreditCard, LayoutDashboard, LogOut } from "lucide-react";
+import { Bell, BookOpen, CalendarCheck, CreditCard, Inbox, LayoutDashboard, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const items = [
@@ -10,6 +10,7 @@ const items = [
   { href: "/portal/classes", label: "Classes", icon: BookOpen },
   { href: "/portal/attendance", label: "Attendance", icon: CalendarCheck },
   { href: "/portal/payments", label: "Payments", icon: CreditCard },
+  { href: "/portal/notifications", label: "Notifications", icon: Inbox },
   { href: "/portal/notices", label: "Notices", icon: Bell }
 ];
 

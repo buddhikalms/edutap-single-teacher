@@ -11,7 +11,7 @@ function dayRange(date = new Date()) {
   return { start, end };
 }
 
-function paymentSummary(payments: Array<{ amount: unknown; balance: unknown; status: string; dueDate: Date }>) {
+function paymentSummary(payments: Array<{ amount: unknown; balance: unknown; status: string; dueDate: Date }>, currency: string) {
   const pending = payments.filter((payment) => payment.status !== "PAID" && payment.status !== "CANCELLED");
   const amount = pending.reduce((total, payment) => total + Number(payment.balance), 0);
   const overdue = pending.some((payment) => payment.status === "OVERDUE" || payment.dueDate < new Date());
@@ -22,7 +22,7 @@ function paymentSummary(payments: Array<{ amount: unknown; balance: unknown; sta
   }
 
   return {
-    paymentLabel: `${overdue ? "Overdue" : partial ? "Partial" : "Pending"} ${formatCurrency(amount)}`,
+    paymentLabel: `${overdue ? "Overdue" : partial ? "Partial" : "Pending"} ${formatCurrency(amount, currency)}`,
     paymentStatus: overdue ? ("overdue" as const) : partial ? ("partial" as const) : ("pending" as const)
   };
 }
@@ -34,8 +34,9 @@ function sessionView(session: {
   status: "ACTIVE" | "ENDED";
   startsAt: Date | null;
   endsAt: Date | null;
-  classGroup: { name: string };
+  classGroup: { name: string; branch?: { name: string; location: string | null } | null; teacher?: { name: string } | null };
   records: Array<{ id: string; studentId: string; status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"; source: "MANUAL" | "QR" | "NFC" | "BULK"; markedAt: Date }>;
+  _count?: { classEndNotificationLogs: number };
 }): AttendanceSessionView {
   const present = session.records.filter((record) => record.status === "PRESENT").length;
   const absent = session.records.filter((record) => record.status === "ABSENT").length;
@@ -46,10 +47,15 @@ function sessionView(session: {
     id: session.id,
     classGroupId: session.classGroupId,
     className: session.classGroup.name,
+    branchName: session.classGroup.branch?.location
+      ? `${session.classGroup.branch.name} (${session.classGroup.branch.location})`
+      : session.classGroup.branch?.name ?? "Branch",
+    teacherName: session.classGroup.teacher?.name ?? "Unassigned",
     sessionDate: session.sessionDate.toLocaleDateString(),
     status: session.status,
     startsAt: session.startsAt?.toISOString() ?? null,
     endsAt: session.endsAt?.toISOString() ?? null,
+    classEndNotificationCount: session._count?.classEndNotificationLogs ?? 0,
     present,
     absent,
     late,
@@ -69,7 +75,7 @@ export default async function AttendancePage() {
   const { instituteId } = await getTenantContext();
   const { start, end } = dayRange();
 
-  const [classes, sessions, audits, allRecords] = await Promise.all([
+  const [classes, sessions, audits, allRecords, settings] = await Promise.all([
     prisma.classGroup.findMany({
       where: { instituteId },
       include: {
@@ -89,13 +95,20 @@ export default async function AttendancePage() {
         },
         attendanceSessions: {
           where: {
-            status: "ACTIVE",
             sessionDate: { gte: start, lt: end }
           },
           include: {
-            classGroup: { select: { name: true } },
-            records: true
+            classGroup: {
+              select: {
+                name: true,
+                branch: { select: { name: true, location: true } },
+                teacher: { select: { name: true } }
+              }
+            },
+            records: true,
+            _count: { select: { classEndNotificationLogs: true } }
           },
+          orderBy: { updatedAt: "desc" },
           take: 1
         }
       },
@@ -104,8 +117,15 @@ export default async function AttendancePage() {
     prisma.attendanceSession.findMany({
       where: { classGroup: { instituteId } },
       include: {
-        classGroup: { select: { name: true } },
-        records: true
+        classGroup: {
+          select: {
+            name: true,
+            branch: { select: { name: true, location: true } },
+            teacher: { select: { name: true } }
+          }
+        },
+        records: true,
+        _count: { select: { classEndNotificationLogs: true } }
       },
       orderBy: { sessionDate: "desc" },
       take: 20
@@ -127,8 +147,10 @@ export default async function AttendancePage() {
       },
       orderBy: { markedAt: "desc" },
       take: 500
-    })
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
   ]);
+  const currency = settings?.currency ?? "USD";
 
   const classData: AttendanceClass[] = classes.map((classGroup) => ({
     id: classGroup.id,
@@ -140,7 +162,7 @@ export default async function AttendancePage() {
     teacher: classGroup.teacher?.name ?? "Unassigned",
     activeSession: classGroup.attendanceSessions[0] ? sessionView(classGroup.attendanceSessions[0]) : null,
     students: classGroup.enrollments.map((enrollment) => {
-      const payment = paymentSummary(enrollment.student.payments);
+      const payment = paymentSummary(enrollment.student.payments, currency);
       return {
         id: enrollment.student.id,
         name: `${enrollment.student.firstName} ${enrollment.student.lastName}`,

@@ -12,20 +12,23 @@ export default async function ClassProfilePage({ params }: { params: Promise<{ c
   const { instituteId } = await getTenantContext();
   const { classGroupId } = await params;
 
-  const classGroup = await prisma.classGroup.findFirst({
-    where: { id: classGroupId, instituteId },
-    include: {
-      branch: true,
-      course: true,
-      teacher: true,
-      enrollments: {
-        include: {
-          student: true
-        },
-        orderBy: { enrolledAt: "desc" }
+  const [classGroup, settings] = await Promise.all([
+    prisma.classGroup.findFirst({
+      where: { id: classGroupId, instituteId },
+      include: {
+        branch: true,
+        course: true,
+        teacher: true,
+        enrollments: {
+          include: {
+            student: true
+          },
+          orderBy: { enrolledAt: "desc" }
+        }
       }
-    }
-  });
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+  ]);
 
   if (!classGroup) {
     notFound();
@@ -33,6 +36,7 @@ export default async function ClassProfilePage({ params }: { params: Promise<{ c
 
   const activeEnrollments = classGroup.enrollments.filter((enrollment) => enrollment.active);
   const usage = Math.min(100, Math.round((activeEnrollments.length / classGroup.capacity) * 100));
+  const currency = settings?.currency ?? "USD";
 
   return (
     <div className="space-y-6">
@@ -55,7 +59,7 @@ export default async function ClassProfilePage({ params }: { params: Promise<{ c
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric icon={UsersRound} label="Active students" value={String(activeEnrollments.length)} />
             <Metric icon={GraduationCap} label="Capacity" value={String(classGroup.capacity)} />
-            <Metric icon={CreditCard} label="Fee" value={formatCurrency(classGroup.course.fee.toString())} />
+            <Metric icon={CreditCard} label="Fee" value={formatCurrency(classGroup.course.fee.toString(), currency)} />
           </div>
         </div>
       </section>

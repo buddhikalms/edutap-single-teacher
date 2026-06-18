@@ -1,7 +1,7 @@
 const config = {
-  name: "ClassCard Student",
-  slug: "classcard-student",
-  scheme: "classcardstudent",
+  name: "EduTap Student",
+  slug: "edutap-student",
+  scheme: "edutapstudent",
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
@@ -10,10 +10,10 @@ const config = {
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: "com.classcardpro.student"
+    bundleIdentifier: "com.edutap.student"
   },
   android: {
-    package: "com.classcardpro.student",
+    package: "com.edutap.student",
     adaptiveIcon: {
       backgroundColor: "#07111f"
     }

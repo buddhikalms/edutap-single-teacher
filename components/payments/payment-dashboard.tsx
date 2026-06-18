@@ -32,7 +32,7 @@ export type PaymentDashboardData = {
   }>;
 };
 
-export function PaymentDashboard({ data }: { data: PaymentDashboardData }) {
+export function PaymentDashboard({ data, currency }: { data: PaymentDashboardData; currency: string }) {
   return (
     <div className="space-y-6">
       <section className="glass-panel rounded-2xl p-6 sm:p-8">
@@ -62,10 +62,10 @@ export function PaymentDashboard({ data }: { data: PaymentDashboardData }) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <FinanceMetric title="Monthly income" value={formatCurrency(data.monthlyIncome)} icon={Banknote} tone="navy" />
-        <FinanceMetric title="Today collections" value={formatCurrency(data.todayCollections)} icon={CalendarDays} tone="teal" />
-        <FinanceMetric title="Pending payments" value={formatCurrency(data.pendingPayments)} icon={CreditCard} tone="gold" />
-        <FinanceMetric title="Overdue payments" value={formatCurrency(data.overduePayments)} icon={AlertTriangle} tone="rose" />
+        <FinanceMetric title="Monthly income" value={formatCurrency(data.monthlyIncome, currency)} icon={Banknote} tone="navy" />
+        <FinanceMetric title="Today collections" value={formatCurrency(data.todayCollections, currency)} icon={CalendarDays} tone="teal" />
+        <FinanceMetric title="Pending payments" value={formatCurrency(data.pendingPayments, currency)} icon={CreditCard} tone="gold" />
+        <FinanceMetric title="Overdue payments" value={formatCurrency(data.overduePayments, currency)} icon={AlertTriangle} tone="rose" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
@@ -91,7 +91,7 @@ export function PaymentDashboard({ data }: { data: PaymentDashboardData }) {
                       <p className="text-xs text-muted-foreground">{student.admissionNo}</p>
                     </div>
                     <Badge variant={student.pending > 0 ? "warning" : "success"}>
-                      {student.pending > 0 ? formatCurrency(student.pending) : "clear"}
+                      {student.pending > 0 ? formatCurrency(student.pending, currency) : "clear"}
                     </Badge>
                   </div>
                 </Link>
@@ -117,8 +117,8 @@ export function PaymentDashboard({ data }: { data: PaymentDashboardData }) {
                 </div>
                 <div className="flex items-center gap-3 md:text-right">
                   <div>
-                    <p className="font-semibold">{formatCurrency(payment.paidAmount)}</p>
-                    <p className="text-xs text-muted-foreground">balance {formatCurrency(payment.balance)}</p>
+                    <p className="font-semibold">{formatCurrency(payment.paidAmount, currency)}</p>
+                    <p className="text-xs text-muted-foreground">balance {formatCurrency(payment.balance, currency)}</p>
                   </div>
                   <Badge variant={payment.status === "PAID" ? "success" : payment.status === "OVERDUE" ? "warning" : "outline"}>
                     {payment.status.toLowerCase()}

@@ -60,7 +60,7 @@ export function RegisterInstituteForm() {
       <div className="mb-7">
         <h2 className="text-2xl font-semibold tracking-normal">Register institute</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Create the first branch and admin account for a new ClassCard Pro workspace.
+          Create the first branch and admin account for a new EduTap workspace.
         </p>
       </div>
 

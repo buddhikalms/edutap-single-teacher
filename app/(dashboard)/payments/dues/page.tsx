@@ -13,7 +13,7 @@ export default async function DuePaymentsPage() {
   const month = currentMonth();
   const now = new Date();
 
-  const [classes, payments] = await Promise.all([
+  const [classes, payments, settings] = await Promise.all([
     prisma.classGroup.findMany({
       where: { instituteId },
       include: {
@@ -28,7 +28,8 @@ export default async function DuePaymentsPage() {
     prisma.payment.findMany({
       where: { instituteId, type: "MONTHLY_FEE" },
       include: { receipts: { orderBy: { issuedAt: "desc" }, take: 1 } }
-    })
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
   ]);
 
   const paymentMap = new Map(payments.map((payment) => [`${payment.studentId}:${payment.classGroupId}:${payment.month}`, payment]));
@@ -81,5 +82,12 @@ export default async function DuePaymentsPage() {
     }
   }
 
-  return <DuePaymentsManager rows={rows} classes={classes.map((classGroup) => ({ id: classGroup.id, name: classGroup.name }))} month={month} />;
+  return (
+    <DuePaymentsManager
+      rows={rows}
+      classes={classes.map((classGroup) => ({ id: classGroup.id, name: classGroup.name }))}
+      month={month}
+      currency={settings?.currency ?? "USD"}
+    />
+  );
 }

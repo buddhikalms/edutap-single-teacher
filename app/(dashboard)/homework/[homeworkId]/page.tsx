@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
-import { formatCurrency } from "@/lib/utils";
 
 type PageProps = {
   params: Promise<{ homeworkId: string }>;
@@ -168,7 +167,7 @@ function Metric({ icon: Icon, label, value }: { icon: typeof FileText; label: st
       <CardContent className="p-5">
         <Icon className="h-5 w-5 text-muted-foreground" />
         <p className="mt-3 text-sm text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold">{label === "Revenue" ? formatCurrency(value) : value}</p>
+        <p className="mt-1 text-2xl font-semibold">{value}</p>
       </CardContent>
     </Card>
   );

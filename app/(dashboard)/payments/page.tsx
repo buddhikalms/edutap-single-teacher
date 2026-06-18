@@ -32,7 +32,7 @@ export default async function PaymentsPage() {
   const currentMonth = monthKey(now);
   const months = lastSixMonths();
 
-  const [monthlyPayments, todayPayments, pendingPayments, overduePayments, recentPayments, students, chartPayments] =
+  const [monthlyPayments, todayPayments, pendingPayments, overduePayments, recentPayments, students, chartPayments, settings] =
     await Promise.all([
       prisma.payment.findMany({ where: { instituteId, month: currentMonth, status: { not: "CANCELLED" } } }),
       prisma.payment.findMany({ where: { instituteId, paidAt: { gte: todayStart, lt: tomorrow }, status: { not: "CANCELLED" } } }),
@@ -51,7 +51,8 @@ export default async function PaymentsPage() {
       }),
       prisma.payment.findMany({
         where: { instituteId, month: { in: months.map((month) => month.key) }, status: { not: "CANCELLED" } }
-      })
+      }),
+      prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
     ]);
 
   const chart: PaymentDashboardData["chart"] = months.map((month) => ({
@@ -87,5 +88,5 @@ export default async function PaymentsPage() {
     }))
   };
 
-  return <PaymentDashboard data={data} />;
+  return <PaymentDashboard data={data} currency={settings?.currency ?? "USD"} />;
 }

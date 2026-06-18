@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <GraduationCap className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-lg font-bold">ClassCard Pro</p>
+              <p className="text-lg font-bold">EduTap</p>
               <p className="text-xs text-white/60">Institute intelligence suite</p>
             </div>
           </div>
@@ -50,7 +50,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 <GraduationCap className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-lg font-bold">ClassCard Pro</p>
+                <p className="text-lg font-bold">EduTap</p>
                 <p className="text-xs text-muted-foreground">Institute intelligence suite</p>
               </div>
             </div>

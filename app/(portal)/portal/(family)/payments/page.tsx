@@ -39,7 +39,7 @@ export default async function PortalPaymentsPage() {
         <Card>
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Pending amount</p>
-            <p className="mt-1 text-3xl font-bold">{formatCurrency(pendingAmount)}</p>
+            <p className="mt-1 text-3xl font-bold">{formatCurrency(pendingAmount, context.currency)}</p>
           </CardContent>
         </Card>
       </div>
@@ -68,12 +68,12 @@ export default async function PortalPaymentsPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={paymentBadge(payment.status)}>{payment.status}</Badge>
-                  <Badge variant="outline">Balance {formatCurrency(Number(payment.balance))}</Badge>
+                  <Badge variant="outline">Balance {formatCurrency(Number(payment.balance), context.currency)}</Badge>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge variant="outline">Amount {formatCurrency(Number(payment.amount))}</Badge>
-                <Badge variant="outline">Paid {formatCurrency(Number(payment.paidAmount))}</Badge>
+                <Badge variant="outline">Amount {formatCurrency(Number(payment.amount), context.currency)}</Badge>
+                <Badge variant="outline">Paid {formatCurrency(Number(payment.paidAmount), context.currency)}</Badge>
                 {payment.receipts.map((receipt) => (
                   <Button key={receipt.id} asChild variant="outline" size="sm">
                     <Link href={`/portal/receipts/${receipt.id}`}>

@@ -1,6 +1,6 @@
 "use server";
 
-import { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
+import { SubscriptionPlanKey, SubscriptionStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { planDefinitions } from "@/lib/subscription-plans";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +14,7 @@ export async function changeSubscriptionPlan(formData: FormData) {
   }
 
   const plan = formData.get("plan");
-  if (!plan || !Object.values(SubscriptionPlan).includes(plan as SubscriptionPlan)) {
+  if (!plan || !Object.values(SubscriptionPlanKey).includes(plan as SubscriptionPlanKey)) {
     throw new Error("Invalid subscription plan.");
   }
 
@@ -31,20 +31,34 @@ export async function changeSubscriptionPlan(formData: FormData) {
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       monthlyPrice: definition.price,
+      yearlyPrice: definition.yearlyPrice,
       studentLimit: definition.studentLimit,
       teacherLimit: definition.teacherLimit,
       branchLimit: definition.branchLimit,
-      smsCredits: definition.smsCredits
+      classLimit: definition.classLimit,
+      courseLimit: definition.courseLimit,
+      storageLimitMb: definition.storageLimitMb,
+      smsCredits: definition.smsCredits,
+      liveClassAccess: definition.liveClassAccess,
+      parentNotificationAccess: definition.parentNotificationAccess,
+      customBrandingAccess: definition.customBrandingAccess
     },
     update: {
       plan: definition.id,
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       monthlyPrice: definition.price,
+      yearlyPrice: definition.yearlyPrice,
       studentLimit: definition.studentLimit,
       teacherLimit: definition.teacherLimit,
       branchLimit: definition.branchLimit,
-      smsCredits: definition.smsCredits
+      classLimit: definition.classLimit,
+      courseLimit: definition.courseLimit,
+      storageLimitMb: definition.storageLimitMb,
+      smsCredits: definition.smsCredits,
+      liveClassAccess: definition.liveClassAccess,
+      parentNotificationAccess: definition.parentNotificationAccess,
+      customBrandingAccess: definition.customBrandingAccess
     }
   });
 

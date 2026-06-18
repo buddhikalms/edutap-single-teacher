@@ -7,13 +7,16 @@ export default async function StudentPaymentPage({ params }: { params: Promise<{
   const { instituteId } = await getTenantContext();
   const { studentId } = await params;
 
-  const student = await prisma.student.findFirst({
-    where: { id: studentId, instituteId },
-    include: {
-      enrollments: { include: { classGroup: { include: { course: true } } } },
-      payments: { include: { receipts: true }, orderBy: { createdAt: "desc" } }
-    }
-  });
+  const [student, settings] = await Promise.all([
+    prisma.student.findFirst({
+      where: { id: studentId, instituteId },
+      include: {
+        enrollments: { include: { classGroup: { include: { course: true } } } },
+        payments: { include: { receipts: true }, orderBy: { createdAt: "desc" } }
+      }
+    }),
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+  ]);
 
   if (!student) {
     notFound();
@@ -48,6 +51,7 @@ export default async function StudentPaymentPage({ params }: { params: Promise<{
         fee: Number(enrollment.classGroup.course.fee)
       }))}
       payments={payments}
+      currency={settings?.currency ?? "USD"}
     />
   );
 }

@@ -49,7 +49,7 @@ export function DashboardScreen({ navigation }: Props) {
   return (
     <ScreenShell
       title={`Hi, ${user?.name.split(" ")[0] ?? "there"}`}
-      eyebrow={user?.institute?.name ?? "ClassCard Pro"}
+      eyebrow={user?.institute?.name ?? "EduTap"}
       right={
         <Pressable onPress={signOut} style={styles.iconButton}>
           <Ionicons name="log-out-outline" color={colors.white} size={20} />
