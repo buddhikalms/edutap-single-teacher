@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, GraduationCap, LayoutDashboard, Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BookOpen } from "lucide-react";
+import { PublicHeader } from "@/components/public/public-header";
 
 const navItems = [
   { href: "/explore/teachers", label: "Teachers" },
@@ -17,47 +17,6 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       <main>{children}</main>
       <PublicFooter />
     </div>
-  );
-}
-
-export function PublicHeader() {
-  return (
-    <header className="sticky top-0 z-40 border-b border-white/70 bg-white/88 backdrop-blur-xl">
-      <div className="container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-3 font-semibold">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white">
-            <GraduationCap className="h-5 w-5" />
-          </span>
-          <span className="text-lg">EduTap</span>
-        </Link>
-        <nav className="hidden items-center gap-1 lg:flex">
-          {navItems.map((item) => (
-            <Link key={item.href} href={item.href} className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground">
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="hidden items-center gap-2 md:flex">
-          <Button asChild variant="ghost">
-            <Link href="/login">
-              <LayoutDashboard className="h-4 w-4" />
-              Sign in
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/register/institute">
-              Start institute
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-        <Button asChild variant="outline" size="icon" className="md:hidden" aria-label="Open public navigation">
-          <Link href="/pricing">
-            <Menu className="h-4 w-4" />
-          </Link>
-        </Button>
-      </div>
-    </header>
   );
 }
 
