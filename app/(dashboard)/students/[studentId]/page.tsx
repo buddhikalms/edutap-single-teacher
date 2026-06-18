@@ -21,6 +21,11 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
         parents: true,
         payments: { orderBy: { dueDate: "desc" }, take: 6 },
         attendance: { include: { session: { include: { classGroup: true } } }, orderBy: { markedAt: "desc" }, take: 8 },
+        cards: {
+          where: { status: "ACTIVE" },
+          take: 1,
+          orderBy: { issuedAt: "desc" }
+        },
         enrollments: {
           include: {
             classGroup: {
@@ -43,6 +48,8 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   const pending = student.payments.filter((payment) => payment.status !== "PAID" && payment.status !== "CANCELLED");
   const paid = student.payments.filter((payment) => payment.status === "PAID");
   const currency = settings?.currency ?? "USD";
+  const activeCard = student.cards[0];
+  const qrToken = activeCard?.qrToken ?? activeCard?.qrCode ?? student.attendanceToken ?? "token-pending";
   const attendanceRate =
     student.attendance.length === 0
       ? 0
@@ -61,7 +68,15 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           <h2 className="mt-4 text-3xl font-semibold">{student.firstName} {student.lastName}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{student.admissionNo} · {student.branch.name}</p>
         </div>
-        <Badge variant={student.status === "ACTIVE" ? "success" : "outline"}>{student.status.toLowerCase()}</Badge>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link href={`/students/${student.id}/cards`}>
+              <IdCard className="h-4 w-4" />
+              Manage cards
+            </Link>
+          </Button>
+          <Badge variant={student.status === "ACTIVE" ? "success" : "outline"}>{student.status.toLowerCase()}</Badge>
+        </div>
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
@@ -76,8 +91,9 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             </div>
             <div className="mt-6 grid gap-3">
               <InfoLine icon={IdCard} label="Phone" value={student.phone ?? "Not added"} />
-              <InfoLine icon={Radio} label="NFC UID" value={student.nfcUid ?? "Not assigned"} />
-              <InfoLine icon={QrCode} label="QR code" value={student.qrCode ?? "Not assigned"} />
+              <InfoLine icon={IdCard} label="Card number" value={activeCard?.cardNumber ?? "Not assigned"} />
+              <InfoLine icon={Radio} label="NFC UID" value={activeCard?.nfcUid ?? student.nfcUid ?? "Not assigned"} />
+              <InfoLine icon={QrCode} label="QR code" value={activeCard?.qrCode ?? student.qrCode ?? "Not assigned"} />
             </div>
           </CardContent>
         </Card>
@@ -95,12 +111,12 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           <Card className="glass-panel">
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
               <div className="rounded-xl border bg-white p-3">
-                <StudentQrCode token={student.attendanceToken ?? "token-pending"} />
+                <StudentQrCode token={qrToken} />
               </div>
               <div>
                 <Badge variant="outline">Secure attendance QR</Badge>
                 <p className="mt-3 font-semibold">QR token</p>
-                <p className="mt-1 break-all text-sm text-muted-foreground">{student.attendanceToken ?? "Token pending"}</p>
+                <p className="mt-1 break-all text-sm text-muted-foreground">{qrToken}</p>
               </div>
             </CardContent>
           </Card>

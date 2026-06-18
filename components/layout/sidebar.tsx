@@ -29,6 +29,7 @@ const tenantNavItems = [
   { href: "/classes", label: "Classes", icon: BookOpen, area: "classes", group: "Academics" },
   { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment", group: "Academics" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance", group: "Operations" },
+  { href: "/cards", label: "Cards", icon: CreditCard, area: "cards", group: "Operations" },
   { href: "/payments", label: "Payments", icon: CreditCard, area: "payments", group: "Operations" },
   { href: "/homework", label: "Homework", icon: BookOpenCheck, area: "homework", group: "Learning" },
   { href: "/quizzes", label: "Quizzes", icon: Trophy, area: "quizzes", group: "Learning" },

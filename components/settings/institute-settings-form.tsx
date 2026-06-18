@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useActionState, useEffect } from "react";
-import { BellRing, Building2, Palette, ReceiptText, Upload } from "lucide-react";
+import { BellRing, Building2, CreditCard, Palette, ReceiptText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { updateInstituteSettings } from "@/app/(dashboard)/settings/actions";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,14 @@ type SettingsFormProps = {
     notificationWebPushEnabled: boolean;
     notificationInAppEnabled: boolean;
     notificationIncludeDueDates: boolean;
+    cardRequireDuringRegistration: boolean;
+    cardRequireBothNfcAndQr: boolean;
+    cardAllowQrOnly: boolean;
+    cardAllowNfcOnly: boolean;
+    cardAutoGenerateQrToken: boolean;
+    cardReplacementFee: unknown;
+    cardNotifyParentOnReplacement: boolean;
+    cardNotifyAdminOnLostOrStolenScan: boolean;
     currency: string;
     themeColor: string;
     logoPlaceholder: string | null;
@@ -160,6 +168,29 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
             <Toggle name="notificationWebPushEnabled" title="Enable web push" description="Send browser push alerts to installed EduTap web apps." checked={settings.notificationWebPushEnabled} />
             <Toggle name="notificationInAppEnabled" title="Enable in-app alerts" description="Keep notifications in the parent portal inbox." checked={settings.notificationInAppEnabled} />
             <Toggle name="notificationIncludeDueDates" title="Include due dates" description="Add nearest due dates to payment-aware alerts." checked={settings.notificationIncludeDueDates} />
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Student card rules
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Toggle name="cardRequireDuringRegistration" title="Require card at registration" description="Block new student creation until a physical card is assigned." checked={settings.cardRequireDuringRegistration} />
+            <Toggle name="cardRequireBothNfcAndQr" title="Require both NFC and QR" description="Force every active card to include both identifiers." checked={settings.cardRequireBothNfcAndQr} />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <Toggle name="cardAllowQrOnly" title="Allow QR-only cards" description="Permit assignment when NFC is not available." checked={settings.cardAllowQrOnly} />
+              <Toggle name="cardAllowNfcOnly" title="Allow NFC-only cards" description="Permit assignment when QR is not available." checked={settings.cardAllowNfcOnly} />
+              <Toggle name="cardAutoGenerateQrToken" title="Auto-generate QR token" description="Create a secure QR token if none is provided." checked={settings.cardAutoGenerateQrToken} />
+              <Toggle name="cardNotifyParentOnReplacement" title="Notify parent on replacement" description="Reserved for parent notification workflows." checked={settings.cardNotifyParentOnReplacement} />
+              <Toggle name="cardNotifyAdminOnLostOrStolenScan" title="Alert on lost/stolen scans" description="Flag suspicious lost or stolen card scans in the admin logs." checked={settings.cardNotifyAdminOnLostOrStolenScan} />
+            </div>
+            <Field label="Replacement fee" htmlFor="cardReplacementFee">
+              <Input id="cardReplacementFee" name="cardReplacementFee" type="number" min={0} step="0.01" defaultValue={settings.cardReplacementFee ? String(settings.cardReplacementFee) : ""} />
+            </Field>
           </CardContent>
         </Card>
 

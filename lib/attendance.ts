@@ -1,8 +1,9 @@
-import { AttendanceSource, AttendanceStatus, PaymentStatus, Prisma } from "@prisma/client";
+import { AttendanceSource, AttendanceStatus, CardScanType, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { nfcUidCandidates, normalizeNfcUid } from "@/lib/nfc";
 import { sendParentAttendanceNotification } from "@/lib/parent-attendance-notifications";
 import { formatCurrency } from "@/lib/utils";
+import { findActiveCardByCredential, logCardScan, scanResultForCardStatus } from "@/lib/student-cards";
 
 export type AttendanceMarkResult = {
   ok: boolean;
@@ -132,20 +133,92 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
     return { ok: false, statusCode: 409, message: "No active attendance session for this class today." };
   }
 
-  const student = input.studentId
+  const scannedValue = input.nfcUid ?? input.token ?? "";
+  const scanType = input.source === AttendanceSource.NFC ? CardScanType.NFC : input.source === AttendanceSource.QR ? CardScanType.QR : null;
+  const scannedCard = scanType
+    ? await findActiveCardByCredential({
+        instituteId: classGroup.instituteId,
+        scanType,
+        value: scannedValue
+      })
+    : null;
+
+  if (scanType && !scannedCard) {
+    const normalizedNfcUid = input.nfcUid ? normalizeNfcUid(input.nfcUid) : undefined;
+    await Promise.all([
+      audit({
+        instituteId: classGroup.instituteId,
+        sessionId: session.id,
+        source: input.source,
+        status,
+        success: false,
+        message: input.token ? "QR card was not recognized." : "NFC card was not recognized.",
+        metadata: { token: input.token, nfcUid: input.nfcUid, normalizedNfcUid }
+      }),
+      logCardScan({
+        instituteId: classGroup.instituteId,
+        scanType,
+        scannedValue,
+        result: "CARD_NOT_FOUND",
+        classGroupId: classGroup.id,
+        attendanceSessionId: session.id,
+        notes: input.token ? "QR card was not recognized." : "NFC card was not recognized."
+      })
+    ]);
+
+    return {
+      ok: false,
+      statusCode: 404,
+      message: input.token ? "QR card was not recognized." : `NFC card was not recognized${normalizedNfcUid ? `: ${normalizedNfcUid}` : "."}`,
+      credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid } : undefined
+    };
+  }
+
+  if (scanType && scannedCard && scannedCard.status !== "ACTIVE") {
+    const result = scanResultForCardStatus(scannedCard.status);
+    const message = `This card is no longer active. Status: ${scannedCard.status}.`;
+
+    await Promise.all([
+      audit({
+        instituteId: classGroup.instituteId,
+        sessionId: session.id,
+        studentId: scannedCard.studentId,
+        source: input.source,
+        status,
+        success: false,
+        message,
+        metadata: { cardId: scannedCard.id, cardStatus: scannedCard.status }
+      }),
+      logCardScan({
+        instituteId: classGroup.instituteId,
+        cardId: scannedCard.id,
+        studentId: scannedCard.studentId,
+        scanType,
+        scannedValue,
+        result,
+        classGroupId: classGroup.id,
+        attendanceSessionId: session.id,
+        notes: message
+      })
+    ]);
+
+    return {
+      ok: false,
+      statusCode: 403,
+      message,
+      student: {
+        id: scannedCard.student.id,
+        name: `${scannedCard.student.firstName} ${scannedCard.student.lastName}`,
+        admissionNo: scannedCard.student.admissionNo
+      }
+    };
+  }
+
+  const student = scannedCard
+    ? scannedCard.student
+    : input.studentId
     ? await prisma.student.findFirst({
         where: { id: input.studentId, instituteId: classGroup.instituteId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          admissionNo: true,
-          status: true
-        }
-      })
-    : input.token
-    ? await prisma.student.findFirst({
-        where: { attendanceToken: input.token, instituteId: classGroup.instituteId },
         select: {
           id: true,
           firstName: true,
@@ -246,16 +319,31 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
   };
 
   if (duplicate) {
-    await audit({
-      instituteId: classGroup.instituteId,
-      sessionId: session.id,
-      studentId: student.id,
-      recordId: duplicate.id,
-      source: input.source,
-      status: duplicate.status,
-      success: false,
-      message: "Attendance already marked for this session."
-    });
+    await Promise.all([
+      audit({
+        instituteId: classGroup.instituteId,
+        sessionId: session.id,
+        studentId: student.id,
+        recordId: duplicate.id,
+        source: input.source,
+        status: duplicate.status,
+        success: false,
+        message: "Attendance already marked for this session."
+      }),
+      scanType
+        ? logCardScan({
+            instituteId: classGroup.instituteId,
+            cardId: scannedCard?.id,
+            studentId: student.id,
+            scanType,
+            scannedValue,
+            result: "DUPLICATE_ATTENDANCE",
+            classGroupId: classGroup.id,
+            attendanceSessionId: session.id,
+            notes: "Attendance already marked for this session."
+          })
+        : Promise.resolve()
+    ]);
 
     return {
       ok: false,
@@ -280,16 +368,31 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
     }
   });
 
-  await audit({
-    instituteId: classGroup.instituteId,
-    sessionId: session.id,
-    studentId: student.id,
-    recordId: record.id,
-    source: input.source,
-    status,
-    success: true,
-    message: "Attendance marked successfully."
-  });
+  await Promise.all([
+    audit({
+      instituteId: classGroup.instituteId,
+      sessionId: session.id,
+      studentId: student.id,
+      recordId: record.id,
+      source: input.source,
+      status,
+      success: true,
+      message: "Attendance marked successfully."
+    }),
+    scanType
+      ? logCardScan({
+          instituteId: classGroup.instituteId,
+          cardId: scannedCard?.id,
+          studentId: student.id,
+          scanType,
+          scannedValue,
+          result: "SUCCESS",
+          classGroupId: classGroup.id,
+          attendanceSessionId: session.id,
+          notes: "Attendance marked successfully."
+        })
+      : Promise.resolve()
+  ]);
 
   try {
     await sendParentAttendanceNotification({

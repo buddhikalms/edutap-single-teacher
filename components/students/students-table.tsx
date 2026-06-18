@@ -12,7 +12,7 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
-import { Eye, Loader2, Pencil, Plus, Radio, Search, Trash2, UserRound, X } from "lucide-react";
+import { CreditCard, Eye, Loader2, Pencil, Plus, QrCode, Radio, Search, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createStudent, deleteStudent, updateStudent } from "@/app/(dashboard)/students/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
@@ -51,8 +51,10 @@ export type StudentRow = {
   dateOfBirth: string;
   status: "ACTIVE" | "PAUSED" | "GRADUATED" | "ARCHIVED";
   avatarUrl: string | null;
+  cardNumber: string | null;
   nfcUid: string | null;
   qrCode: string | null;
+  qrToken: string | null;
   branchId: string;
   branch: string;
   classes: string;
@@ -84,8 +86,10 @@ const emptyStudent: StudentInput = {
   dateOfBirth: undefined,
   status: "ACTIVE",
   avatarUrl: undefined,
+  cardNumber: undefined,
   nfcUid: undefined,
   qrCode: undefined,
+  qrToken: undefined,
   branchId: "",
   parentName: "",
   parentRelationship: "Guardian",
@@ -108,8 +112,10 @@ function rowToInput(row: StudentRow): StudentInput {
     dateOfBirth: row.dateOfBirth || undefined,
     status: row.status,
     avatarUrl: row.avatarUrl ?? undefined,
+    cardNumber: row.cardNumber ?? undefined,
     nfcUid: row.nfcUid ?? undefined,
     qrCode: row.qrCode ?? undefined,
+    qrToken: row.qrToken ?? undefined,
     branchId: row.branchId,
     parentName: row.parentName,
     parentRelationship: row.parentRelationship,
@@ -438,20 +444,55 @@ function StudentPanel({
                   </Select>
                 </FormField>
               </FieldRow>
-              <FieldRow>
-                <FormField label="NFC UID" error={form.formState.errors.nfcUid?.message}>
-                  <div className="flex gap-2">
-                    <Input placeholder="04:A1:..." {...form.register("nfcUid")} />
-                    <Button type="button" variant="outline" onClick={scanWebNfcCard} disabled={nfcScanning}>
-                      {nfcScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
-                      Read
-                    </Button>
+              <div className="rounded-xl border bg-white/75 p-4">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                  <div>
+                    <p className="flex items-center gap-2 font-semibold">
+                      <CreditCard className="h-4 w-4 text-primary" />
+                      Student card assignment
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">Scan or enter the physical NFC and QR identifiers printed on the student card.</p>
                   </div>
-                </FormField>
-                <FormField label="QR code" error={form.formState.errors.qrCode?.message}>
-                  <Input placeholder="QR-STUDENT-1001" {...form.register("qrCode")} />
-                </FormField>
-              </FieldRow>
+                  <Badge variant="success" className="w-fit">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Active on save
+                  </Badge>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <FormField label="Card number" error={form.formState.errors.cardNumber?.message}>
+                    <Input placeholder="CARD-0001" {...form.register("cardNumber")} />
+                  </FormField>
+                  <FormField label="NFC UID" error={form.formState.errors.nfcUid?.message}>
+                    <div className="flex gap-2">
+                      <Input placeholder="04:A1:..." {...form.register("nfcUid")} />
+                      <Button type="button" variant="outline" onClick={scanWebNfcCard} disabled={nfcScanning}>
+                        {nfcScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
+                        Read
+                      </Button>
+                    </div>
+                  </FormField>
+                  <FormField label="QR code value" error={form.formState.errors.qrCode?.message}>
+                    <Input placeholder="QR-STUDENT-1001" {...form.register("qrCode")} />
+                  </FormField>
+                  <FormField label="QR token" error={form.formState.errors.qrToken?.message}>
+                    <div className="flex gap-2">
+                      <Input placeholder="Leave blank to use QR code or auto-token" {...form.register("qrToken")} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const token = `QR-${crypto.randomUUID()}`;
+                          form.setValue("qrToken", token, { shouldDirty: true, shouldValidate: true });
+                          toast.success("QR token generated.");
+                        }}
+                      >
+                        <QrCode className="h-4 w-4" />
+                        Generate
+                      </Button>
+                    </div>
+                  </FormField>
+                </div>
+              </div>
               <FormField label="Photo URL placeholder" error={form.formState.errors.avatarUrl?.message}>
                 <Input placeholder="Optional image URL" {...form.register("avatarUrl")} />
               </FormField>

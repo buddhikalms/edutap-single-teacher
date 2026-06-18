@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { MobileAuthError, requireOperationalMobileUser } from "@/lib/mobile-auth";
 import { normalizeNfcUid } from "@/lib/nfc";
 import { assignStudentNfcSchema } from "@/lib/validations";
+import { assignOrUpdateActiveCard } from "@/lib/student-cards";
 
 type RouteContext = {
   params: Promise<{ studentId: string }>;
@@ -61,9 +62,19 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    await prisma.student.update({
-      where: { id: student.id },
-      data: { nfcUid: normalizedNfcUid }
+    await prisma.$transaction(async (tx) => {
+      await tx.student.update({
+        where: { id: student.id },
+        data: { nfcUid: normalizedNfcUid }
+      });
+
+      await assignOrUpdateActiveCard(tx, {
+        instituteId: user.instituteId,
+        studentId: student.id,
+        performedById: user.id,
+        card: { nfcUid: normalizedNfcUid },
+        requireCard: false
+      });
     });
 
     return NextResponse.json({

@@ -6,6 +6,7 @@ export const roleAccess = {
   classes: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   enrollment: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "STAFF"],
   attendance: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
+  cards: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   payments: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "STAFF"],
   homework: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],
   quizzes: ["INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER", "STAFF"],

@@ -94,8 +94,10 @@ export const studentSchema = z.object({
   dateOfBirth: optionalText,
   status: z.enum(["ACTIVE", "PAUSED", "GRADUATED", "ARCHIVED"]),
   avatarUrl: optionalText,
+  cardNumber: optionalText,
   nfcUid: optionalText,
   qrCode: optionalText,
+  qrToken: optionalText,
   branchId: z.string().min(1, "Branch is required."),
   parentName: z.string().trim().min(1, "Guardian name is required."),
   parentRelationship: z.enum(["Father", "Mother", "Guardian", "Other"]),
@@ -106,6 +108,41 @@ export const studentSchema = z.object({
   parentAppLogin: z.string().trim().min(1, "Parent app login mobile or email is required."),
   emergencyContactNumber: z.string().trim().min(1, "Emergency contact number is required."),
   parentOccupation: optionalText
+});
+
+export const cardAssignmentSchema = z.object({
+  studentId: z.string().min(1, "Student is required."),
+  cardNumber: optionalText,
+  nfcUid: optionalText,
+  qrCode: optionalText,
+  qrToken: optionalText,
+  notes: optionalText
+});
+
+export const cardReplacementSchema = z.object({
+  studentId: z.string().min(1, "Student is required."),
+  reason: z.enum(["LOST", "MISSING", "STOLEN", "DAMAGED", "WRONG_CARD", "OTHER"]),
+  cardNumber: optionalText,
+  nfcUid: optionalText,
+  qrCode: optionalText,
+  qrToken: optionalText,
+  notes: optionalText,
+  createReplacementFee: z.boolean().default(false)
+});
+
+export const cardStatusSchema = z.object({
+  cardId: z.string().min(1, "Card is required."),
+  status: z.enum(["LOST", "MISSING", "STOLEN", "DAMAGED", "BLOCKED", "INACTIVE", "ACTIVE"]),
+  reason: optionalText,
+  notes: optionalText
+});
+
+export const cardDuplicateValidationSchema = z.object({
+  cardNumber: optionalText,
+  nfcUid: optionalText,
+  qrCode: optionalText,
+  qrToken: optionalText,
+  excludeCardId: optionalText
 });
 
 export const teacherSchema = z.object({
@@ -401,6 +438,9 @@ export const liveClassRecordingSchema = z.object({
 });
 
 export type StudentInput = z.infer<typeof studentSchema>;
+export type CardAssignmentInput = z.infer<typeof cardAssignmentSchema>;
+export type CardReplacementInput = z.infer<typeof cardReplacementSchema>;
+export type CardStatusInput = z.infer<typeof cardStatusSchema>;
 export type PublicTeacherRegistrationInput = z.infer<typeof publicTeacherRegistrationSchema>;
 export type PublicInstituteRegistrationInput = z.infer<typeof publicInstituteRegistrationSchema>;
 export type StudentSelfRegistrationInput = z.infer<typeof studentSelfRegistrationSchema>;

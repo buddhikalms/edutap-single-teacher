@@ -282,6 +282,46 @@ enum IntegrationProvider {
   GOOGLE
 }
 
+enum StudentCardStatus {
+  ACTIVE
+  INACTIVE
+  LOST
+  MISSING
+  STOLEN
+  DAMAGED
+  REPLACED
+  BLOCKED
+}
+
+enum StudentCardHistoryAction {
+  ISSUED
+  ASSIGNED
+  ACTIVATED
+  DEACTIVATED
+  MARKED_LOST
+  MARKED_MISSING
+  MARKED_STOLEN
+  MARKED_DAMAGED
+  REPLACED
+  BLOCKED
+  UNBLOCKED
+}
+
+enum CardScanType {
+  NFC
+  QR
+}
+
+enum CardScanResult {
+  SUCCESS
+  CARD_NOT_FOUND
+  CARD_INACTIVE
+  CARD_LOST
+  CARD_STOLEN
+  CARD_MISSING
+  DUPLICATE_ATTENDANCE
+}
+
 model Institute {
   id                          String                       @id @default(cuid())
   name                        String
@@ -324,6 +364,9 @@ model Institute {
   attendanceNotificationLogs  AttendanceNotificationLog[]
   classEndNotificationLogs    ClassEndNotificationLog[]
   teacherRegistrationRequests TeacherRegistrationRequest[]
+  studentCards                StudentCard[]
+  studentCardHistory          StudentCardHistory[]
+  cardScanLogs                CardScanLog[]
 }
 
 model InstituteSettings {
@@ -354,6 +397,14 @@ model InstituteSettings {
   notificationWebPushEnabled                 Boolean   @default(true)
   notificationInAppEnabled                   Boolean   @default(true)
   notificationIncludeDueDates                Boolean   @default(true)
+  cardRequireDuringRegistration              Boolean   @default(false)
+  cardRequireBothNfcAndQr                    Boolean   @default(false)
+  cardAllowQrOnly                            Boolean   @default(true)
+  cardAllowNfcOnly                           Boolean   @default(true)
+  cardAutoGenerateQrToken                    Boolean   @default(true)
+  cardReplacementFee                         Decimal?  @db.Decimal(10, 2)
+  cardNotifyParentOnReplacement              Boolean   @default(false)
+  cardNotifyAdminOnLostOrStolenScan          Boolean   @default(true)
   notificationCustomTemplates                Json?
   branchSettings                             Json?
   createdAt                                  DateTime  @default(now())
@@ -510,6 +561,10 @@ model User {
   quizzesCreated         Quiz[]                @relation("QuizCreatedBy")
   courseMaterialsCreated CourseMaterial[]      @relation("CourseMaterialCreatedBy")
   liveClassesCreated     LiveClass[]           @relation("LiveClassCreatedBy")
+  studentCardsIssued     StudentCard[]         @relation("StudentCardIssuedBy")
+  studentCardsReplaced   StudentCard[]         @relation("StudentCardReplacedBy")
+  studentCardHistory     StudentCardHistory[]  @relation("StudentCardHistoryPerformedBy")
+  cardScanLogs           CardScanLog[]         @relation("CardScanLogScannedBy")
 
   @@index([instituteId])
   @@index([branchId])
@@ -564,6 +619,9 @@ model Student {
   notificationsV2            Notification[]
   devices                    StudentDevice[]
   liveClassAttendances       LiveClassAttendance[]
+  cards                      StudentCard[]
+  cardHistory                StudentCardHistory[]
+  cardScanLogs               CardScanLog[]
 
   @@unique([instituteId, admissionNo])
   @@index([instituteId, nfcUid])
@@ -778,6 +836,7 @@ model ClassGroup {
   attendanceSessions       AttendanceSession[]
   payments                 Payment[]
   classEndNotificationLogs ClassEndNotificationLog[]
+  cardScanLogs             CardScanLog[]
   notices                  Notice[]
   homework                 Homework[]
   quizzes                  Quiz[]
@@ -831,6 +890,7 @@ model AttendanceSession {
   auditLogs                  AttendanceAuditLog[]
   attendanceNotificationLogs AttendanceNotificationLog[]
   classEndNotificationLogs   ClassEndNotificationLog[]
+  cardScanLogs               CardScanLog[]
 
   @@unique([classGroupId, sessionDate])
   @@index([sessionDate])
@@ -877,6 +937,102 @@ model AttendanceAuditLog {
   @@index([instituteId, createdAt])
   @@index([sessionId])
   @@index([studentId])
+}
+
+model StudentCard {
+  id                String               @id @default(cuid())
+  instituteId       String
+  studentId         String
+  cardNumber        String?
+  nfcUid            String?
+  qrCode            String?
+  qrToken           String?
+  status            StudentCardStatus    @default(ACTIVE)
+  issuedAt          DateTime             @default(now())
+  activatedAt       DateTime?
+  deactivatedAt     DateTime?
+  replacedAt        DateTime?
+  lostReportedAt    DateTime?
+  stolenReportedAt  DateTime?
+  missingReportedAt DateTime?
+  damagedReportedAt DateTime?
+  notes             String?              @db.Text
+  issuedById        String?
+  replacedById      String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  institute         Institute            @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student           Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  issuedBy          User?                @relation("StudentCardIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  replacedBy        User?                @relation("StudentCardReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
+  history           StudentCardHistory[]
+  scanLogs          CardScanLog[]
+
+  @@unique([instituteId, cardNumber])
+  @@unique([instituteId, nfcUid])
+  @@unique([instituteId, qrCode])
+  @@unique([instituteId, qrToken])
+  @@index([instituteId, status])
+  @@index([studentId, status])
+  @@index([issuedById])
+  @@index([replacedById])
+}
+
+model StudentCardHistory {
+  id             String                   @id @default(cuid())
+  instituteId    String
+  studentId      String
+  cardId         String
+  action         StudentCardHistoryAction
+  previousStatus StudentCardStatus?
+  newStatus      StudentCardStatus?
+  previousNfcUid String?
+  newNfcUid      String?
+  previousQrCode String?
+  newQrCode      String?
+  reason         String?
+  notes          String?                  @db.Text
+  performedById  String?
+  performedAt    DateTime                 @default(now())
+  institute      Institute                @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student        Student                  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  card           StudentCard              @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  performedBy    User?                    @relation("StudentCardHistoryPerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
+
+  @@index([instituteId, performedAt])
+  @@index([studentId, performedAt])
+  @@index([cardId, performedAt])
+  @@index([performedById])
+}
+
+model CardScanLog {
+  id                  String             @id @default(cuid())
+  instituteId         String
+  cardId              String?
+  studentId           String?
+  scanType            CardScanType
+  scannedValue        String
+  result              CardScanResult
+  classGroupId        String?
+  attendanceSessionId String?
+  scannedById         String?
+  scannedAt           DateTime           @default(now())
+  deviceInfo          String?            @db.Text
+  notes               String?            @db.Text
+  institute           Institute          @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  card                StudentCard?       @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  student             Student?           @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  classGroup          ClassGroup?        @relation(fields: [classGroupId], references: [id], onDelete: SetNull)
+  attendanceSession   AttendanceSession? @relation(fields: [attendanceSessionId], references: [id], onDelete: SetNull)
+  scannedBy           User?              @relation("CardScanLogScannedBy", fields: [scannedById], references: [id], onDelete: SetNull)
+
+  @@index([instituteId, scannedAt])
+  @@index([cardId, scannedAt])
+  @@index([studentId, scannedAt])
+  @@index([classGroupId])
+  @@index([attendanceSessionId])
+  @@index([scannedById])
+  @@index([scanType, result])
 }
 
 model Payment {

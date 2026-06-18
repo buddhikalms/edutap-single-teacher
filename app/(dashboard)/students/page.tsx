@@ -13,6 +13,11 @@ export default async function StudentsPage() {
         parents: { take: 1 },
         payments: true,
         attendance: true,
+        cards: {
+          where: { status: "ACTIVE" },
+          take: 1,
+          orderBy: { issuedAt: "desc" }
+        },
         enrollments: {
           include: {
             classGroup: true
@@ -42,8 +47,10 @@ export default async function StudentsPage() {
     phone: student.phone,
     status: student.status,
     avatarUrl: student.avatarUrl,
+    cardNumber: student.cards[0]?.cardNumber ?? null,
     nfcUid: student.nfcUid,
     qrCode: student.qrCode,
+    qrToken: student.cards[0]?.qrToken ?? student.attendanceToken,
     dateOfBirth: student.dateOfBirth ? student.dateOfBirth.toISOString().slice(0, 10) : "",
     branchId: student.branchId,
     branch: student.branch.name,

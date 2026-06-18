@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { studentSchema, type StudentInput } from "@/lib/validations";
 import { normalizeNfcUid } from "@/lib/nfc";
 import { findOrCreateParent } from "@/lib/parent-registration";
+import { assignOrUpdateActiveCard, hasCardCredential } from "@/lib/student-cards";
 
 function toDate(value?: string) {
   return value ? new Date(value) : null;
@@ -75,7 +76,7 @@ function uniqueMessage(error: unknown) {
 
 export async function createStudent(input: StudentInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, userId } = await getTenantContext();
     const parsed = studentSchema.parse(input);
     await assertBranch(instituteId, parsed.branchId);
     await assertUniqueNfcUid(instituteId, parsed.nfcUid);
@@ -108,6 +109,19 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
         create: { parentId: parent.id, studentId: student.id, relation: parsed.parentRelationship },
         update: { relation: parsed.parentRelationship }
       });
+
+      await assignOrUpdateActiveCard(tx, {
+        instituteId,
+        studentId: student.id,
+        performedById: userId,
+        card: {
+          cardNumber: parsed.cardNumber,
+          nfcUid: parsed.nfcUid,
+          qrCode: parsed.qrCode,
+          qrToken: parsed.qrToken
+        },
+        requireCard: false
+      });
     });
 
     revalidatePath("/students");
@@ -118,7 +132,7 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
       return { ok: false, message: duplicate };
     }
 
-    if (error instanceof Error && error.message.includes("NFC card is already assigned")) {
+    if (error instanceof Error && (error.message.includes("NFC card is already assigned") || error.message.includes("card identifier") || error.message.includes("student card"))) {
       return { ok: false, message: error.message };
     }
 
@@ -128,7 +142,7 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
 
 export async function updateStudent(id: string, input: StudentInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, userId } = await getTenantContext();
     const parsed = studentSchema.parse(input);
     await assertBranch(instituteId, parsed.branchId);
     await assertUniqueNfcUid(instituteId, parsed.nfcUid, id);
@@ -170,6 +184,20 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
         create: { parentId: parent.id, studentId: id, relation: parsed.parentRelationship },
         update: { relation: parsed.parentRelationship }
       });
+
+      if (hasCardCredential({ cardNumber: parsed.cardNumber, nfcUid: parsed.nfcUid, qrCode: parsed.qrCode, qrToken: parsed.qrToken })) {
+        await assignOrUpdateActiveCard(tx, {
+          instituteId,
+          studentId: id,
+          performedById: userId,
+          card: {
+            cardNumber: parsed.cardNumber,
+            nfcUid: parsed.nfcUid,
+            qrCode: parsed.qrCode,
+            qrToken: parsed.qrToken
+          }
+        });
+      }
     });
 
     revalidatePath("/students");
@@ -181,7 +209,7 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
       return { ok: false, message: duplicate };
     }
 
-    if (error instanceof Error && error.message.includes("NFC card is already assigned")) {
+    if (error instanceof Error && (error.message.includes("NFC card is already assigned") || error.message.includes("card identifier") || error.message.includes("student card"))) {
       return { ok: false, message: error.message };
     }
 
