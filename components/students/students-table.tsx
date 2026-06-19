@@ -15,6 +15,7 @@ import { useForm } from "react-hook-form";
 import { CreditCard, Eye, Loader2, Pencil, Plus, QrCode, Radio, Search, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createStudent, deleteStudent, updateStudent } from "@/app/(dashboard)/students/actions";
+import { QrCodeScanner } from "@/components/cards/camera-qr-scanner";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -324,6 +325,7 @@ function StudentPanel({
 }) {
   const [isPending, startTransition] = useTransition();
   const [nfcScanning, setNfcScanning] = useState(false);
+  const [qrScanning, setQrScanning] = useState(false);
   const form = useForm<StudentInput>({
     resolver: zodResolver(studentSchema),
     defaultValues
@@ -472,7 +474,10 @@ function StudentPanel({
                     </div>
                   </FormField>
                   <FormField label="QR code value" error={form.formState.errors.qrCode?.message}>
-                    <Input placeholder="QR-STUDENT-1001" {...form.register("qrCode")} />
+                    <div className="flex gap-2">
+                      <Input placeholder="QR-STUDENT-1001" {...form.register("qrCode")} />
+                      <Button type="button" variant="outline" onClick={() => setQrScanning(true)}><QrCode className="h-4 w-4" />Scan</Button>
+                    </div>
                   </FormField>
                   <FormField label="QR token" error={form.formState.errors.qrToken?.message}>
                     <div className="flex gap-2">
@@ -555,6 +560,12 @@ function StudentPanel({
           </div>
         </form>
       </div>
+      <QrCodeScanner open={qrScanning} onClose={() => setQrScanning(false)} onScan={(value) => {
+        form.setValue("qrCode", value, { shouldDirty: true, shouldValidate: true });
+        form.setValue("qrToken", value, { shouldDirty: true, shouldValidate: true });
+        setQrScanning(false);
+        toast.success("QR code captured and assigned.");
+      }} />
     </div>
   );
 }

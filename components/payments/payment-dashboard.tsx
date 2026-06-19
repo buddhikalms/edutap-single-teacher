@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, Banknote, CalendarDays, CreditCard, FileText, ReceiptText } from "lucide-react";
 import { PaymentChart } from "@/components/payments/payment-chart";
+import { PaymentStudentFinder } from "@/components/payments/payment-student-finder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,28 +79,8 @@ export function PaymentDashboard({ data, currency }: { data: PaymentDashboardDat
           </CardContent>
         </Card>
         <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Student ledgers</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.students.length ? (
-              data.students.slice(0, 8).map((student) => (
-                <Link key={student.id} href={`/payments/students/${student.id}`} className="block rounded-xl border bg-white/72 p-4 transition hover:bg-muted/40">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-semibold">{student.name}</p>
-                      <p className="text-xs text-muted-foreground">{student.admissionNo}</p>
-                    </div>
-                    <Badge variant={student.pending > 0 ? "warning" : "success"}>
-                      {student.pending > 0 ? formatCurrency(student.pending, currency) : "clear"}
-                    </Badge>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <Empty title="No students" text="Student ledgers will appear when students are added." />
-            )}
-          </CardContent>
+          <CardHeader><CardTitle>Find student to mark payment</CardTitle></CardHeader>
+          <CardContent><PaymentStudentFinder students={data.students} currency={currency} /></CardContent>
         </Card>
       </section>
 
