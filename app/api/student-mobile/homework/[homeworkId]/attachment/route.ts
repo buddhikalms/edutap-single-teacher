@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireStudentMobileUser, StudentMobileAuthError } from "@/lib/student-mobile-auth";
 import { prisma } from "@/lib/prisma";
+import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
 
 type RouteContext = { params: Promise<{ homeworkId: string }> };
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads", "homework-submissions");
 
 function extensionFor(file: File) {
   const fromName = path.extname(file.name).toLowerCase();
@@ -51,7 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ ok: false, message: "Uploads must be 10 MB or smaller." }, { status: 413 });
     }
 
-    const uploadDir = path.join(UPLOAD_ROOT, homeworkId);
+    const uploadDir = uploadDiskPath("homework-submissions", homeworkId);
     await mkdir(uploadDir, { recursive: true });
 
     const filename = `${randomUUID()}${extensionFor(file)}`;
@@ -60,7 +60,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     await writeFile(diskPath, bytes);
 
-    const publicPath = `/uploads/homework-submissions/${homeworkId}/${filename}`;
+    const publicPath = uploadPublicUrl("homework-submissions", homeworkId, filename);
 
     return NextResponse.json({
       ok: true,

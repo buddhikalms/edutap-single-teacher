@@ -13,6 +13,14 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 
+function monthStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
@@ -30,8 +38,27 @@ export default async function DashboardPage() {
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
   const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+  const trendStart = monthStart(new Date(startOfToday.getFullYear(), startOfToday.getMonth() - 5, 1));
+  const trendMonths = Array.from({ length: 6 }, (_, index) => monthStart(new Date(trendStart.getFullYear(), trendStart.getMonth() + index, 1)));
 
-  const [totalStudents, todayRecords, presentToday, pendingPayments, monthlyIncome, recentPayments, recentAttendance, classGroups, settings, homeworkReview, upcomingLive, parentAlerts] =
+  const [
+    totalStudents,
+    todayRecords,
+    presentToday,
+    lateToday,
+    absentToday,
+    excusedToday,
+    pendingPayments,
+    monthlyIncome,
+    incomeTrendPayments,
+    recentPayments,
+    recentAttendance,
+    classGroups,
+    settings,
+    homeworkReview,
+    upcomingLive,
+    parentAlerts
+  ] =
     await Promise.all([
       prisma.student.count({ where: { instituteId } }),
       prisma.attendanceRecord.count({
@@ -57,6 +84,42 @@ export default async function DashboardPage() {
           }
         }
       }),
+      prisma.attendanceRecord.count({
+        where: {
+          status: AttendanceStatus.LATE,
+          session: {
+            sessionDate: {
+              gte: startOfToday,
+              lt: endOfToday
+            },
+            classGroup: { instituteId }
+          }
+        }
+      }),
+      prisma.attendanceRecord.count({
+        where: {
+          status: AttendanceStatus.ABSENT,
+          session: {
+            sessionDate: {
+              gte: startOfToday,
+              lt: endOfToday
+            },
+            classGroup: { instituteId }
+          }
+        }
+      }),
+      prisma.attendanceRecord.count({
+        where: {
+          status: AttendanceStatus.EXCUSED,
+          session: {
+            sessionDate: {
+              gte: startOfToday,
+              lt: endOfToday
+            },
+            classGroup: { instituteId }
+          }
+        }
+      }),
       prisma.payment.aggregate({
         where: { instituteId, status: { in: [PaymentStatus.PENDING, PaymentStatus.OVERDUE, PaymentStatus.PARTIAL] } },
         _count: { _all: true },
@@ -65,6 +128,17 @@ export default async function DashboardPage() {
       prisma.payment.aggregate({
         where: { instituteId, status: PaymentStatus.PAID, paidAt: { gte: startOfMonth } },
         _sum: { amount: true }
+      }),
+      prisma.payment.findMany({
+        where: {
+          instituteId,
+          status: PaymentStatus.PAID,
+          paidAt: {
+            not: null,
+            gte: trendStart
+          }
+        },
+        select: { amount: true, paidAt: true }
       }),
       prisma.payment.findMany({
         where: { instituteId },
@@ -118,6 +192,23 @@ export default async function DashboardPage() {
   const currency = settings?.currency ?? "USD";
 
   const attendanceRate = todayRecords === 0 ? "0%" : `${Math.round((presentToday / todayRecords) * 100)}%`;
+  const incomeByMonth = new Map(trendMonths.map((date) => [monthKey(date), 0]));
+  for (const payment of incomeTrendPayments) {
+    if (payment.paidAt) {
+      const key = monthKey(payment.paidAt);
+      incomeByMonth.set(key, (incomeByMonth.get(key) ?? 0) + Number(payment.amount));
+    }
+  }
+  const incomeTrend = trendMonths.map((date) => ({
+    month: date.toLocaleString("en-US", { month: "short" }),
+    income: incomeByMonth.get(monthKey(date)) ?? 0
+  }));
+  const attendanceMix = [
+    { name: "Present", value: presentToday, color: "#0f766e" },
+    { name: "Late", value: lateToday, color: "#d97706" },
+    { name: "Absent", value: absentToday, color: "#e11d48" },
+    { name: "Excused", value: excusedToday, color: "#64748b" }
+  ];
   const activities = [
     ...recentPayments.map((payment) => ({
       title: `${payment.student.firstName} ${payment.student.lastName} invoice ${payment.invoiceNo}`,
@@ -189,8 +280,8 @@ export default async function DashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
-        <RevenueChart />
-        <AttendanceChart />
+        <RevenueChart data={incomeTrend} currency={currency} />
+        <AttendanceChart data={attendanceMix} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">

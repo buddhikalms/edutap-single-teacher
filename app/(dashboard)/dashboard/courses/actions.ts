@@ -10,6 +10,7 @@ import { nextInvoiceNo } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerTeacherId } from "@/lib/single-teacher";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { uploadDiskPath } from "@/lib/upload-storage";
 import { courseSchema, type CourseInput } from "@/lib/validations";
 
 function slugify(value: string) {
@@ -132,7 +133,7 @@ async function storeResource(courseId: string, file: FormDataEntryValue | null) 
   const allowed = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov"];
   if (!allowed.includes(ext)) throw new Error("Unsupported resource file type.");
 
-  const folder = path.join(process.cwd(), "storage", "courses", courseId);
+  const folder = uploadDiskPath("courses", courseId);
   await mkdir(folder, { recursive: true });
   const name = `${randomUUID()}${ext}`;
   await writeFile(path.join(folder, name), Buffer.from(await file.arrayBuffer()), { flag: "wx" });

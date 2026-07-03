@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_EXTENSIONS: Record<string, string> = {
@@ -45,14 +46,14 @@ export async function POST(request: Request) {
     const now = new Date();
     const folder = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
     const filename = `${randomUUID()}.${extension}`;
-    const uploadDirectory = path.join(process.cwd(), "public", "uploads", "images", folder);
+    const uploadDirectory = uploadDiskPath("images", folder);
 
     await mkdir(uploadDirectory, { recursive: true });
     await writeFile(path.join(uploadDirectory, filename), bytes, { flag: "wx" });
 
     return NextResponse.json({
       ok: true,
-      url: `/uploads/images/${folder}/${filename}`
+      url: uploadPublicUrl("images", folder, filename)
     });
   } catch (error) {
     console.error(error);

@@ -9,10 +9,10 @@ import { redirect } from "next/navigation";
 import { assertCanManageClass, homeworkSubmissionStatus, parseDateTime, splitLines } from "@/lib/learning";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
 import { homeworkSchema, homeworkSubmissionReviewSchema } from "@/lib/validations";
 
 const MAX_HOMEWORK_ATTACHMENT_BYTES = 15 * 1024 * 1024;
-const HOMEWORK_UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads", "homework");
 const ALLOWED_HOMEWORK_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -79,7 +79,7 @@ async function saveHomeworkAttachmentFiles(homeworkId: string, files: FormDataEn
   const uploads = files.filter(isUploadedFile);
   if (!uploads.length) return [];
 
-  const uploadDir = path.join(HOMEWORK_UPLOAD_ROOT, homeworkId);
+  const uploadDir = uploadDiskPath("homework", homeworkId);
   await mkdir(uploadDir, { recursive: true });
 
   const attachments = [];
@@ -99,7 +99,7 @@ async function saveHomeworkAttachmentFiles(homeworkId: string, files: FormDataEn
 
     attachments.push({
       name: file.name || filename,
-      url: `/uploads/homework/${homeworkId}/${filename}`,
+      url: uploadPublicUrl("homework", homeworkId, filename),
       type: file.type || null
     });
   }

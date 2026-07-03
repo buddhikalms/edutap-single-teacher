@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarCheck2,
@@ -104,6 +104,20 @@ type AttendanceSearchStudent = {
   status: string;
 };
 
+type WebNfcReadingEvent = Event & {
+  serialNumber?: string;
+};
+
+type WebNfcReader = {
+  scan: (options?: { signal?: AbortSignal }) => Promise<void>;
+  onreading: ((event: WebNfcReadingEvent) => void) | null;
+  onreadingerror: (() => void) | null;
+};
+
+type WebNfcWindow = Window & {
+  NDEFReader?: new () => WebNfcReader;
+};
+
 export function AttendanceTerminal({
   classes,
   sessions,
@@ -127,10 +141,15 @@ export function AttendanceTerminal({
   const [selectedStudent, setSelectedStudent] = useState<AttendanceSearchStudent | null>(null);
   const [feedback, setFeedback] = useState<AttendanceMarkResult | null>(null);
   const [recent, setRecent] = useState<AttendanceMarkResult[]>([]);
+  const [webNfcStatus, setWebNfcStatus] = useState("Waiting for an active session.");
   const [isPending, startTransition] = useTransition();
   const [isScanning, startScanTransition] = useTransition();
   const [isSearching, startSearchTransition] = useTransition();
   const [isSendingClassOver, startClassOverTransition] = useTransition();
+  const webNfcAbortRef = useRef<AbortController | null>(null);
+  const webNfcRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webNfcPostingRef = useRef(false);
+  const lastWebNfcReadRef = useRef<{ uid: string; at: number } | null>(null);
   const router = useRouter();
 
   const branchOptions = useMemo(
@@ -144,6 +163,124 @@ export function AttendanceTerminal({
   const selectedClass = filteredClasses.find((classGroup) => classGroup.id === selectedClassId) ?? filteredClasses[0] ?? classes[0];
   const activeSession = selectedClass?.activeSession ?? null;
   const canScan = activeSession?.status === "ACTIVE";
+  const postScan = useCallback(
+    async (endpoint: "nfc" | "qr", payload: Record<string, string>) => {
+      const response = await fetch(`/api/attendance/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classGroupId: selectedClass?.id,
+          status: "PRESENT",
+          ...payload
+        })
+      });
+      const result = (await response.json()) as AttendanceMarkResult;
+      setFeedback(result);
+      setRecent((current) => [result, ...current].slice(0, 8));
+
+      if (result.ok) {
+        toast.success(result.message);
+        setNfcUid("");
+        setQrToken("");
+      } else {
+        toast.error(result.message);
+      }
+    },
+    [selectedClass?.id]
+  );
+
+  useEffect(() => {
+    return () => {
+      webNfcAbortRef.current?.abort();
+      if (webNfcRestartRef.current) {
+        clearTimeout(webNfcRestartRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    webNfcAbortRef.current?.abort();
+    if (webNfcRestartRef.current) {
+      clearTimeout(webNfcRestartRef.current);
+    }
+
+    const updateStatus = (message: string) => {
+      queueMicrotask(() => setWebNfcStatus(message));
+    };
+
+    if (!canScan || !selectedClass?.id) {
+      updateStatus("Start an attendance session to listen for cards.");
+      return;
+    }
+
+    const nfcWindow = window as WebNfcWindow;
+    if (!nfcWindow.NDEFReader) {
+      updateStatus("Web NFC is not available in this browser. Use Chrome on Android or enter the UID manually.");
+      return;
+    }
+
+    let stopped = false;
+
+    async function startReader() {
+      if (stopped || webNfcPostingRef.current || !nfcWindow.NDEFReader) return;
+
+      const controller = new AbortController();
+      webNfcAbortRef.current = controller;
+      const reader = new nfcWindow.NDEFReader();
+
+      reader.onreading = (event) => {
+        const uid = event.serialNumber?.trim();
+        if (!uid || webNfcPostingRef.current) return;
+
+        const now = Date.now();
+        if (lastWebNfcReadRef.current?.uid === uid && now - lastWebNfcReadRef.current.at < 2500) {
+          setWebNfcStatus("Same card ignored for a moment.");
+          return;
+        }
+
+        lastWebNfcReadRef.current = { uid, at: now };
+        webNfcPostingRef.current = true;
+        controller.abort();
+        setNfcUid(uid);
+        setWebNfcStatus(`Read ${uid}. Marking attendance...`);
+
+        void postScan("nfc", { nfcUid: uid })
+          .finally(() => {
+            webNfcPostingRef.current = false;
+            if (!stopped) {
+              setWebNfcStatus("Ready for the next card.");
+              webNfcRestartRef.current = setTimeout(() => {
+                void startReader();
+              }, 450);
+            }
+          });
+      };
+
+      reader.onreadingerror = () => {
+        setWebNfcStatus("Could not read that card. Hold it near the reader again.");
+      };
+
+      try {
+        await reader.scan({ signal: controller.signal });
+        setWebNfcStatus("NFC reader is listening. Tap a student card.");
+      } catch (error) {
+        if (!stopped && !(error instanceof DOMException && error.name === "AbortError")) {
+          setWebNfcStatus(error instanceof Error ? error.message : "Could not start the NFC reader.");
+        }
+      }
+    }
+
+    void startReader();
+
+    return () => {
+      stopped = true;
+      webNfcAbortRef.current?.abort();
+      if (webNfcRestartRef.current) {
+        clearTimeout(webNfcRestartRef.current);
+      }
+    };
+  }, [activeSession?.id, canScan, postScan, selectedClass?.id]);
+
   function startSession() {
     if (!selectedClass) {
       toast.error("Select a class first.");
@@ -214,29 +351,6 @@ export function AttendanceTerminal({
 
       router.refresh();
     });
-  }
-
-  async function postScan(endpoint: "nfc" | "qr", payload: Record<string, string>) {
-    const response = await fetch(`/api/attendance/${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        classGroupId: selectedClass?.id,
-        status: "PRESENT",
-        ...payload
-      })
-    });
-    const result = (await response.json()) as AttendanceMarkResult;
-    setFeedback(result);
-    setRecent((current) => [result, ...current].slice(0, 8));
-
-    if (result.ok) {
-      toast.success(result.message);
-      setNfcUid("");
-      setQrToken("");
-    } else {
-      toast.error(result.message);
-    }
   }
 
   async function searchEnrolledStudents() {
@@ -423,8 +537,9 @@ export function AttendanceTerminal({
               <div className="rounded-xl border bg-white/72 p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <Radio className="h-4 w-4 text-teal-700" />
-                  <p className="font-semibold">NFC scan simulator</p>
+                  <p className="font-semibold">NFC reader</p>
                 </div>
+                <p className="mb-3 rounded-lg border bg-white/80 px-3 py-2 text-xs font-semibold text-muted-foreground">{webNfcStatus}</p>
                 <div className="flex gap-2">
                   <Input value={nfcUid} onChange={(event) => setNfcUid(event.target.value)} placeholder="Tap or enter NFC UID" />
                   <Button onClick={scanNfc} disabled={isScanning || !canScan}>

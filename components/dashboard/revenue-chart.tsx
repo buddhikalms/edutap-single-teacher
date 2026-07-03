@@ -2,22 +2,19 @@
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/utils";
 
-const data = [
-  { month: "Jan", income: 14800 },
-  { month: "Feb", income: 18200 },
-  { month: "Mar", income: 17100 },
-  { month: "Apr", income: 22500 },
-  { month: "May", income: 23800 },
-  { month: "Jun", income: 26400 }
-];
+export type RevenueChartPoint = {
+  month: string;
+  income: number;
+};
 
-export function RevenueChart() {
+export function RevenueChart({ data, currency }: { data: RevenueChartPoint[]; currency: string }) {
   return (
     <Card className="glass-panel">
       <CardHeader>
         <CardTitle>Monthly income trend</CardTitle>
-        <CardDescription>Revenue placeholder wired for payments reporting.</CardDescription>
+        <CardDescription>Paid payment income for the last 6 months.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[320px]">
@@ -31,10 +28,10 @@ export function RevenueChart() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ec" />
               <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value) / 1000}k`} />
+              <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => formatCurrency(Number(value), currency)} width={82} />
               <Tooltip
                 cursor={{ stroke: "#0f172a", strokeWidth: 1 }}
-                formatter={(value) => [`$${Number(value).toLocaleString()}`, "Income"]}
+                formatter={(value) => [formatCurrency(Number(value), currency), "Income"]}
                 contentStyle={{ borderRadius: 12, borderColor: "#d9e2ec" }}
               />
               <Area type="monotone" dataKey="income" stroke="#0f766e" strokeWidth={3} fill="url(#incomeGradient)" />
