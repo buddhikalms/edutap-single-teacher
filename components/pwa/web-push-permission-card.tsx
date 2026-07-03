@@ -16,9 +16,22 @@ function urlBase64ToUint8Array(value: string) {
   return output;
 }
 
+function arraysEqual(left: Uint8Array, right: Uint8Array) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function subscriptionUsesPublicKey(subscription: PushSubscription, publicKey: string) {
+  const currentKey = subscription.options.applicationServerKey;
+  return Boolean(currentKey && arraysEqual(new Uint8Array(currentKey), urlBase64ToUint8Array(publicKey)));
+}
+
 type WebPushPermissionCardProps = {
   audience?: "parent" | "student";
 };
+
+function isPushSafeContext() {
+  return window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
 
 export function WebPushPermissionCard({ audience = "parent" }: WebPushPermissionCardProps) {
   const [permission, setPermission] = useState<NotificationPermission>(() =>
@@ -33,6 +46,7 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     "serviceWorker" in navigator &&
     "PushManager" in window &&
     "Notification" in window &&
+    isPushSafeContext() &&
     Boolean(publicKey);
 
   async function saveSubscription(subscription: PushSubscription) {
@@ -52,6 +66,14 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     }
   }
 
+  async function removeSubscription(subscription: PushSubscription) {
+    await fetch("/api/web-push/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint })
+    }).catch(() => undefined);
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -63,11 +85,9 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
 
       try {
         setPermission(Notification.permission);
-        const registration =
-          (await navigator.serviceWorker.getRegistration()) ??
-          (Notification.permission === "granted" ? await navigator.serviceWorker.register("/sw.js") : null);
+        const registration = await navigator.serviceWorker.getRegistration("/");
         const subscription = await registration?.pushManager.getSubscription();
-        if (active) setEnabled(Boolean(subscription));
+        if (active) setEnabled(Boolean(subscription && publicKey && subscriptionUsesPublicKey(subscription, publicKey)));
       } catch {
         if (active) setEnabled(false);
       } finally {
@@ -80,7 +100,8 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     return () => {
       active = false;
     };
-  }, [browserSupported]);
+  }, [browserSupported, publicKey]);
+
   async function enableNotifications() {
     if (!browserSupported || !publicKey) {
       toast.error("Web push is not available in this browser or VAPID key is missing.");
@@ -90,7 +111,8 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     setLoading(true);
 
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      const registration = await navigator.serviceWorker.ready;
       const result = await Notification.requestPermission();
       setPermission(result);
 
@@ -99,12 +121,19 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
         return;
       }
 
+      const publicKeyBytes = urlBase64ToUint8Array(publicKey);
       const existing = await registration.pushManager.getSubscription();
+      if (existing && !subscriptionUsesPublicKey(existing, publicKey)) {
+        await removeSubscription(existing);
+        await existing.unsubscribe();
+      }
+
+      const current = await registration.pushManager.getSubscription();
       const subscription =
-        existing ??
+        current ??
         (await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey)
+          applicationServerKey: publicKeyBytes
         }));
 
       await saveSubscription(subscription);
@@ -117,6 +146,7 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
             : "EduTap can now send class and payment alerts to this browser."
       });
     } catch (error) {
+      setEnabled(false);
       toast.error(error instanceof Error ? error.message : "Could not enable web notifications.");
     } finally {
       setLoading(false);

@@ -45,13 +45,23 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const payload = event.data
-    ? event.data.json()
-    : {
+  let payload = {
+    title: "EduTap",
+    body: "You have a new EduTap alert.",
+    data: {}
+  };
+
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch {
+      payload = {
         title: "EduTap",
-        body: "You have a new EduTap alert.",
+        body: event.data.text() || "You have a new EduTap alert.",
         data: {}
       };
+    }
+  }
 
   const title = payload.title || "EduTap";
   const options = {
@@ -67,17 +77,15 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.actionUrl || event.notification.data?.url || "/portal/notifications";
+  const targetUrl = new URL(event.notification.data?.actionUrl || event.notification.data?.url || "/portal/notifications", self.location.origin).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((client) => client.url.includes(self.location.origin));
+      const existing = clients.find((client) => client.url.startsWith(self.location.origin));
       if (existing) {
-        existing.focus();
-        existing.navigate(url);
-        return;
+        return existing.focus().then((client) => client.navigate(targetUrl));
       }
-      return self.clients.openWindow(url);
+      return self.clients.openWindow(targetUrl);
     })
   );
 });

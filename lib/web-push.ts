@@ -7,15 +7,30 @@ export function hashEndpoint(endpoint: string) {
   return createHash("sha256").update(endpoint).digest("hex");
 }
 
-function configureWebPush() {
+export function getWebPushConfig() {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT || "mailto:support@edutap.com";
 
   if (!publicKey || !privateKey) {
+    return { ok: false as const, reason: "VAPID public/private keys are not configured." };
+  }
+
+  if (!subject.startsWith("mailto:") && !subject.startsWith("https://")) {
+    return { ok: false as const, reason: "VAPID_SUBJECT must be a mailto: or https:// URL." };
+  }
+
+  return { ok: true as const, publicKey, privateKey, subject };
+}
+
+function configureWebPush() {
+  const config = getWebPushConfig();
+  if (!config.ok) {
+    console.error(`[web-push] ${config.reason}`);
     return false;
   }
 
+  const { publicKey, privateKey, subject } = config;
   webPush.setVapidDetails(subject, publicKey, privateKey);
   return true;
 }
@@ -39,13 +54,22 @@ export async function sendWebPushMessages(input: {
     return { sent: 0, failed: 0, skipped: true };
   }
 
+  let recipientWhere: Prisma.WebPushSubscriptionWhereInput;
+  if (input.parentId) {
+    recipientWhere = { parentId: input.parentId, ...(input.userId ? { userId: input.userId } : {}) };
+  } else if (input.studentId) {
+    recipientWhere = { studentId: input.studentId, ...(input.userId ? { userId: input.userId } : {}) };
+  } else if (input.userId) {
+    recipientWhere = { userId: input.userId };
+  } else {
+    return { sent: 0, failed: 0, skipped: true };
+  }
+
   const subscriptions = await prisma.webPushSubscription.findMany({
     where: {
       instituteId: input.instituteId,
       isActive: true,
-      ...(input.parentId ? { parentId: input.parentId } : {}),
-      ...(input.studentId ? { studentId: input.studentId } : {}),
-      ...(input.userId ? { userId: input.userId } : {})
+      ...recipientWhere
     }
   });
 
@@ -106,6 +130,11 @@ export async function sendWebPushMessages(input: {
     } catch (error) {
       failed += 1;
       const statusCode = typeof error === "object" && error && "statusCode" in error ? Number((error as { statusCode?: number }).statusCode) : null;
+      console.error("[web-push] Delivery failed", {
+        endpointHash: subscription.endpointHash,
+        statusCode,
+        error: error instanceof Error ? error.message : error
+      });
 
       if (statusCode === 404 || statusCode === 410) {
         await prisma.webPushSubscription.update({

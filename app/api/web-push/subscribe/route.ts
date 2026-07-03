@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { hashEndpoint } from "@/lib/web-push";
+import { getWebPushConfig, hashEndpoint } from "@/lib/web-push";
 
 const subscribeSchema = z.object({
   subscription: z.object({
@@ -22,6 +22,11 @@ export async function POST(request: Request) {
 
   if (!session?.user?.id || !session.user.instituteId || !["PARENT", "FAMILY", "STUDENT"].includes(session.user.role)) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+  }
+
+  const webPushConfig = getWebPushConfig();
+  if (!webPushConfig.ok) {
+    return NextResponse.json({ message: webPushConfig.reason }, { status: 503 });
   }
 
   const parsed = subscribeSchema.safeParse(await request.json().catch(() => null));
