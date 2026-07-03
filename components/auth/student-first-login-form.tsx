@@ -46,6 +46,7 @@ export function StudentFirstLoginForm() {
   const [qrOpen, setQrOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nfcListening, setNfcListening] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
   const [student, setStudent] = useState<ActivationStudent | null>(null);
   const [activationToken, setActivationToken] = useState("");
   const [identifier, setIdentifier] = useState("");
@@ -82,6 +83,7 @@ export function StudentFirstLoginForm() {
   async function scanNfc() {
     const nfcWindow = window as WebNfcWindow;
     if (!nfcWindow.NDEFReader) {
+      setScanMessage("NFC is available only on supported Android browsers. Use Scan QR on this phone if NFC is not shown.");
       toast.error("Web NFC is not available in this browser. Use Chrome on Android or scan QR.");
       return;
     }
@@ -89,15 +91,18 @@ export function StudentFirstLoginForm() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 20000);
     setNfcListening(true);
+    setScanMessage("NFC reader is starting. Hold the card near the back of the phone.");
 
     try {
       const reader = new nfcWindow.NDEFReader();
       await reader.scan({ signal: controller.signal });
+      setScanMessage("NFC reader is listening. Tap the student card now.");
       toast.info("Hold the student card near this device.");
       reader.onreading = (event) => {
         window.clearTimeout(timeout);
         controller.abort();
         setNfcListening(false);
+        setScanMessage(`NFC card read: ${event.serialNumber}`);
         if (!event.serialNumber) {
           toast.error("The card was read, but no NFC UID was available.");
           return;
@@ -108,11 +113,13 @@ export function StudentFirstLoginForm() {
         window.clearTimeout(timeout);
         controller.abort();
         setNfcListening(false);
+        setScanMessage("Could not read that NFC card. Try again or scan QR.");
         toast.error("Could not read that NFC card.");
       };
     } catch (error) {
       window.clearTimeout(timeout);
       setNfcListening(false);
+      setScanMessage(error instanceof Error ? error.message : "Could not start NFC.");
       toast.error(error instanceof Error ? error.message : "Could not start NFC.");
     }
   }
@@ -234,16 +241,37 @@ export function StudentFirstLoginForm() {
           </div>
         ) : (
           <div className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button type="button" size="lg" variant="outline" onClick={() => setQrOpen(true)} disabled={busy}>
-                <QrCode className="h-4 w-4" />
-                Scan QR
-              </Button>
-              <Button type="button" size="lg" variant="outline" onClick={scanNfc} disabled={busy || nfcListening}>
-                {nfcListening ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
-                Tap NFC
-              </Button>
+            <div className="grid gap-3">
+              <button
+                type="button"
+                onClick={() => setQrOpen(true)}
+                disabled={busy}
+                className="flex min-h-24 w-full items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-primary/60 hover:bg-primary/[0.03] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white">
+                  <QrCode className="h-6 w-6" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold">Scan QR code</span>
+                  <span className="mt-1 block text-sm leading-5 text-muted-foreground">Open the phone camera scanner for the student card QR.</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={scanNfc}
+                disabled={busy || nfcListening}
+                className="flex min-h-24 w-full items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-primary/60 hover:bg-primary/[0.03] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
+                  {nfcListening ? <Loader2 className="h-6 w-6 animate-spin" /> : <Radio className="h-6 w-6" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold">{nfcListening ? "NFC reader active" : "Tap NFC card"}</span>
+                  <span className="mt-1 block text-sm leading-5 text-muted-foreground">Android Chrome can read the card directly from this page.</span>
+                </span>
+              </button>
             </div>
+            {scanMessage ? <p className="rounded-xl border bg-white/80 px-3 py-2 text-sm text-muted-foreground">{scanMessage}</p> : null}
 
             <div className="relative text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t">
               <span className="relative bg-white px-3">or password login</span>

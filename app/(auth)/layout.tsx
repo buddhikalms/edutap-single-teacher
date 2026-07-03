@@ -2,7 +2,7 @@ import { GraduationCap, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.22),_transparent_28%),linear-gradient(135deg,#f8fafc_0%,#edf2f7_42%,#f7f5ef_100%)]">
+    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.22),_transparent_28%),linear-gradient(135deg,#f8fafc_0%,#edf2f7_42%,#f7f5ef_100%)]">
       <div className="grid min-h-screen lg:grid-cols-[0.95fr_1.05fr]">
         <section className="hidden min-h-screen flex-col justify-between border-r border-white/70 bg-primary p-10 text-white lg:flex">
           <div className="flex items-center gap-3">
@@ -42,7 +42,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </section>
 
-        <section className="flex min-h-screen items-center justify-center p-6">
+        <section className="flex min-h-screen items-center justify-center px-4 py-6 sm:p-6">
           <div className="w-full max-w-[460px]">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-white shadow-glow">
@@ -56,7 +56,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <div className="glass-panel rounded-2xl p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Secure teacher workspace
+                Secure EduTap access
               </div>
               {children}
             </div>
