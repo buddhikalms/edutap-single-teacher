@@ -14,7 +14,7 @@ export default async function EditQuizPage({ params }: PageProps) {
   const scope = classScopeForRole({ userId, role, branchId });
   const [quiz, classes, courses] = await Promise.all([
     prisma.quiz.findFirst({ where: { id: quizId, instituteId } }),
-    prisma.classGroup.findMany({ where: { instituteId, ...scope }, include: { course: true }, orderBy: { name: "asc" } }),
+    prisma.classGroup.findMany({ where: { instituteId, ...scope }, include: { subject: true }, orderBy: { name: "asc" } }),
     prisma.course.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } })
   ]);
 
@@ -32,7 +32,7 @@ export default async function EditQuizPage({ params }: PageProps) {
         <h2 className="mt-4 text-3xl font-semibold">{quiz.title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">Update quiz settings and continue to the question builder.</p>
       </section>
-      <QuizForm action={action} classes={classes} courses={courses} quiz={quiz} />
+      <QuizForm action={action} classes={classes} quiz={quiz} />
     </div>
   );
 }

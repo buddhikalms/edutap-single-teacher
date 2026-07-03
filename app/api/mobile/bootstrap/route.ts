@@ -26,7 +26,9 @@ export async function GET(request: Request) {
           code: true,
           schedule: true,
           branchId: true,
-          course: { select: { name: true, subject: true, grade: true, fee: true } },
+          subject: { select: { name: true } },
+          gradeLevel: { select: { name: true } },
+          monthlyFee: true,
           teacher: { select: { name: true } },
           _count: { select: { enrollments: true } }
         }
@@ -83,10 +85,10 @@ export async function GET(request: Request) {
           code: classGroup.code,
           schedule: classGroup.schedule,
           branchId: classGroup.branchId,
-          courseName: classGroup.course.name,
-          subject: classGroup.course.subject,
-          grade: classGroup.course.grade,
-          monthlyFee: Number(classGroup.course.fee),
+          courseName: classGroup.subject.name,
+          subject: classGroup.subject.name,
+          grade: classGroup.gradeLevel?.name,
+          monthlyFee: Number(classGroup.monthlyFee),
           teacherName: classGroup.teacher?.name ?? "Unassigned",
           enrolledCount: classGroup._count.enrollments,
           activeSession: activeSession

@@ -20,7 +20,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ receip
       payment: {
         include: {
           student: { include: { branch: true } },
-          classGroup: { include: { course: true } }
+          classGroup: { include: { subject: true } }
         }
       }
     }
@@ -95,7 +95,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ receip
             <div className="overflow-hidden rounded-xl border">
               <table className="w-full text-sm">
                 <tbody>
-                  <ReceiptRow label="Class / course" value={payment.classGroup ? `${payment.classGroup.name} · ${payment.classGroup.course.name}` : "General payment"} />
+                  <ReceiptRow label="Class / course" value={payment.classGroup ? `${payment.classGroup.name} · ${payment.classGroup.subject.name}` : "General payment"} />
                   <ReceiptRow label="Amount" value={formatCurrency(payment.amount.toString(), currency)} />
                   <ReceiptRow label="Discount" value={formatCurrency(payment.discount.toString(), currency)} />
                   <ReceiptRow label="Paid on this receipt" value={formatCurrency(receipt.amount.toString(), currency)} />

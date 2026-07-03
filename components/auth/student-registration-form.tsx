@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -55,11 +55,7 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
     }
   });
 
-  const instituteSlug = useWatch({ control: form.control, name: "instituteSlug" });
-  const selectedInstitute = useMemo(
-    () => institutes.find((institute) => institute.slug === instituteSlug) ?? defaultInstitute,
-    [defaultInstitute, instituteSlug, institutes]
-  );
+  const selectedInstitute = defaultInstitute;
 
   async function submit(values: StudentSelfRegistrationInput) {
     setIsSubmitting(true);
@@ -119,7 +115,7 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
       <div className="mb-7">
         <h2 className="text-2xl font-semibold tracking-normal">Student registration</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Create your student account and submit parent or guardian details for institute review.
+          Create your student account and provide the required parent or guardian details.
         </p>
         <div className="mt-4">
           <InstallAppButton />
@@ -134,24 +130,9 @@ export function StudentRegistrationForm({ institutes }: { institutes: InstituteO
       ) : null}
 
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Institute" error={form.formState.errors.instituteSlug?.message}>
-            <Select
-              {...form.register("instituteSlug")}
-              onChange={(event) => {
-                const institute = institutes.find((item) => item.slug === event.target.value);
-                form.setValue("instituteSlug", event.target.value, { shouldValidate: true });
-                form.setValue("branchId", institute?.branches[0]?.id ?? "", { shouldValidate: true });
-              }}
-            >
-              {institutes.map((institute) => (
-                <option key={institute.id} value={institute.slug}>
-                  {institute.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Branch" error={form.formState.errors.branchId?.message}>
+        <input type="hidden" {...form.register("instituteSlug")} />
+        <div>
+          <Field label="Class location" error={form.formState.errors.branchId?.message}>
             <Select {...form.register("branchId")}>
               {selectedInstitute?.branches.map((branch) => (
                 <option key={branch.id} value={branch.id}>

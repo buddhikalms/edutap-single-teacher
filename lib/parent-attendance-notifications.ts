@@ -188,16 +188,14 @@ export async function sendParentAttendanceNotification(input: AttendanceNotifica
     }),
     prisma.student.findFirst({
       where: { id: input.studentId, instituteId: input.instituteId },
-      include: {
-        parents: { include: { user: { select: { id: true, email: true } } } }
-      }
+      select: { id: true, firstName: true, lastName: true }
     }),
     prisma.classGroup.findFirst({
       where: { id: input.classGroupId, instituteId: input.instituteId },
       include: {
         branch: { select: { id: true, name: true, location: true } },
         teacher: { select: { id: true, name: true } },
-        course: { select: { name: true } }
+        subject: { select: { name: true } }
       }
     })
   ]);
@@ -226,7 +224,7 @@ export async function sendParentAttendanceNotification(input: AttendanceNotifica
     where: { studentId: student.id, parent: { instituteId: input.instituteId } },
     include: { parent: { include: { user: { select: { id: true, email: true } } } } }
   });
-  const parents = [...student.parents, ...explicitLinks.map((link) => link.parent)].filter(
+  const parents = explicitLinks.map((link) => link.parent).filter(
     (parent, index, all) => all.findIndex((item) => item.id === parent.id) === index
   );
 
@@ -479,16 +477,12 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
         include: {
           branch: { select: { id: true, name: true, location: true } },
           teacher: { select: { id: true, name: true, userId: true } },
-          course: { select: { name: true } }
+          subject: { select: { name: true } }
         }
       },
       records: {
         include: {
-          student: {
-            include: {
-              parents: { include: { user: { select: { id: true, email: true } } } }
-            }
-          }
+          student: { select: { id: true, firstName: true, lastName: true } }
         }
       }
     }
@@ -515,7 +509,6 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
   const allowedStatuses = new Set<AttendanceStatus>();
   if (settings?.classEndedSendToPresent !== false) allowedStatuses.add(AttendanceStatus.PRESENT);
   if (settings?.classEndedSendToLate !== false) allowedStatuses.add(AttendanceStatus.LATE);
-  if (settings?.classEndedSendToAbsent === true) allowedStatuses.add(AttendanceStatus.ABSENT);
 
   const records = session.records.filter((record) => allowedStatuses.has(record.status));
 
@@ -527,12 +520,7 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
     where: { studentId: { in: records.map((record) => record.studentId) }, parent: { instituteId: input.instituteId } },
     include: { parent: { include: { user: { select: { id: true, email: true } } } } }
   });
-  const parentIds = Array.from(
-    new Set([
-      ...records.flatMap((record) => record.student.parents.map((parent) => parent.id)),
-      ...explicitLinks.map((link) => link.parentId)
-    ])
-  );
+  const parentIds = Array.from(new Set(explicitLinks.map((link) => link.parentId)));
   const devices = await prisma.studentDevice.findMany({
     where: {
       instituteId: input.instituteId,
@@ -553,10 +541,10 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
   let failedCount = 0;
 
   for (const record of records) {
-    const parents = [
-      ...record.student.parents,
-      ...explicitLinks.filter((link) => link.studentId === record.studentId).map((link) => link.parent)
-    ].filter((parent, index, all) => all.findIndex((item) => item.id === parent.id) === index);
+    const parents = explicitLinks
+      .filter((link) => link.studentId === record.studentId)
+      .map((link) => link.parent)
+      .filter((parent, index, all) => all.findIndex((item) => item.id === parent.id) === index);
     const studentName = `${record.student.firstName} ${record.student.lastName}`.trim();
     const paymentSummary =
       settings?.classEndedIncludePaymentSummary === false

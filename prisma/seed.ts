@@ -244,12 +244,17 @@ async function main() {
     })
   ]);
 
+  const subjects = await Promise.all(["Mathematics", "Physics", "English"].map((name) =>
+    prisma.subject.create({ data: { instituteId: institute.id, name } })
+  ));
+
   const courses = await Promise.all([
     prisma.course.create({
       data: {
         name: "Advanced Mathematics",
         code: "MATH-A",
         subject: "Mathematics",
+        subjectId: subjects[0].id,
         grade: "Grade 10",
         gradeId: grade10.id,
         description: "Premium exam-focused mathematics coaching.",
@@ -262,6 +267,7 @@ async function main() {
         name: "Physics Mastery",
         code: "PHY-M",
         subject: "Physics",
+        subjectId: subjects[1].id,
         grade: "Grade 11",
         gradeId: grade11.id,
         description: "Conceptual physics with weekly assessments.",
@@ -274,6 +280,7 @@ async function main() {
         name: "Academic English",
         code: "ENG-A",
         subject: "English",
+        subjectId: subjects[2].id,
         grade: "Grade 10",
         gradeId: grade10.id,
         description: "Writing, comprehension, and public speaking.",
@@ -295,7 +302,7 @@ async function main() {
         instituteId: institute.id,
         branchId: branch.id,
         gradeId: grade10.id,
-        courseId: courses[0].id,
+        subjectId: subjects[0].id,
         teacherId: teachers[0].id
       }
     }),
@@ -310,7 +317,7 @@ async function main() {
         instituteId: institute.id,
         branchId: branch.id,
         gradeId: grade11.id,
-        courseId: courses[1].id,
+        subjectId: subjects[1].id,
         teacherId: teachers[1].id,
         classType: "HYBRID",
         defaultFreePeriodType: "FIRST_WEEK",
@@ -329,7 +336,7 @@ async function main() {
         instituteId: institute.id,
         branchId: branch.id,
         gradeId: grade10.id,
-        courseId: courses[2].id,
+        subjectId: subjects[2].id,
         teacherId: teachers[2].id,
         classType: "ONLINE"
       }

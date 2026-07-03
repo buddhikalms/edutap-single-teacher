@@ -79,7 +79,7 @@ export default async function AttendancePage() {
     prisma.classGroup.findMany({
       where: { instituteId },
       include: {
-        course: true,
+        subject: true,
         branch: true,
         teacher: true,
         enrollments: {
@@ -158,7 +158,7 @@ export default async function AttendancePage() {
     branchId: classGroup.branchId,
     branch: classGroup.branch.name,
     classType: classGroup.classType,
-    course: classGroup.course.name,
+    course: classGroup.subject.name,
     teacher: classGroup.teacher?.name ?? "Unassigned",
     activeSession: classGroup.attendanceSessions[0] ? sessionView(classGroup.attendanceSessions[0]) : null,
     students: classGroup.enrollments.map((enrollment) => {

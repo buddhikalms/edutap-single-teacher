@@ -7,15 +7,14 @@ import { actionError, type ActionState, getTenantContext } from "@/lib/session";
 
 const settingsSchema = z.object({
   instituteName: z.string().min(2),
+  teacherName: z.string().min(2),
+  teacherSpecialty: z.string().min(2),
+  teacherBio: z.string().optional(),
+  teacherPhotoUrl: z.string().optional(),
   email: z.string().email(),
   phone: z.string().optional(),
   address: z.string().optional(),
   logoPlaceholder: z.string().optional(),
-  branchId: z.string().optional(),
-  branchName: z.string().optional(),
-  branchCode: z.string().optional(),
-  branchPhone: z.string().optional(),
-  branchAddress: z.string().optional(),
   receiptPrefix: z.string().min(2).max(12),
   receiptFooter: z.string().optional(),
   paymentDueDay: z.coerce.number().int().min(1).max(28),
@@ -71,6 +70,33 @@ export async function updateInstituteSettings(_previous: ActionState, formData: 
           logoUrl: parsed.logoPlaceholder || null
         }
       });
+
+      const teacher = await tx.teacher.findFirst({
+        where: { instituteId, userId: { not: null } },
+        select: { id: true, userId: true }
+      });
+
+      if (!teacher) throw new Error("Teacher owner profile was not found.");
+
+      await tx.teacher.update({
+        where: { id: teacher.id },
+        data: {
+          name: parsed.teacherName,
+          email: parsed.email,
+          phone: parsed.phone || null,
+          specialty: parsed.teacherSpecialty,
+          subjects: [parsed.teacherSpecialty],
+          bio: parsed.teacherBio || null,
+          photoUrl: parsed.teacherPhotoUrl || null
+        }
+      });
+
+      if (teacher.userId) {
+        await tx.user.update({
+          where: { id: teacher.userId },
+          data: { name: parsed.teacherName, email: parsed.email, image: parsed.teacherPhotoUrl || null }
+        });
+      }
 
       await tx.instituteSettings.upsert({
         where: { instituteId },
@@ -147,22 +173,12 @@ export async function updateInstituteSettings(_previous: ActionState, formData: 
         }
       });
 
-      if (parsed.branchId && parsed.branchName && parsed.branchCode) {
-        await tx.branch.update({
-          where: { id: parsed.branchId, instituteId },
-          data: {
-            name: parsed.branchName,
-            code: parsed.branchCode,
-            phone: parsed.branchPhone || null,
-            address: parsed.branchAddress || null
-          }
-        });
-      }
     });
 
     revalidatePath("/settings");
     revalidatePath("/dashboard");
-    return { ok: true, message: "Institute settings updated." };
+    revalidatePath("/");
+    return { ok: true, message: "Teacher profile and settings updated." };
   } catch (error) {
     return actionError(error, "Settings could not be updated.");
   }

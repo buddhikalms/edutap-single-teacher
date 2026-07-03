@@ -1,15 +1,32 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import type { LiveClassMeetingProvider, LiveClassProvider, Prisma } from "@prisma/client";
-import { decryptIntegrationToken, getProviderCredentials, upsertEncryptedIntegrationTokens } from "@/lib/provider-credentials";
+import { decryptIntegrationToken, decryptSecret, encryptSecret, getProviderCredentials, upsertEncryptedIntegrationTokens } from "@/lib/provider-credentials";
 import { prisma } from "@/lib/prisma";
 
 type MeetingInput = {
   instituteId: string;
+  userId: string;
   title: string;
   description?: string | null;
   startTime: Date;
   durationMinutes: number;
+  settings?: ZoomMeetingOptionInput;
 };
+
+export type ZoomMeetingOptionInput = {
+  waitingRoom?: boolean;
+  passcode?: boolean;
+  joinBeforeHost?: boolean;
+  muteOnEntry?: boolean;
+  recording?: "none" | "local" | "cloud";
+  hostVideo?: boolean;
+  participantVideo?: boolean;
+  alternativeHosts?: string | null;
+  recurring?: boolean;
+};
+
+const DEFAULT_ZOOM_OAUTH_SCOPES = ["user:read:user", "meeting:write:meeting", "recording:read"];
+const ZOOM_PROFILE_SCOPES = ["user:read:user", "user:read:user:admin", "user:read", "user:read:admin"];
 
 export type CreatedMeeting = {
   provider: LiveClassProvider;
@@ -66,51 +83,9 @@ export async function createAutoMeeting(provider: LiveClassMeetingProvider, inpu
   throw new Error("Auto meeting creation is not available for this provider.");
 }
 
-async function createZoomAccessToken(instituteId: string) {
-  const credentials = await getProviderCredentials(instituteId, "ZOOM", ["accountId", "clientId", "clientSecret"]);
-  const accountId = credentials.accountId;
-  const clientId = credentials.clientId;
-  const clientSecret = credentials.clientSecret;
-
-  if (!accountId || !clientId || !clientSecret) {
-    throw new Error("Zoom is not configured. Add Account ID, Client ID, and Client Secret in Live Class settings.");
-  }
-
-  const response = await fetch(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(accountId)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`
-    }
-  });
-  const payload = (await response.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string; reason?: string };
-
-  if (!response.ok || !payload.access_token) {
-    throw new Error(readProviderError(payload, "Zoom token generation failed."));
-  }
-
-  return payload.access_token;
-}
-
-export async function testZoomServerConnection(instituteId: string) {
-  const token = await createZoomAccessToken(instituteId);
-  const response = await fetch("https://api.zoom.us/v2/users/me", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-
-  if (!response.ok) {
-    throw new Error(readProviderError(payload, "Zoom token was generated, but the account check failed. Verify app scopes and account permissions."));
-  }
-
-  return {
-    accountEmail: typeof payload.email === "string" ? payload.email : null,
-    externalAccountId: typeof payload.id === "string" ? payload.id : null,
-    payload: payload as Prisma.InputJsonObject
-  };
-}
-
 async function createZoomMeeting(input: MeetingInput): Promise<CreatedMeeting> {
-  const token = await createZoomAccessToken(input.instituteId);
+  const token = await getZoomAccessTokenForUser(input.userId);
+  const settings = await zoomMeetingSettings(input.userId, input.settings);
   const response = await fetch("https://api.zoom.us/v2/users/me/meetings", {
     method: "POST",
     headers: {
@@ -119,16 +94,21 @@ async function createZoomMeeting(input: MeetingInput): Promise<CreatedMeeting> {
     },
     body: JSON.stringify({
       topic: input.title,
-      type: 2,
+      type: settings.recurring ? 8 : 2,
       start_time: input.startTime.toISOString(),
       duration: input.durationMinutes,
       timezone: "UTC",
       agenda: input.description ?? undefined,
       settings: {
-        join_before_host: false,
-        waiting_room: true,
+        host_video: settings.hostVideo,
+        participant_video: settings.participantVideo,
+        join_before_host: settings.joinBeforeHost,
+        waiting_room: settings.waitingRoom,
+        mute_upon_entry: settings.muteOnEntry,
         approval_type: 2,
-        auto_recording: "none"
+        auto_recording: settings.recording,
+        ...(settings.passcode ? {} : { password: "" }),
+        ...(settings.alternativeHosts ? { alternative_hosts: settings.alternativeHosts } : {})
       }
     })
   });
@@ -147,6 +127,284 @@ async function createZoomMeeting(input: MeetingInput): Promise<CreatedMeeting> {
     meetingPassword: typeof payload.password === "string" ? payload.password : null,
     providerResponse: payload as Prisma.InputJsonObject
   };
+}
+
+function zoomOAuthSecret() {
+  const secret = process.env.PROVIDER_CREDENTIAL_KEY ?? process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+  if (!secret) throw new Error("Set NEXTAUTH_SECRET before connecting Zoom.");
+  return secret;
+}
+
+function zoomRedirectUri(origin: string) {
+  return process.env.ZOOM_REDIRECT_URI ?? `${origin}/api/integrations/zoom/callback`;
+}
+
+function getZoomOAuthCredentials() {
+  const clientId = process.env.ZOOM_CLIENT_ID;
+  const clientSecret = process.env.ZOOM_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Zoom OAuth is not configured. Set ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET on the server.");
+  }
+
+  return { clientId, clientSecret };
+}
+
+function zoomOAuthScopes() {
+  const scopes = (process.env.ZOOM_OAUTH_SCOPES ?? DEFAULT_ZOOM_OAUTH_SCOPES.join(" "))
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(scopes));
+}
+
+function tokenHasAnyScope(scope: string | undefined, candidates: string[]) {
+  if (!scope) return true;
+  const grantedScopes = new Set(scope.split(/[\s,]+/).filter(Boolean));
+  return candidates.some((candidate) => grantedScopes.has(candidate));
+}
+
+export async function createZoomOAuthUrl(input: { instituteId: string; userId: string; origin: string }) {
+  const { clientId } = getZoomOAuthCredentials();
+  const payload = Buffer.from(
+    JSON.stringify({
+      instituteId: input.instituteId,
+      userId: input.userId,
+      nonce: randomUUID(),
+      ts: Date.now()
+    })
+  ).toString("base64url");
+  const signature = createHmac("sha256", zoomOAuthSecret()).update(payload).digest("base64url");
+  const url = new URL("https://zoom.us/oauth/authorize");
+
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", zoomRedirectUri(input.origin));
+  url.searchParams.set("scope", zoomOAuthScopes().join(" "));
+  url.searchParams.set("state", `${payload}.${signature}`);
+
+  return url.toString();
+}
+
+export function verifyZoomOAuthState(state: string) {
+  const [payload, signature] = state.split(".");
+  if (!payload || !signature) throw new Error("Zoom connection state is invalid.");
+
+  const expected = createHmac("sha256", zoomOAuthSecret()).update(payload).digest("base64url");
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (signatureBuffer.length !== expectedBuffer.length || !timingSafeEqual(signatureBuffer, expectedBuffer)) {
+    throw new Error("Zoom connection state could not be verified.");
+  }
+
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { instituteId: string; userId: string; ts: number };
+  if (Date.now() - parsed.ts > 10 * 60_000) throw new Error("Zoom connection state expired. Please try again.");
+
+  return parsed;
+}
+
+export async function exchangeZoomCode(input: { code: string; state: string; origin: string }) {
+  const state = verifyZoomOAuthState(input.state);
+  const { clientId, clientSecret } = getZoomOAuthCredentials();
+  const response = await fetch("https://zoom.us/oauth/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      code: input.code,
+      redirect_uri: zoomRedirectUri(input.origin),
+      grant_type: "authorization_code"
+    })
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  } & Record<string, unknown>;
+
+  if (!response.ok || !payload.access_token || !payload.refresh_token) {
+    throw new Error(readProviderError(payload, "Zoom OAuth token exchange failed."));
+  }
+
+  if (!tokenHasAnyScope(payload.scope, ZOOM_PROFILE_SCOPES)) {
+    throw new Error(
+      `Zoom OAuth token is missing a user profile scope. Add one of these scopes to the Zoom app and reconnect: ${ZOOM_PROFILE_SCOPES.join(", ")}.`
+    );
+  }
+
+  const profile = await fetchZoomUserProfile(payload.access_token);
+  await prisma.zoomConnection.upsert({
+    where: { userId: state.userId },
+    create: {
+      userId: state.userId,
+      zoomAccountId: profile.zoomAccountId,
+      email: profile.email,
+      displayName: profile.displayName,
+      accessToken: encryptSecret(payload.access_token),
+      refreshToken: encryptSecret(payload.refresh_token),
+      expiresAt: new Date(Date.now() + (payload.expires_in ?? 3600) * 1000),
+      lastSyncAt: new Date()
+    },
+    update: {
+      zoomAccountId: profile.zoomAccountId,
+      email: profile.email,
+      displayName: profile.displayName,
+      accessToken: encryptSecret(payload.access_token),
+      refreshToken: encryptSecret(payload.refresh_token),
+      expiresAt: new Date(Date.now() + (payload.expires_in ?? 3600) * 1000),
+      lastSyncAt: new Date()
+    }
+  });
+
+  await prisma.zoomMeetingSettings.upsert({
+    where: { userId: state.userId },
+    create: { userId: state.userId },
+    update: {}
+  });
+
+  return state;
+}
+
+async function fetchZoomUserProfile(accessToken: string) {
+  const response = await fetch("https://api.zoom.us/v2/users/me", {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+
+  if (!response.ok) {
+    throw new Error(readProviderError(payload, "Zoom account profile lookup failed."));
+  }
+
+  const email = typeof payload.email === "string" ? payload.email : "";
+  const id = typeof payload.id === "string" ? payload.id : "";
+  const accountId = typeof payload.account_id === "string" ? payload.account_id : id;
+  const displayName =
+    typeof payload.display_name === "string"
+      ? payload.display_name
+      : [payload.first_name, payload.last_name].filter((item): item is string => typeof item === "string" && item.length > 0).join(" ");
+
+  if (!email || !accountId) throw new Error("Zoom account profile did not include an email or account ID.");
+
+  return { email, zoomAccountId: accountId, displayName: displayName || email };
+}
+
+export async function getZoomAccessTokenForUser(userId: string) {
+  const connection = await prisma.zoomConnection.findUnique({ where: { userId } });
+  if (!connection) throw new Error("Zoom is not connected. Connect your Zoom account in Live Class Settings.");
+
+  if (connection.expiresAt.getTime() > Date.now() + 60_000) {
+    return decryptSecret(connection.accessToken);
+  }
+
+  return refreshZoomAccessToken(userId);
+}
+
+export async function refreshZoomAccessToken(userId: string) {
+  const connection = await prisma.zoomConnection.findUnique({ where: { userId } });
+  if (!connection) throw new Error("Zoom is not connected. Connect your Zoom account in Live Class Settings.");
+
+  const { clientId, clientSecret } = getZoomOAuthCredentials();
+  const response = await fetch("https://zoom.us/oauth/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: decryptSecret(connection.refreshToken)
+    })
+  });
+  const payload = (await response.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number } & Record<string, unknown>;
+
+  if (!response.ok || !payload.access_token) {
+    throw new Error(readProviderError(payload, "Zoom token refresh failed. Please reconnect Zoom."));
+  }
+
+  await prisma.zoomConnection.update({
+    where: { userId },
+    data: {
+      accessToken: encryptSecret(payload.access_token),
+      refreshToken: payload.refresh_token ? encryptSecret(payload.refresh_token) : undefined,
+      expiresAt: new Date(Date.now() + (payload.expires_in ?? 3600) * 1000),
+      lastSyncAt: new Date()
+    }
+  });
+
+  return payload.access_token;
+}
+
+export async function testZoomOAuthConnection(userId: string) {
+  const token = await getZoomAccessTokenForUser(userId);
+  const profile = await fetchZoomUserProfile(token);
+  await prisma.zoomConnection.update({
+    where: { userId },
+    data: {
+      zoomAccountId: profile.zoomAccountId,
+      email: profile.email,
+      displayName: profile.displayName,
+      lastSyncAt: new Date()
+    }
+  });
+  return profile;
+}
+
+async function zoomMeetingSettings(userId: string, overrides?: ZoomMeetingOptionInput) {
+  const settings = await prisma.zoomMeetingSettings.upsert({
+    where: { userId },
+    create: { userId },
+    update: {}
+  });
+
+  return {
+    waitingRoom: overrides?.waitingRoom ?? settings.defaultWaitingRoom,
+    passcode: overrides?.passcode ?? settings.defaultPasscodeGeneration,
+    joinBeforeHost: overrides?.joinBeforeHost ?? settings.defaultJoinBeforeHost,
+    muteOnEntry: overrides?.muteOnEntry ?? settings.defaultMuteParticipants,
+    recording: overrides?.recording ?? (settings.defaultRecording as "none" | "local" | "cloud"),
+    hostVideo: overrides?.hostVideo ?? settings.defaultHostVideo,
+    participantVideo: overrides?.participantVideo ?? settings.defaultParticipantVideo,
+    alternativeHosts: overrides?.alternativeHosts ?? null,
+    recurring: overrides?.recurring ?? false
+  };
+}
+
+export async function syncZoomRecordingForLiveClass(input: { userId: string; liveClassId: string }) {
+  const liveClass = await prisma.liveClass.findUnique({ where: { id: input.liveClassId }, include: { zoomMeeting: true } });
+  if (!liveClass?.zoomMeeting?.zoomMeetingId) throw new Error("This live class does not have a Zoom meeting.");
+
+  const token = await getZoomAccessTokenForUser(input.userId);
+  const response = await fetch(`https://api.zoom.us/v2/meetings/${encodeURIComponent(liveClass.zoomMeeting.zoomMeetingId)}/recordings`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+
+  if (!response.ok) {
+    throw new Error(readProviderError(payload, "Zoom recording lookup failed."));
+  }
+
+  const files = Array.isArray(payload.recording_files) ? payload.recording_files : [];
+  const recording = files.find((file): file is Record<string, unknown> => {
+    return Boolean(file && typeof file === "object" && typeof (file as Record<string, unknown>).play_url === "string");
+  });
+  const recordingUrl = typeof recording?.play_url === "string" ? recording.play_url : null;
+
+  await prisma.zoomMeeting.update({
+    where: { liveClassId: input.liveClassId },
+    data: {
+      status: typeof payload.status === "string" ? payload.status : liveClass.zoomMeeting.status,
+      recordingImported: Boolean(recordingUrl),
+      recordingUrl,
+      recordingMetadata: payload as Prisma.InputJsonObject,
+      updatedAt: new Date()
+    }
+  });
+
+  return { recordingUrl, payload };
 }
 
 function googleOAuthSecret() {

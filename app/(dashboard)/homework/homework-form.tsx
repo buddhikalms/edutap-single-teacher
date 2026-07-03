@@ -9,8 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type HomeworkFormProps = {
   action: (formData: FormData) => Promise<void>;
-  classes: Array<{ id: string; name: string; courseId: string; course: { name: string } }>;
-  courses: Array<{ id: string; name: string }>;
+  classes: Array<{ id: string; name: string; subject: { name: string } }>;
   students: Array<{ id: string; admissionNo: string; firstName: string; lastName: string }>;
   homework?: {
     title: string;
@@ -36,7 +35,7 @@ function linksValue(value: unknown) {
   return Array.isArray(value) ? value.join("\n") : "";
 }
 
-export function HomeworkForm({ action, classes, courses, students, homework }: HomeworkFormProps) {
+export function HomeworkForm({ action, classes, students, homework }: HomeworkFormProps) {
   const selectedStudents = new Set(homework?.submissions.map((submission) => submission.studentId) ?? []);
 
   return (
@@ -52,7 +51,7 @@ export function HomeworkForm({ action, classes, courses, students, homework }: H
           <Field label="Description" htmlFor="description">
             <Textarea id="description" name="description" defaultValue={homework?.description ?? ""} required className="min-h-[150px]" />
           </Field>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div>
             <Field label="Deadline" htmlFor="deadline">
               <Input id="deadline" name="deadline" type="datetime-local" defaultValue={homework ? dateValue(homework.deadline) : ""} required />
             </Field>
@@ -66,16 +65,6 @@ export function HomeworkForm({ action, classes, courses, students, homework }: H
                 {classes.map((classGroup) => (
                   <option key={classGroup.id} value={classGroup.id}>
                     {classGroup.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Course" htmlFor="courseId">
-              <Select id="courseId" name="courseId" defaultValue={homework?.courseId ?? ""}>
-                <option value="">Use class course</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.name}
                   </option>
                 ))}
               </Select>

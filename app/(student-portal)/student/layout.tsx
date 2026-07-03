@@ -1,0 +1,5 @@
+import { StudentNav } from "@/components/student/student-nav";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
+import { getStudentWebContext } from "@/lib/student-web";
+import { prisma } from "@/lib/prisma";
+export default async function StudentLayout({children}:{children:React.ReactNode}){const{student,instituteId}=await getStudentWebContext();const institute=await prisma.institute.findUnique({where:{id:instituteId},select:{name:true}});return <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(20,184,166,.15),_transparent_30%),#f4f7f9] pb-24 md:pb-8"><header className="bg-primary text-white"><div className="mx-auto max-w-7xl px-4 py-5"><div className="flex items-center justify-between gap-5"><div><p className="text-xs text-white/60">{institute?.name}</p><h1 className="text-xl font-semibold">Hi, {student.firstName}</h1></div><StudentNav/></div></div></header><div className="mx-auto max-w-7xl space-y-5 px-4 py-5"><InstallAppButton/>{children}</div></main>}

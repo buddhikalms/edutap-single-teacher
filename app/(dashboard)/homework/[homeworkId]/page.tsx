@@ -25,7 +25,7 @@ export default async function HomeworkDetailPage({ params }: PageProps) {
     where: { id: homeworkId, instituteId },
     include: {
       classGroup: true,
-      course: true,
+      subject: true,
       attachments: true,
       submissions: {
         include: { student: true },
@@ -61,7 +61,7 @@ export default async function HomeworkDetailPage({ params }: PageProps) {
           <div>
             <Badge variant={homework.status === "PUBLISHED" ? "success" : homework.status === "CLOSED" ? "warning" : "outline"}>{homework.status.toLowerCase()}</Badge>
             <h2 className="mt-4 text-3xl font-semibold tracking-normal sm:text-4xl">{homework.title}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{homework.classGroup.name} · {homework.course?.name ?? "Class course"} · Due {homework.deadline.toLocaleString()}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{homework.classGroup.name} · {homework.subject?.name ?? "Class homework"} · Due {homework.deadline.toLocaleString()}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline">

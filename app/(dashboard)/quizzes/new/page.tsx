@@ -9,7 +9,7 @@ export default async function NewQuizPage() {
   const { instituteId, userId, role, branchId } = await getTenantContext();
   const scope = classScopeForRole({ userId, role, branchId });
   const [classes, courses] = await Promise.all([
-    prisma.classGroup.findMany({ where: { instituteId, ...scope }, include: { course: true }, orderBy: { name: "asc" } }),
+    prisma.classGroup.findMany({ where: { instituteId, ...scope }, include: { subject: true }, orderBy: { name: "asc" } }),
     prisma.course.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } })
   ]);
 
@@ -20,7 +20,7 @@ export default async function NewQuizPage() {
         <h2 className="mt-4 text-3xl font-semibold">New assessment</h2>
         <p className="mt-2 text-sm text-muted-foreground">Set timing, marks, attempts, and then build questions step by step.</p>
       </section>
-      <QuizForm action={createQuizAction} classes={classes} courses={courses} />
+      <QuizForm action={createQuizAction} classes={classes} />
     </div>
   );
 }

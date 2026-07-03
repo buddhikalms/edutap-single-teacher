@@ -3,11 +3,11 @@ import { BookOpen } from "lucide-react";
 import { PublicHeader } from "@/components/public/public-header";
 
 const navItems = [
-  { href: "/explore/teachers", label: "Teachers" },
+  { href: "/classes", label: "Classes" },
   { href: "/courses", label: "Courses" },
-  { href: "/explore/classes", label: "Classes" },
-  { href: "/online-classes", label: "Online" },
-  { href: "/pricing", label: "Pricing" }
+  { href: "/teacher", label: "Teacher" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Contact" }
 ];
 
 export function PublicShell({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export function PublicFooter() {
             EduTap LMS
           </div>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/72">
-            Public course discovery, teacher onboarding, institute SaaS billing, and daily education operations in one modern platform.
+            A connected learning space for classes, courses, resources, attendance, and clear family communication.
           </p>
         </div>
         <div>
@@ -46,16 +46,16 @@ export function PublicFooter() {
           </div>
         </div>
         <div>
-          <p className="font-semibold">Join EduTap</p>
+          <p className="font-semibold">Student access</p>
           <div className="mt-3 grid gap-2 text-sm text-white/72">
-            <Link href="/register/teacher" className="hover:text-white">
-              Register as teacher
+            <Link href="/student/register" className="hover:text-white">
+              Request class enrollment
             </Link>
-            <Link href="/register/institute" className="hover:text-white">
-              Register institute
+            <Link href="/family/login" className="hover:text-white">
+              Student login
             </Link>
             <Link href="/login" className="hover:text-white">
-              Dashboard sign in
+              Teacher dashboard
             </Link>
           </div>
         </div>
@@ -84,12 +84,12 @@ export function SectionHeading({
   );
 }
 
-export function PageHero({ title, description, image, children }: { title: string; description: string; image: string; children?: React.ReactNode }) {
+export function PageHero({ title, description, image, children }: { title: string; description: string; image?: string; children?: React.ReactNode }) {
   return (
     <section className="relative isolate overflow-hidden">
       <div className="absolute inset-0 -z-10">
-        <img src={image} alt="" className="h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-primary/72" />
+        {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : null}
+        <div className={`absolute inset-0 ${image ? "bg-primary/72" : "bg-[radial-gradient(circle_at_80%_20%,rgba(20,184,166,.38),transparent_30%),linear-gradient(135deg,#092f39,#164e63)]"}`} />
         <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-background to-transparent" />
       </div>
       <div className="container flex min-h-[360px] flex-col justify-end pb-14 pt-24 text-white">

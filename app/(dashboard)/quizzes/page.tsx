@@ -18,7 +18,7 @@ export default async function QuizzesPage() {
   const scope = classScopeForRole({ userId, role, branchId });
   const quizzes = await prisma.quiz.findMany({
     where: { instituteId, classGroup: scope },
-    include: { classGroup: true, course: true, questions: true, attempts: true },
+    include: { classGroup: true, subject: true, questions: true, attempts: true },
     orderBy: { startsAt: "desc" }
   });
 
@@ -49,7 +49,7 @@ export default async function QuizzesPage() {
                     <div>
                       <Badge variant={badge(availability)}>{availability}</Badge>
                       <h3 className="mt-3 text-xl font-semibold">{quiz.title}</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">{quiz.classGroup.name} · {quiz.course?.name ?? "Class course"}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">{quiz.classGroup.name} · {quiz.subject?.name ?? "Class quiz"}</p>
                     </div>
                     <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white"><Trophy className="h-5 w-5" /></div>
                   </div>

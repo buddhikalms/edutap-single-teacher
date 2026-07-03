@@ -24,7 +24,8 @@ export default async function PortalReceiptPage({ params }: ReceiptPageProps) {
       payment: {
         include: {
           student: true,
-          classGroup: { include: { course: true } }
+          course: true,
+          classGroup: { include: { subject: true } }
         }
       }
     }
@@ -65,7 +66,7 @@ export default async function PortalReceiptPage({ params }: ReceiptPageProps) {
             <div>
               <p className="text-sm text-muted-foreground">Class</p>
               <p className="mt-1 font-semibold">{receipt.payment.classGroup?.name ?? "General payment"}</p>
-              <p className="text-sm text-muted-foreground">{receipt.payment.classGroup?.course.name ?? receipt.payment.type}</p>
+              <p className="text-sm text-muted-foreground">{receipt.payment.classGroup?.subject.name ?? receipt.payment.course?.name ?? receipt.payment.type}</p>
             </div>
           </div>
 

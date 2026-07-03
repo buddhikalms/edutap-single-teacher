@@ -115,7 +115,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       },
       include: {
         student: true,
-        classGroup: true
+        classGroup: true,
+        course: true
       },
       orderBy: { createdAt: "desc" },
       take: 250
@@ -152,7 +153,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       include: {
         branch: true,
         classGroups: {
-          include: { course: true },
+          include: { subject: true },
           where: classGroupId ? { id: classGroupId } : undefined
         }
       },
@@ -168,7 +169,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       },
       include: {
         branch: true,
-        course: true,
+        subject: true,
         teacher: true,
         _count: {
           select: {
@@ -208,6 +209,14 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     trendMap.set(label, current);
   }
   const paymentTrend = Array.from(trendMap.values()).slice(-8);
+  const courseEnrollments = await prisma.courseEnrollment.findMany({
+    where: { instituteId, studentId: studentId || undefined, createdAt: dateRange },
+    include: { student: true, course: { include: { subjectRecord: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 250
+  });
+  const classPayments = payments.filter((payment) => payment.classGroupId);
+  const coursePayments = payments.filter((payment) => payment.courseId);
 
   const studentReport = studentRows.map((student) => ({
     name: `${student.firstName} ${student.lastName}`,
@@ -231,7 +240,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const classReport = classRows.map((classGroup) => ({
     name: classGroup.name,
     code: classGroup.code,
-    course: classGroup.course.name,
+    subject: classGroup.subject.name,
     teacher: classGroup.teacher?.name ?? "Unassigned",
     branch: classGroup.branch.name,
     students: classGroup._count.enrollments,
@@ -280,11 +289,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     ),
     csvSection(
       "Class Report",
-      ["Class", "Code", "Course", "Teacher", "Branch", "Students", "Capacity", "Sessions", "Payments"],
+      ["Class", "Code", "Subject", "Teacher", "Branch", "Students", "Capacity", "Sessions", "Payments"],
       classReport.map((classGroup) => [
         classGroup.name,
         classGroup.code,
-        classGroup.course,
+        classGroup.subject,
         classGroup.teacher,
         classGroup.branch,
         classGroup.students,
@@ -347,8 +356,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       />
 
       <ReportTable
-        title="Payment report"
-        rows={payments}
+        title="Class payment report"
+        rows={classPayments}
         columns={[
           { key: "invoice", label: "Invoice", render: (row) => row.invoiceNo },
           { key: "student", label: "Student", render: (row) => `${row.student.firstName} ${row.student.lastName}` },
@@ -358,6 +367,31 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           { key: "status", label: "Status", render: (row) => row.status }
         ]}
       />
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <ReportTable
+          title="Course enrollment & progress report"
+          rows={courseEnrollments}
+          columns={[
+            { key: "course", label: "Course", render: (row) => row.course.name },
+            { key: "subject", label: "Subject", render: (row) => row.course.subjectRecord?.name ?? "-" },
+            { key: "student", label: "Student", render: (row) => `${row.student.firstName} ${row.student.lastName}` },
+            { key: "status", label: "Access", render: (row) => row.status },
+            { key: "progress", label: "Progress", align: "right", render: (row) => `${Number(row.progress)}%` }
+          ]}
+        />
+        <ReportTable
+          title="Course payment report"
+          rows={coursePayments}
+          columns={[
+            { key: "invoice", label: "Invoice", render: (row) => row.invoiceNo },
+            { key: "course", label: "Course", render: (row) => row.course?.name ?? "-" },
+            { key: "student", label: "Student", render: (row) => `${row.student.firstName} ${row.student.lastName}` },
+            { key: "paid", label: "Paid", align: "right", render: (row) => formatCurrency(row.paidAmount.toString(), currency) },
+            { key: "status", label: "Status", render: (row) => row.status }
+          ]}
+        />
+      </section>
 
       <ReportTable
         title="Due payment report"
@@ -403,7 +437,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         rows={classReport}
         columns={[
           { key: "class", label: "Class", render: (row) => row.name },
-          { key: "course", label: "Course", render: (row) => row.course },
+          { key: "subject", label: "Subject", render: (row) => row.subject },
           { key: "teacher", label: "Teacher", render: (row) => row.teacher },
           { key: "branch", label: "Branch", render: (row) => row.branch },
           { key: "students", label: "Students", align: "right", render: (row) => `${row.students}/${row.capacity}` },

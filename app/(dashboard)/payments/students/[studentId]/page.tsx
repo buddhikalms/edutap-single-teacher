@@ -11,7 +11,7 @@ export default async function StudentPaymentPage({ params }: { params: Promise<{
     prisma.student.findFirst({
       where: { id: studentId, instituteId },
       include: {
-        enrollments: { include: { classGroup: { include: { course: true } } } },
+        enrollments: { include: { classGroup: { include: { subject: true } } } },
         payments: { include: { receipts: true }, orderBy: { createdAt: "desc" } }
       }
     }),
@@ -47,8 +47,8 @@ export default async function StudentPaymentPage({ params }: { params: Promise<{
       }}
       classes={student.enrollments.map((enrollment) => ({
         id: enrollment.classGroup.id,
-        name: `${enrollment.classGroup.name} · ${enrollment.classGroup.course.name}`,
-        fee: Number(enrollment.classGroup.course.fee)
+        name: `${enrollment.classGroup.name} · ${enrollment.classGroup.subject.name}`,
+        fee: Number(enrollment.classGroup.monthlyFee)
       }))}
       payments={payments}
       currency={settings?.currency ?? "USD"}

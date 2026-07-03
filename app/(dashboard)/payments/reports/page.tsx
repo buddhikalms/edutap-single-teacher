@@ -28,7 +28,7 @@ export default async function PaymentReportsPage() {
       where: { instituteId, status: { not: "CANCELLED" } },
       include: {
         student: true,
-        classGroup: { include: { course: true } }
+        classGroup: { include: { subject: true } }
       },
       orderBy: { createdAt: "desc" }
     }),

@@ -1,0 +1,8 @@
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { Bell, BookOpen, CalendarCheck, ClipboardList, CreditCard, GraduationCap, Home, LogOut, UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
+const items=[["/student/dashboard","Home",Home],["/student/classes","Classes",CalendarCheck],["/student/courses","Courses",GraduationCap],["/student/homework","Homework",BookOpen],["/student/quizzes","Quizzes",ClipboardList],["/student/payments","Payments",CreditCard],["/student/notifications","Alerts",Bell],["/student/profile","Profile",UserRound]] as const;
+export function StudentNav(){const path=usePathname();return <><nav className="hidden flex-wrap gap-2 md:flex">{items.map(([href,label,Icon])=><Link key={href} href={href} className={cn("flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/10",path.startsWith(href)&&"bg-white text-primary")}><Icon className="h-4 w-4"/>{label}</Link>)}<button onClick={()=>signOut({callbackUrl:"/student/login"})} className="p-2 text-white/70"><LogOut className="h-4 w-4"/></button></nav><nav className="fixed inset-x-0 bottom-0 z-50 flex overflow-x-auto border-t bg-white p-1 pb-[max(.25rem,env(safe-area-inset-bottom))] shadow-xl md:hidden">{items.map(([href,label,Icon])=><Link key={href} href={href} className={cn("flex min-w-[72px] flex-1 flex-col items-center gap-1 rounded-lg p-2 text-[10px] text-muted-foreground",path.startsWith(href)&&"bg-primary/10 text-primary")}><Icon className="h-5 w-5"/>{label}</Link>)}</nav></>}

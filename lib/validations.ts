@@ -92,7 +92,7 @@ export const studentSchema = z.object({
   email: optionalEmail,
   phone: optionalText,
   dateOfBirth: optionalText,
-  status: z.enum(["ACTIVE", "PAUSED", "GRADUATED", "ARCHIVED"]),
+  status: z.enum(["PENDING_APPROVAL", "ACTIVE", "REJECTED", "PAUSED", "GRADUATED", "ARCHIVED"]),
   avatarUrl: optionalText,
   cardNumber: optionalText,
   nfcUid: optionalText,
@@ -160,6 +160,14 @@ export const gradeSchema = z.object({
   isActive: z.boolean().default(true)
 });
 
+export const subjectSchema = z.object({
+  name: z.string().trim().min(1, "Subject name is required."),
+  description: optionalText,
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Choose a valid color."),
+  icon: z.string().trim().min(1, "Choose an icon."),
+  isActive: z.boolean().default(true)
+});
+
 export const branchSchema = z.object({
   name: z.string().trim().min(1, "Branch name is required."),
   code: z.string().trim().min(1, "Branch code is required."),
@@ -171,12 +179,17 @@ export const branchSchema = z.object({
 
 export const courseSchema = z.object({
   name: z.string().trim().min(1, "Course name is required."),
-  code: z.string().trim().min(1, "Course code is required."),
-  subject: optionalText,
-  grade: optionalText,
-  gradeId: z.string().min(1, "Grade is required."),
+  subjectId: z.string().min(1, "Subject is required."),
+  gradeId: optionalText,
   description: optionalText,
-  fee: z.coerce.number().min(0, "Fee must be zero or more.")
+  thumbnailUrl: optionalText,
+  durationType: z.enum(["DAYS", "WEEKS", "MONTHS", "LIFETIME"]),
+  durationValue: z.coerce.number().int().min(1).optional(),
+  accessType: z.enum(["FREE", "PAID", "MANUAL_UNLOCK"]),
+  fee: z.coerce.number().min(0, "Price must be zero or more."),
+  startDate: optionalText,
+  endDate: optionalText,
+  status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"])
 });
 
 export const classGroupSchema = z.object({
@@ -187,13 +200,16 @@ export const classGroupSchema = z.object({
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1."),
   branchId: z.string().min(1, "Branch is required."),
   gradeId: z.string().min(1, "Grade is required."),
-  courseId: z.string().min(1, "Course is required."),
+  subjectId: z.string().min(1, "Subject is required."),
   teacherId: optionalText,
   classType: z.enum(["INHOUSE", "ONLINE", "HYBRID"]),
   fee: z.coerce.number().min(0, "Fee must be zero or more."),
+  admissionFee: z.coerce.number().min(0, "Admission fee must be zero or more.").optional(),
+  paymentStartDate: optionalText,
   defaultFreePeriodType: z.enum(["NONE", "FIRST_WEEK", "SECOND_WEEK", "FIRST_MONTH", "CUSTOM_DAYS"]),
   defaultFreeDays: z.coerce.number().int().min(0, "Free days must be zero or more.").default(0),
-  defaultPaymentDueDay: z.coerce.number().int().min(1, "Due day must be between 1 and 28.").max(28, "Due day must be between 1 and 28.")
+  defaultPaymentDueDay: z.coerce.number().int().min(1, "Due day must be between 1 and 28.").max(28, "Due day must be between 1 and 28."),
+  status: z.enum(["ACTIVE", "DISABLED", "ARCHIVED"])
 });
 
 export const enrollmentSchema = z.object({
@@ -409,6 +425,15 @@ export const liveClassSchema = z.object({
   price: z.coerce.number().min(0, "Price must be zero or more.").default(0),
   status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"]).default("DRAFT"),
   recordingEnabled: z.coerce.boolean().default(false),
+  waitingRoom: z.coerce.boolean().default(true),
+  passcode: z.coerce.boolean().default(true),
+  joinBeforeHost: z.coerce.boolean().default(false),
+  muteOnEntry: z.coerce.boolean().default(true),
+  recording: z.enum(["none", "local", "cloud"]).default("none"),
+  hostVideo: z.coerce.boolean().default(true),
+  participantVideo: z.coerce.boolean().default(false),
+  alternativeHosts: optionalText,
+  recurring: z.coerce.boolean().default(false),
   studentIds: z.array(z.string()).optional().default([])
 }).superRefine((value, ctx) => {
   const externalProviders = ["EXTERNAL_ZOOM", "EXTERNAL_GOOGLE_MEET", "YOUTUBE_LIVE", "OTHER_LINK"];
@@ -446,6 +471,7 @@ export type PublicInstituteRegistrationInput = z.infer<typeof publicInstituteReg
 export type StudentSelfRegistrationInput = z.infer<typeof studentSelfRegistrationSchema>;
 export type TeacherInput = z.infer<typeof teacherSchema>;
 export type GradeInput = z.infer<typeof gradeSchema>;
+export type SubjectInput = z.infer<typeof subjectSchema>;
 export type BranchInput = z.infer<typeof branchSchema>;
 export type CourseInput = z.infer<typeof courseSchema>;
 export type ClassGroupInput = z.infer<typeof classGroupSchema>;

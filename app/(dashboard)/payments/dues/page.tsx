@@ -17,7 +17,7 @@ export default async function DuePaymentsPage() {
     prisma.classGroup.findMany({
       where: { instituteId },
       include: {
-        course: true,
+        subject: true,
         enrollments: {
           where: { active: true, status: "ACTIVE" },
           include: { student: true }
@@ -51,7 +51,7 @@ export default async function DuePaymentsPage() {
         continue;
       }
 
-      const fee = Number(enrollment.monthlyFeeOverride ?? classGroup.monthlyFee ?? classGroup.course.fee);
+      const fee = Number(enrollment.monthlyFeeOverride ?? classGroup.monthlyFee ?? classGroup.monthlyFee);
       const discount = payment ? Number(payment.discount) : Number(enrollment.discount);
       const balance = payment ? Number(payment.balance) : Math.max(0, fee - discount);
       const dueDate = paymentDueDate(month, classGroup.defaultPaymentDueDay);

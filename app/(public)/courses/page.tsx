@@ -1,77 +1,25 @@
-import { Search } from "lucide-react";
-import { CourseCard } from "@/components/public/public-cards";
+import Link from "next/link";
+import { ArrowRight, BookOpen, Clock3, Layers3 } from "lucide-react";
 import { PageHero } from "@/components/public/site-shell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { publicCourses, searchText, uniqueValues } from "@/lib/public-site";
+import { getPublicCourses, getPublicTeacher } from "@/lib/public-catalog";
+import { formatCurrency } from "@/lib/utils";
 
-type SearchParams = Record<string, string | undefined>;
+export const dynamic = "force-dynamic";
 
-export default async function CoursesPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
-  const params = (await searchParams) ?? {};
-  const query = params.q?.toLowerCase() ?? "";
-  const grade = params.grade ?? "";
-  const subject = params.subject ?? "";
-  const pricing = params.pricing ?? "";
-  const duration = params.duration ?? "";
-
-  const courses = publicCourses.filter((course) => {
-    const haystack = searchText(course.title, course.description, course.category, course.subject, course.grade);
-    return (
-      (!query || haystack.includes(query)) &&
-      (!grade || course.grade === grade) &&
-      (!subject || course.subject === subject) &&
-      (!pricing || (pricing === "Free" ? course.isFree : !course.isFree)) &&
-      (!duration || course.durationType === duration)
-    );
-  });
-
-  return (
-    <>
-      <PageHero
-        title="Courses"
-        description="Structured programs with modules, recordings, resources, quizzes, homework, access rules, and clear duration."
-        image="https://images.unsplash.com/photo-1513258496099-48168024aec0?auto=format&fit=crop&w=1800&q=80"
-      />
-      <section className="container py-10">
-        <form className="grid gap-3 rounded-lg border bg-white/88 p-4 shadow-luxury md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input name="q" defaultValue={params.q ?? ""} placeholder="Search courses..." className="pl-9" />
-          </div>
-          <Select name="grade" defaultValue={grade}>
-            <option value="">All grades</option>
-            {uniqueValues(publicCourses, (course) => course.grade).map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </Select>
-          <Select name="subject" defaultValue={subject}>
-            <option value="">All subjects</option>
-            {uniqueValues(publicCourses, (course) => course.subject).map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </Select>
-          <Select name="pricing" defaultValue={pricing}>
-            <option value="">Free or paid</option>
-            <option>Free</option>
-            <option>Paid</option>
-          </Select>
-          <Select name="duration" defaultValue={duration}>
-            <option value="">Any duration</option>
-            <option>Days</option>
-            <option>Weeks</option>
-            <option>Months</option>
-            <option>Lifetime</option>
-          </Select>
-          <Button type="submit">Filter</Button>
-        </form>
-        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {courses.map((course) => (
-            <CourseCard key={course.slug} course={course} />
-          ))}
-        </div>
-      </section>
-    </>
-  );
+export default async function CoursesPage() {
+  const [courses, teacher] = await Promise.all([getPublicCourses(), getPublicTeacher()]);
+  const currency = teacher?.institute.settings?.currency ?? "LKR";
+  return <>
+    <PageHero title="Learn beyond the weekly class" description="Courses are structured learning products with modules, recordings, resources, papers, and quizzes. They remain separate from regular class enrollment." />
+    <section className="container py-16">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {courses.map((course) => <article key={course.id} className="overflow-hidden rounded-3xl border bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+          {course.thumbnailUrl ? <img src={course.thumbnailUrl} alt={course.title} className="h-52 w-full object-cover" /> : <div className="flex h-52 items-center justify-center bg-gradient-to-br from-teal-100 to-amber-100"><BookOpen className="h-14 w-14 text-primary" /></div>}
+          <div className="p-6"><div className="flex items-center justify-between"><Badge variant="secondary">{course.subject}</Badge><span className="font-semibold">{course.isFree ? "Free" : formatCurrency(course.price, currency)}</span></div><h2 className="mt-4 text-xl font-semibold">{course.title}</h2><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{course.description || "A structured learning program with guided content and resources."}</p><div className="mt-5 flex gap-4 text-xs text-muted-foreground"><span className="flex gap-1"><Layers3 className="h-4 w-4" />{course.moduleCount} modules</span><span className="flex gap-1"><Clock3 className="h-4 w-4" />{course.durationType.toLowerCase()}</span></div><Button asChild className="mt-6 w-full"><Link href={`/courses/${course.slug}`}>View course <ArrowRight className="h-4 w-4" /></Link></Button></div>
+        </article>)}
+      </div>
+    </section>
+  </>;
 }

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Loader2, UserPlus } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { ImageUploadInput } from "@/components/forms/image-upload-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -84,8 +85,8 @@ export function TeacherRegistrationForm() {
           <Input type="password" autoComplete="new-password" {...form.register("password")} />
         </Field>
       </div>
-      <Field label="Profile photo URL" error={form.formState.errors.profilePhotoUrl?.message}>
-        <Input placeholder="Optional placeholder URL" {...form.register("profilePhotoUrl")} />
+      <Field label="Profile photo" error={form.formState.errors.profilePhotoUrl?.message}>
+        <ImageUploadInput onUploaded={(url) => form.setValue("profilePhotoUrl", url || undefined, { shouldDirty: true, shouldValidate: true })} />
       </Field>
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Subject" error={form.formState.errors.subject?.message}>
@@ -222,8 +223,8 @@ export function InstituteRegistrationForm() {
       <Field label="Address" error={form.formState.errors.address?.message}>
         <Input {...form.register("address")} />
       </Field>
-      <Field label="Logo URL" error={form.formState.errors.logoUrl?.message}>
-        <Input placeholder="Optional placeholder URL" {...form.register("logoUrl")} />
+      <Field label="Logo" error={form.formState.errors.logoUrl?.message}>
+        <ImageUploadInput onUploaded={(url) => form.setValue("logoUrl", url || undefined, { shouldDirty: true, shouldValidate: true })} />
       </Field>
       <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}

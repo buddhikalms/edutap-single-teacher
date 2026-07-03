@@ -26,7 +26,9 @@ export async function GET(request: Request, context: RouteContext) {
                 code: true,
                 schedule: true,
                 branchId: true,
-                course: { select: { name: true, fee: true, subject: true, grade: true } },
+                subject: { select: { name: true } },
+                gradeLevel: { select: { name: true } },
+                monthlyFee: true,
                 teacher: { select: { name: true } }
               }
             }
@@ -94,8 +96,8 @@ export async function GET(request: Request, context: RouteContext) {
           schedule: enrollment.classGroup.schedule,
           active: enrollment.active,
           teacherName: enrollment.classGroup.teacher?.name ?? "Unassigned",
-          courseName: enrollment.classGroup.course.name,
-          monthlyFee: Number(enrollment.classGroup.course.fee)
+          courseName: enrollment.classGroup.subject.name,
+          monthlyFee: Number(enrollment.classGroup.monthlyFee)
         })),
         attendanceHistory: student.attendance.map((record) => ({
           id: record.id,

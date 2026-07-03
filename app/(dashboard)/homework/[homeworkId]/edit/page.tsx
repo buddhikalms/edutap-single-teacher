@@ -19,7 +19,7 @@ export default async function EditHomeworkPage({ params }: PageProps) {
       where: { id: homeworkId, instituteId },
       include: { attachments: true, submissions: { select: { studentId: true } } }
     }),
-    prisma.classGroup.findMany({ where: { instituteId, ...scope }, include: { course: true }, orderBy: { name: "asc" } }),
+    prisma.classGroup.findMany({ where: { instituteId, ...scope }, include: { subject: true }, orderBy: { name: "asc" } }),
     prisma.course.findMany({ where: { instituteId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.student.findMany({ where: { instituteId, status: "ACTIVE" }, select: { id: true, admissionNo: true, firstName: true, lastName: true }, orderBy: { firstName: "asc" } })
   ]);
@@ -40,7 +40,7 @@ export default async function EditHomeworkPage({ params }: PageProps) {
         <h2 className="mt-4 text-3xl font-semibold">{homework.title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">Adjust deadline, resources, student assignment, or publication status.</p>
       </section>
-      <HomeworkForm action={action} classes={classes} courses={courses} students={students} homework={homework} />
+      <HomeworkForm action={action} classes={classes} students={students} homework={homework} />
     </div>
   );
 }

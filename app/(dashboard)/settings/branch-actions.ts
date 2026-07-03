@@ -34,11 +34,11 @@ export async function createBranch(input: BranchInput): Promise<ActionState> {
     revalidatePath("/settings");
     revalidatePath("/classes");
     revalidatePath("/students");
-    return { ok: true, message: "Branch added successfully." };
+    return { ok: true, message: "Teaching location added successfully." };
   } catch (error) {
     const duplicate = duplicateMessage(error);
     if (duplicate) return { ok: false, message: duplicate };
-    return actionError(error, "Could not add branch.");
+    return actionError(error, "Could not add teaching location.");
   }
 }
 
@@ -49,7 +49,7 @@ export async function updateBranch(id: string, input: BranchInput): Promise<Acti
     const branch = await prisma.branch.findFirst({ where: { id, instituteId }, select: { id: true } });
 
     if (!branch) {
-      return { ok: false, message: "Branch was not found." };
+      return { ok: false, message: "Teaching location was not found." };
     }
 
     await prisma.branch.update({
@@ -67,11 +67,11 @@ export async function updateBranch(id: string, input: BranchInput): Promise<Acti
     revalidatePath("/settings");
     revalidatePath("/classes");
     revalidatePath("/students");
-    return { ok: true, message: "Branch updated successfully." };
+    return { ok: true, message: "Teaching location updated successfully." };
   } catch (error) {
     const duplicate = duplicateMessage(error);
     if (duplicate) return { ok: false, message: duplicate };
-    return actionError(error, "Could not update branch.");
+    return actionError(error, "Could not update teaching location.");
   }
 }
 
@@ -81,15 +81,15 @@ export async function setBranchActive(id: string, isActive: boolean): Promise<Ac
     const branch = await prisma.branch.findFirst({ where: { id, instituteId }, select: { id: true } });
 
     if (!branch) {
-      return { ok: false, message: "Branch was not found." };
+      return { ok: false, message: "Teaching location was not found." };
     }
 
     await prisma.branch.update({ where: { id }, data: { isActive } });
     revalidatePath("/settings");
     revalidatePath("/classes");
     revalidatePath("/students");
-    return { ok: true, message: isActive ? "Branch enabled." : "Branch disabled." };
+    return { ok: true, message: isActive ? "Teaching location enabled." : "Teaching location disabled." };
   } catch (error) {
-    return actionError(error, "Could not update branch status.");
+    return actionError(error, "Could not update teaching location status.");
   }
 }

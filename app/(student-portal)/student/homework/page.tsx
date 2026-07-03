@@ -1,0 +1,6 @@
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Card,CardContent } from "@/components/ui/card";
+import { prisma } from "@/lib/prisma";
+import { getStudentWebContext } from "@/lib/student-web";
+export default async function StudentHomework(){const{studentId}=await getStudentWebContext();const rows=await prisma.homeworkSubmission.findMany({where:{studentId},include:{homework:{include:{classGroup:true,subject:true}}},orderBy:{homework:{deadline:"asc"}}});return <div className="space-y-5"><h2 className="text-3xl font-semibold">Homework</h2><div className="grid gap-4 lg:grid-cols-2">{rows.map(row=><Link href={`/student/homework/${row.homeworkId}`} key={row.id}><Card className="h-full"><CardContent className="p-5"><div className="flex justify-between"><Badge>{row.homework.subject?.name}</Badge><Badge variant={row.status==="REVIEWED"?"success":row.status==="LATE"?"warning":"outline"}>{row.status.toLowerCase()}</Badge></div><h3 className="mt-3 text-xl font-semibold">{row.homework.title}</h3><p className="mt-1 text-sm text-muted-foreground">{row.homework.classGroup.name} · Due {row.homework.deadline.toLocaleString()}</p>{row.marksAwarded!==null?<p className="mt-3 font-semibold">{Number(row.marksAwarded)} / {row.homework.marks}</p>:null}</CardContent></Card></Link>)}</div></div>}

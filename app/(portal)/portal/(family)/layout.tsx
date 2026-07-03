@@ -18,7 +18,7 @@ export default async function FamilyPortalLayout({ children }: { children: React
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-sm text-white/60">{institute?.name ?? "EduTap"}</p>
-              <h1 className="mt-1 text-2xl font-bold tracking-normal">Family Portal</h1>
+              <h1 className="mt-1 text-2xl font-bold tracking-normal">EduTap Account</h1>
               <p className="mt-2 text-sm text-white/60">
                 Signed in as {context.userName} · {context.students.length} student{context.students.length === 1 ? "" : "s"} linked
               </p>

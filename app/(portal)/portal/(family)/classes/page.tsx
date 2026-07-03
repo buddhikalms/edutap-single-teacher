@@ -13,7 +13,8 @@ export default async function PortalClassesPage() {
       student: true,
       classGroup: {
         include: {
-          course: true,
+          subject: true,
+          gradeLevel: true,
           teacher: true,
           branch: true,
           _count: { select: { enrollments: true } }
@@ -38,7 +39,7 @@ export default async function PortalClassesPage() {
                 <div>
                   <CardTitle>{enrollment.classGroup.name}</CardTitle>
                   <CardDescription>
-                    {enrollment.student.firstName} {enrollment.student.lastName} · {enrollment.classGroup.course.name}
+                    {enrollment.student.firstName} {enrollment.student.lastName} · {enrollment.classGroup.subject.name}
                   </CardDescription>
                 </div>
                 <Badge variant={enrollment.active ? "success" : "warning"}>{enrollment.active ? "Active" : "Inactive"}</Badge>
@@ -59,8 +60,8 @@ export default async function PortalClassesPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{enrollment.classGroup.branch.name}</Badge>
-                <Badge variant="outline">{enrollment.classGroup.course.grade ?? "All grades"}</Badge>
-                <Badge variant="outline">{formatCurrency(Number(enrollment.classGroup.course.fee), context.currency)}/month</Badge>
+                <Badge variant="outline">{enrollment.classGroup.gradeLevel?.name ?? "All grades"}</Badge>
+                <Badge variant="outline">{formatCurrency(Number(enrollment.classGroup.monthlyFee), context.currency)}/month</Badge>
                 <Badge variant="outline">{enrollment.classGroup._count.enrollments} enrolled</Badge>
               </div>
             </CardContent>

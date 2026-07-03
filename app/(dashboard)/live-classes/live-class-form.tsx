@@ -10,15 +10,13 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { selectedStudentIds } from "@/lib/live-classes";
 
-type Option = { id: string; name: string };
-
 const providerOptions: Array<{
   value: LiveClassMeetingProvider;
   title: string;
   description: string;
   icon: typeof Video;
 }> = [
-  { value: "ZOOM_AUTO", title: "Zoom Auto Meeting", description: "Create a Zoom room from stored Server-to-Server OAuth credentials.", icon: Video },
+  { value: "ZOOM_AUTO", title: "Zoom", description: "Create a Zoom room from your connected account.", icon: Video },
   { value: "GOOGLE_MEET_AUTO", title: "Google Meet Auto Meeting", description: "Create a Calendar event with a generated Meet link.", icon: CalendarClock },
   { value: "EXTERNAL_ZOOM", title: "External Zoom Link", description: "Paste a Zoom room created outside InstituteOS.", icon: Link2 },
   { value: "EXTERNAL_GOOGLE_MEET", title: "External Google Meet Link", description: "Paste a Google Meet room created outside InstituteOS.", icon: Link2 },
@@ -28,9 +26,7 @@ const providerOptions: Array<{
 
 type LiveClassFormProps = {
   action: (formData: FormData) => Promise<void>;
-  classes: Array<{ id: string; name: string; courseId: string; course: { name: string }; teacherId: string | null }>;
-  courses: Option[];
-  teachers: Option[];
+  classes: Array<{ id: string; name: string; subject: { name: string }; teacherId: string | null }>;
   students: Array<{ id: string; admissionNo: string; firstName: string; lastName: string }>;
   liveClass?: {
     title: string;
@@ -57,7 +53,7 @@ function dateValue(date: Date) {
   return local.toISOString().slice(0, 16);
 }
 
-export function LiveClassForm({ action, classes, courses, teachers, students, liveClass }: LiveClassFormProps) {
+export function LiveClassForm({ action, classes, students, liveClass }: LiveClassFormProps) {
   const selectedStudents = new Set(selectedStudentIds(liveClass?.targetStudentIds));
   const selectedProvider = liveClass?.meetingProvider ?? "GOOGLE_MEET_AUTO";
   const externalUrl = liveClass?.externalUrl ?? (!["ZOOM_AUTO", "GOOGLE_MEET_AUTO"].includes(selectedProvider) ? liveClass?.meetingUrl : "");
@@ -75,37 +71,17 @@ export function LiveClassForm({ action, classes, courses, teachers, students, li
           <Field label="Description" htmlFor="description">
             <Textarea id="description" name="description" defaultValue={liveClass?.description ?? ""} className="min-h-[130px]" />
           </Field>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div>
             <Field label="Class group" htmlFor="classGroupId">
               <Select id="classGroupId" name="classGroupId" defaultValue={liveClass?.classGroupId ?? classes[0]?.id} required>
                 {classes.map((classGroup) => (
                   <option key={classGroup.id} value={classGroup.id}>
-                    {classGroup.name} - {classGroup.course.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Course" htmlFor="courseId">
-              <Select id="courseId" name="courseId" defaultValue={liveClass?.courseId ?? ""}>
-                <option value="">Use class course</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.name}
+                    {classGroup.name} - {classGroup.subject.name}
                   </option>
                 ))}
               </Select>
             </Field>
           </div>
-          <Field label="Teacher" htmlFor="teacherId">
-            <Select id="teacherId" name="teacherId" defaultValue={liveClass?.teacherId ?? ""}>
-              <option value="">Use class teacher</option>
-              {teachers.map((teacher) => (
-                <option key={teacher.id} value={teacher.id}>
-                  {teacher.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
           <Field label="Meeting provider" htmlFor="meetingProvider">
             <div className="grid gap-3 md:grid-cols-2">
               {providerOptions.map((provider) => (
@@ -135,6 +111,33 @@ export function LiveClassForm({ action, classes, courses, teachers, students, li
             <Input id="externalUrl" name="externalUrl" type="url" defaultValue={externalUrl ?? ""} placeholder="https://meet.google.com/... or https://youtube.com/live/..." />
             <p className="text-xs leading-5 text-muted-foreground">Required for external Zoom, Google Meet, YouTube Live, and Other Link. Auto providers generate the join URL on save.</p>
           </Field>
+          <div className="rounded-xl border bg-white/70 p-4">
+            <div className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Zoom meeting settings</h3>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Toggle name="waitingRoom" label="Waiting room" checked />
+              <Toggle name="passcode" label="Passcode" checked />
+              <Toggle name="joinBeforeHost" label="Join before host" />
+              <Toggle name="muteOnEntry" label="Mute on entry" checked />
+              <Toggle name="hostVideo" label="Host video" checked />
+              <Toggle name="participantVideo" label="Participant video" />
+              <Toggle name="recurring" label="Recurring meeting" />
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field label="Recording" htmlFor="recording">
+                <Select id="recording" name="recording" defaultValue={liveClass?.recordingEnabled ? "cloud" : "none"}>
+                  <option value="none">None</option>
+                  <option value="local">Local</option>
+                  <option value="cloud">Cloud</option>
+                </Select>
+              </Field>
+              <Field label="Alternative host" htmlFor="alternativeHosts">
+                <Input id="alternativeHosts" name="alternativeHosts" type="email" placeholder="host@example.com" />
+              </Field>
+            </div>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Date and time" htmlFor="startTime">
               <Input id="startTime" name="startTime" type="datetime-local" defaultValue={liveClass ? dateValue(liveClass.startTime) : ""} required />
@@ -198,10 +201,19 @@ export function LiveClassForm({ action, classes, courses, teachers, students, li
           </CardContent>
         </Card>
         <Button type="submit" size="lg" className="w-full">
-          Save live class
+          {liveClass ? "Update Meeting" : "Create Meeting"}
         </Button>
       </div>
     </form>
+  );
+}
+
+function Toggle({ name, label, checked = false }: { name: string; label: string; checked?: boolean }) {
+  return (
+    <label className="flex min-h-11 items-center gap-3 rounded-lg border bg-white/80 px-3 text-sm">
+      <input type="checkbox" name={name} defaultChecked={checked} className="h-4 w-4" />
+      <span className="font-medium">{label}</span>
+    </label>
   );
 }
 

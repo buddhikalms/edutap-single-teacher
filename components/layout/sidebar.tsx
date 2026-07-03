@@ -9,10 +9,10 @@ import {
   BookOpenCheck,
   CalendarCheck,
   CreditCard,
+  Printer,
   GraduationCap,
   LayoutDashboard,
   Settings2,
-  ShieldCheck,
   Trophy,
   UserPlus,
   UsersRound,
@@ -24,29 +24,27 @@ import { cn } from "@/lib/utils";
 const tenantNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, area: "dashboard", group: "Main" },
   { href: "/students", label: "Students", icon: UsersRound, area: "students", group: "People" },
-  { href: "/teachers", label: "Teachers", icon: GraduationCap, area: "teachers", group: "People" },
   { href: "/grades", label: "Grades", icon: BookOpenCheck, area: "grades", group: "Academics" },
-  { href: "/classes", label: "Classes", icon: BookOpen, area: "classes", group: "Academics" },
+  { href: "/subjects", label: "Subjects", icon: BookOpen, area: "subjects", group: "Academics" },
+  { href: "/dashboard/classes", label: "Classes", icon: BookOpen, area: "classes", group: "Academics" },
+  { href: "/dashboard/courses", label: "Courses", icon: GraduationCap, area: "classes", group: "Learning" },
   { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment", group: "Academics" },
+  { href: "/dashboard/enrollment-requests", label: "Enrollment requests", icon: UserPlus, area: "enrollment", group: "Academics" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance", group: "Operations" },
   { href: "/cards", label: "Cards", icon: CreditCard, area: "cards", group: "Operations" },
+  { href: "/dashboard/card-print-export", label: "Card Print Export", icon: Printer, area: "cards", group: "Operations" },
   { href: "/payments", label: "Payments", icon: CreditCard, area: "payments", group: "Operations" },
   { href: "/homework", label: "Homework", icon: BookOpenCheck, area: "homework", group: "Learning" },
   { href: "/quizzes", label: "Quizzes", icon: Trophy, area: "quizzes", group: "Learning" },
   { href: "/live-classes", label: "Live Classes", icon: Video, area: "liveClasses", group: "Learning" },
   { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", group: "Insights" },
   { href: "/notifications", label: "Notifications", icon: BellRing, area: "notifications", group: "Insights" },
-  { href: "/settings", label: "Settings", icon: Settings2, area: "settings", group: "Workspace" },
-  { href: "/billing", label: "Billing", icon: CreditCard, area: "billing", group: "Workspace" }
+  { href: "/settings", label: "Profile & settings", icon: Settings2, area: "settings", group: "Workspace" }
 ];
 
-const superAdminNavItems = [
-  { href: "/admin", label: "Super admin", icon: ShieldCheck, area: "admin", group: "Platform" }
-];
-
-export function Sidebar({ className, role }: { className?: string; role?: string }) {
+export function Sidebar({ className, role, pendingEnrollmentCount = 0 }: { className?: string; role?: string; pendingEnrollmentCount?: number }) {
   const pathname = usePathname();
-  const navItems = (role === "SUPER_ADMIN" ? superAdminNavItems : tenantNavItems).filter((item) =>
+  const navItems = tenantNavItems.filter((item) =>
     canAccess(role, item.area as keyof typeof roleAccess)
   );
   const groupedItems = navItems.reduce<Record<string, typeof navItems>>((groups, item) => {
@@ -68,7 +66,7 @@ export function Sidebar({ className, role }: { className?: string; role?: string
           </div>
           <div className="min-w-0">
             <p className="text-lg font-bold">EduTap</p>
-            <p className="text-xs text-white/60">Premium command center</p>
+            <p className="text-xs text-white/60">Teacher command center</p>
           </div>
         </div>
       </div>
@@ -79,7 +77,7 @@ export function Sidebar({ className, role }: { className?: string; role?: string
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase text-white/40">{group}</p>
             <div className="space-y-1">
               {items.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
                 return (
                   <Link
                     key={item.href}
@@ -100,6 +98,14 @@ export function Sidebar({ className, role }: { className?: string; role?: string
                       <item.icon className="h-4 w-4" />
                     </span>
                     <span className="truncate">{item.label}</span>
+                    {item.href === "/dashboard/enrollment-requests" && pendingEnrollmentCount > 0 ? (
+                      <span className={cn(
+                        "ml-auto min-w-6 rounded-full bg-amber-400 px-2 py-0.5 text-center text-xs font-bold text-amber-950",
+                        active && "bg-primary text-white"
+                      )}>
+                        {pendingEnrollmentCount > 99 ? "99+" : pendingEnrollmentCount}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
@@ -110,9 +116,9 @@ export function Sidebar({ className, role }: { className?: string; role?: string
 
       <div className="shrink-0 border-t border-white/10 p-4">
         <div className="rounded-xl border border-white/10 bg-white/[0.08] p-4">
-          <p className="text-sm font-semibold">Growth pulse</p>
+          <p className="text-sm font-semibold">Your teaching day</p>
           <p className="mt-2 text-xs leading-5 text-white/60">
-            Attendance, payments, and enrollment insight are ready for your next workflow.
+            Attendance, payments, homework, and parent alerts are always close at hand.
           </p>
         </div>
       </div>

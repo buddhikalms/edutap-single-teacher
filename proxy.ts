@@ -6,6 +6,8 @@ export default withAuth({
     authorized({ token, req }) {
       const pathname = req.nextUrl.pathname;
 
+      if (pathname === "/student/login" || pathname === "/student/register") return true;
+
       if (!token) {
         return false;
       }
@@ -14,12 +16,15 @@ export default withAuth({
         return canAccess(token.role, "students");
       }
 
-      if (pathname.startsWith("/teachers")) {
-        return canAccess(token.role, "teachers");
-      }
-
-      if (pathname.startsWith("/classes")) {
+      if (pathname.startsWith("/dashboard/classes") || pathname.startsWith("/dashboard/courses")) {
         return canAccess(token.role, "classes");
+      }
+      if (pathname.startsWith("/dashboard/enrollment-requests")) {
+        return canAccess(token.role, "enrollment");
+      }
+      if (pathname.startsWith("/student/")) return token.role === "STUDENT";
+      if (pathname.startsWith("/subjects")) {
+        return canAccess(token.role, "subjects");
       }
 
       if (pathname.startsWith("/enrollment")) {
@@ -50,10 +55,6 @@ export default withAuth({
         return canAccess(token.role, "settings");
       }
 
-      if (pathname.startsWith("/billing")) {
-        return canAccess(token.role, "billing");
-      }
-
       if (pathname.startsWith("/notifications")) {
         return canAccess(token.role, "notifications");
       }
@@ -74,8 +75,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/students/:path*",
-    "/teachers/:path*",
-    "/classes/:path*",
+    "/subjects/:path*",
     "/enrollment/:path*",
     "/attendance/:path*",
     "/payments/:path*",
@@ -83,8 +83,8 @@ export const config = {
     "/quizzes/:path*",
     "/reports/:path*",
     "/settings/:path*",
-    "/billing/:path*",
     "/notifications/:path*",
+    "/student/:path*",
     "/admin/:path*"
   ]
 };

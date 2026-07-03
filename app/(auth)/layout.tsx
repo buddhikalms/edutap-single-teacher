@@ -11,21 +11,21 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </div>
             <div>
               <p className="text-lg font-bold">EduTap</p>
-              <p className="text-xs text-white/60">Institute intelligence suite</p>
+              <p className="text-xs text-white/60">Single Teacher LMS</p>
             </div>
           </div>
 
           <div className="max-w-xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-white/80">
               <Sparkles className="h-4 w-4 text-accent" />
-              Premium operations for high-performing institutes
+              Your complete private teaching workspace
             </div>
             <h1 className="text-5xl font-semibold leading-tight tracking-normal">
-              Student management with finance, attendance, and class insight in one place.
+              Teach, manage, and grow from one calm workspace.
             </h1>
             <p className="mt-6 max-w-lg text-base leading-7 text-white/70">
-              Built for modern tuition centers, academies, and training institutes that need a calm, fast,
-              professional command center.
+              Classes, courses, attendance, payments, homework, quizzes, resources, and parent
+              communication—together.
             </p>
           </div>
 
@@ -51,13 +51,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               </div>
               <div>
                 <p className="text-lg font-bold">EduTap</p>
-                <p className="text-xs text-muted-foreground">Institute intelligence suite</p>
+                <p className="text-xs text-muted-foreground">Single Teacher LMS</p>
               </div>
             </div>
             <div className="glass-panel rounded-2xl p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Secure institute workspace
+                Secure teacher workspace
               </div>
               {children}
             </div>

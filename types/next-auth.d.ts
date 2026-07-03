@@ -7,6 +7,7 @@ declare module "next-auth" {
       role: string;
       instituteId: string | null;
       branchId: string | null;
+      accountStatus: string;
     } & DefaultSession["user"];
   }
 
@@ -14,6 +15,7 @@ declare module "next-auth" {
     role: string;
     instituteId: string | null;
     branchId: string | null;
+    accountStatus?: string;
   }
 }
 
@@ -23,5 +25,6 @@ declare module "next-auth/jwt" {
     role: string;
     instituteId: string | null;
     branchId: string | null;
+    accountStatus: string;
   }
 }

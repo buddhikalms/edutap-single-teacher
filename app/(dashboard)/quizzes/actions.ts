@@ -37,7 +37,8 @@ export async function createQuizAction(formData: FormData) {
       attemptLimit: parsed.attemptLimit,
       status: parsed.status as QuizStatus,
       classGroupId: parsed.classGroupId,
-      courseId: parsed.courseId ?? classGroup.courseId,
+      courseId: parsed.courseId ?? null,
+      subjectId: classGroup.subjectId,
       instituteId,
       createdById: userId
     }
@@ -72,7 +73,8 @@ export async function updateQuizAction(quizId: string, formData: FormData) {
       attemptLimit: parsed.attemptLimit,
       status: parsed.status as QuizStatus,
       classGroupId: parsed.classGroupId,
-      courseId: parsed.courseId ?? classGroup.courseId
+      courseId: parsed.courseId ?? null,
+      subjectId: classGroup.subjectId
     }
   });
 

@@ -12,7 +12,7 @@ export default async function EnrollmentPage() {
         student: true,
         classGroup: {
           include: {
-            course: true,
+            subject: true,
             teacher: true
           }
         }
@@ -26,7 +26,7 @@ export default async function EnrollmentPage() {
     }),
     prisma.classGroup.findMany({
       where: { instituteId },
-      include: { course: true, teacher: true },
+      include: { subject: true, teacher: true },
       orderBy: { name: "asc" }
     })
   ]);
@@ -38,7 +38,7 @@ export default async function EnrollmentPage() {
     admissionNo: enrollment.student.admissionNo,
     classGroupId: enrollment.classGroupId,
     classGroup: enrollment.classGroup.name,
-    course: enrollment.classGroup.course.name,
+    course: enrollment.classGroup.subject.name,
     teacher: enrollment.classGroup.teacher?.name ?? "Unassigned",
     active: enrollment.active,
     status: enrollment.status,
@@ -59,8 +59,8 @@ export default async function EnrollmentPage() {
   const classOptions = classes.map((classGroup) => ({
     id: classGroup.id,
     name: classGroup.name,
-    meta: `${classGroup.course.name} - ${classGroup.teacher?.name ?? "Unassigned"}`,
-    monthlyFee: Number(classGroup.monthlyFee ?? classGroup.course.fee),
+    meta: `${classGroup.subject.name} - ${classGroup.teacher?.name ?? "Unassigned"}`,
+    monthlyFee: Number(classGroup.monthlyFee ?? 0),
     defaultFreePeriodType: classGroup.defaultFreePeriodType,
     defaultFreeDays: classGroup.defaultFreeDays
   }));

@@ -17,6 +17,7 @@ async function assertStudentAndClass(instituteId: string, studentIds: string[], 
       select: {
         id: true,
         monthlyFee: true,
+        paymentStartDate: true,
         defaultFreePeriodType: true,
         defaultFreeDays: true,
         defaultPaymentDueDay: true
@@ -40,7 +41,7 @@ function enrollmentPaymentData(
   return {
     active: status === "ACTIVE",
     status,
-    paymentStartDate: toDate(input.paymentStartDate) ?? new Date(),
+    paymentStartDate: toDate(input.paymentStartDate) ?? classGroup.paymentStartDate ?? new Date(),
     freePeriodType: input.freePeriodType ?? classGroup.defaultFreePeriodType,
     freeDays: input.freeDays ?? classGroup.defaultFreeDays,
     monthlyFeeOverride: input.monthlyFeeOverride ?? classGroup.monthlyFee ?? null,

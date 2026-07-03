@@ -321,12 +321,22 @@ async function main() {
     ["Biology Fast Track", "BIO-F", "Biology", "Grade 12", "High-yield biology revision with model papers.", "195.00"]
   ] as const;
 
+  const subjects = await Promise.all(
+    courseSeeds.map(([, , name]) =>
+      prisma.subject.upsert({
+        where: { instituteId_name: { instituteId: institute.id, name } },
+        create: { instituteId: institute.id, name },
+        update: { isActive: true }
+      })
+    )
+  );
+
   const courses = await Promise.all(
-    courseSeeds.map(([name, code, subject, grade, description, fee]) =>
+    courseSeeds.map(([name, code, subject, grade, description, fee], index) =>
       prisma.course.upsert({
         where: { instituteId_code: { instituteId: institute.id, code } },
-        create: { name, code, subject, grade, description, fee, instituteId: institute.id },
-        update: { name, subject, grade, description, fee }
+        create: { name, code, subject, subjectId: subjects[index].id, grade, description, fee, instituteId: institute.id },
+        update: { name, subject, subjectId: subjects[index].id, grade, description, fee }
       })
     )
   );
@@ -340,11 +350,11 @@ async function main() {
   ] as const;
 
   const classGroups = await Promise.all(
-    classSeeds.map(([name, code, schedule, room, capacity, branchId, courseId, teacherId]) =>
+    classSeeds.map(([name, code, schedule, room, capacity, branchId, courseId, teacherId], index) =>
       prisma.classGroup.upsert({
         where: { instituteId_code: { instituteId: institute.id, code } },
-        create: { name, code, schedule, room, capacity, instituteId: institute.id, branchId, courseId, teacherId },
-        update: { name, schedule, room, capacity, branchId, courseId, teacherId }
+        create: { name, code, schedule, room, capacity, instituteId: institute.id, branchId, subjectId: subjects[index].id, teacherId },
+        update: { name, schedule, room, capacity, branchId, subjectId: subjects[index].id, teacherId }
       })
     )
   );
@@ -607,7 +617,7 @@ async function main() {
           id: `demo-material-${classGroup.code.toLowerCase()}`,
           instituteId: institute.id,
           classGroupId: classGroup.id,
-          courseId: classGroup.courseId,
+          courseId: null,
           createdById: admin.id,
           title: `${classGroup.name} revision pack`,
           description: "Demo course material for the student app.",

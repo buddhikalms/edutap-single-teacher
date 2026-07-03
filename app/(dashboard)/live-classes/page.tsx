@@ -26,7 +26,7 @@ export default async function LiveClassesPage() {
   const liveClasses = await prisma.liveClass.findMany({
     where: { instituteId, classGroup: scope },
     include: {
-      classGroup: true,
+      classGroup: { include: { subject: true } },
       course: true,
       teacher: true,
       attendances: true,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { testZoomServerConnection } from "@/lib/live-meeting-providers";
+import { refreshZoomAccessToken, syncZoomRecordingForLiveClass, testZoomOAuthConnection } from "@/lib/live-meeting-providers";
 import { prisma } from "@/lib/prisma";
 import { upsertProviderCredential } from "@/lib/provider-credentials";
 import { getTenantContext } from "@/lib/session";
@@ -14,89 +14,76 @@ function assertIntegrationAdmin(role: string) {
 }
 
 export async function saveZoomSettings(formData: FormData) {
-  const { instituteId, role } = await getTenantContext();
-  assertIntegrationAdmin(role);
+  const { userId, role } = await getTenantContext();
+  assertZoomTeacher(role);
 
-  const accountId = String(formData.get("accountId") ?? "");
-  const clientId = String(formData.get("clientId") ?? "");
-  const clientSecret = String(formData.get("clientSecret") ?? "");
-
-  await upsertProviderCredential({ instituteId, provider: "ZOOM", name: "accountId", value: accountId });
-  await upsertProviderCredential({ instituteId, provider: "ZOOM", name: "clientId", value: clientId });
-  await upsertProviderCredential({ instituteId, provider: "ZOOM", name: "clientSecret", value: clientSecret });
-  const configuredZoomCredentials = await prisma.providerCredential.count({
-    where: { instituteId, provider: "ZOOM", name: { in: ["accountId", "clientId", "clientSecret"] } }
-  });
-  const zoomConnected = configuredZoomCredentials === 3;
-
-  await prisma.integrationAccount.upsert({
-    where: { instituteId_provider: { instituteId, provider: "ZOOM" } },
+  await prisma.zoomMeetingSettings.upsert({
+    where: { userId },
     create: {
-      instituteId,
-      provider: "ZOOM",
-      connected: zoomConnected,
-      metadata: { authType: "server_to_server_oauth" }
+      userId,
+      defaultDurationMinutes: Number(formData.get("defaultDurationMinutes") ?? 60),
+      defaultWaitingRoom: formData.get("defaultWaitingRoom") === "on",
+      defaultRecording: String(formData.get("defaultRecording") ?? "none"),
+      defaultJoinBeforeHost: formData.get("defaultJoinBeforeHost") === "on",
+      defaultMuteParticipants: formData.get("defaultMuteParticipants") === "on",
+      defaultPasscodeGeneration: formData.get("defaultPasscodeGeneration") === "on",
+      defaultHostVideo: formData.get("defaultHostVideo") === "on",
+      defaultParticipantVideo: formData.get("defaultParticipantVideo") === "on"
     },
     update: {
-      connected: zoomConnected,
-      metadata: { authType: "server_to_server_oauth" },
-      lastError: null
+      defaultDurationMinutes: Number(formData.get("defaultDurationMinutes") ?? 60),
+      defaultWaitingRoom: formData.get("defaultWaitingRoom") === "on",
+      defaultRecording: String(formData.get("defaultRecording") ?? "none"),
+      defaultJoinBeforeHost: formData.get("defaultJoinBeforeHost") === "on",
+      defaultMuteParticipants: formData.get("defaultMuteParticipants") === "on",
+      defaultPasscodeGeneration: formData.get("defaultPasscodeGeneration") === "on",
+      defaultHostVideo: formData.get("defaultHostVideo") === "on",
+      defaultParticipantVideo: formData.get("defaultParticipantVideo") === "on"
     }
   });
 
-  revalidatePath("/live-classes/settings");
-  redirect("/live-classes/settings?updated=zoom");
+  revalidateLiveClassSettings();
+  redirect("/dashboard/settings/live-classes?updated=zoom-defaults");
 }
 
 export async function testZoomConnectionAction() {
-  const { instituteId, role } = await getTenantContext();
-  assertIntegrationAdmin(role);
-  let target = "/live-classes/settings?tested=zoom";
+  const { userId, role } = await getTenantContext();
+  assertZoomTeacher(role);
+  let target = "/dashboard/settings/live-classes?tested=zoom";
 
   try {
-    const result = await testZoomServerConnection(instituteId);
-
-    await prisma.integrationAccount.upsert({
-      where: { instituteId_provider: { instituteId, provider: "ZOOM" } },
-      create: {
-        instituteId,
-        provider: "ZOOM",
-        connected: true,
-        accountEmail: result.accountEmail,
-        externalAccountId: result.externalAccountId,
-        metadata: { authType: "server_to_server_oauth", lastTestedAt: new Date().toISOString() }
-      },
-      update: {
-        connected: true,
-        accountEmail: result.accountEmail,
-        externalAccountId: result.externalAccountId,
-        metadata: { authType: "server_to_server_oauth", lastTestedAt: new Date().toISOString() },
-        lastError: null
-      }
-    });
-
+    await testZoomOAuthConnection(userId);
   } catch (error) {
-    target = "/live-classes/settings?tested=zoom-failed";
-    await prisma.integrationAccount.upsert({
-      where: { instituteId_provider: { instituteId, provider: "ZOOM" } },
-      create: {
-        instituteId,
-        provider: "ZOOM",
-        connected: false,
-        metadata: { authType: "server_to_server_oauth", lastTestedAt: new Date().toISOString() },
-        lastError: error instanceof Error ? error.message : "Zoom connection test failed."
-      },
-      update: {
-        connected: false,
-        metadata: { authType: "server_to_server_oauth", lastTestedAt: new Date().toISOString() },
-        lastError: error instanceof Error ? error.message : "Zoom connection test failed."
-      }
-    });
-
+    console.error(error);
+    target = "/dashboard/settings/live-classes?tested=zoom-failed";
   }
 
-  revalidatePath("/live-classes/settings");
+  revalidateLiveClassSettings();
   redirect(target);
+}
+
+export async function refreshZoomTokenAction() {
+  const { userId, role } = await getTenantContext();
+  assertZoomTeacher(role);
+  await refreshZoomAccessToken(userId);
+  revalidateLiveClassSettings();
+  redirect("/dashboard/settings/live-classes?updated=zoom-token");
+}
+
+export async function disconnectZoomAction() {
+  const { userId, role } = await getTenantContext();
+  assertZoomTeacher(role);
+  await prisma.zoomConnection.deleteMany({ where: { userId } });
+  revalidateLiveClassSettings();
+  redirect("/dashboard/settings/live-classes?updated=zoom-disconnected");
+}
+
+export async function syncZoomRecordingAction(liveClassId: string) {
+  const { userId, role } = await getTenantContext();
+  assertZoomTeacher(role);
+  await syncZoomRecordingForLiveClass({ userId, liveClassId });
+  revalidatePath(`/live-classes/${liveClassId}`);
+  redirect(`/live-classes/${liveClassId}?synced=zoom-recording`);
 }
 
 export async function saveGoogleOAuthSettings(formData: FormData) {
@@ -126,8 +113,8 @@ export async function saveGoogleOAuthSettings(formData: FormData) {
     }
   });
 
-  revalidatePath("/live-classes/settings");
-  redirect("/live-classes/settings?updated=google");
+  revalidateLiveClassSettings();
+  redirect("/dashboard/settings/live-classes?updated=google");
 }
 
 export async function disconnectGoogleAction() {
@@ -147,6 +134,17 @@ export async function disconnectGoogleAction() {
     }
   });
 
+  revalidateLiveClassSettings();
+  redirect("/dashboard/settings/live-classes?updated=google-disconnected");
+}
+
+function assertZoomTeacher(role: string) {
+  if (!["SUPER_ADMIN", "INSTITUTE_ADMIN", "BRANCH_ADMIN", "TEACHER"].includes(role)) {
+    throw new Error("Only teachers and admins can manage Zoom.");
+  }
+}
+
+function revalidateLiveClassSettings() {
   revalidatePath("/live-classes/settings");
-  redirect("/live-classes/settings?updated=google-disconnected");
+  revalidatePath("/dashboard/settings/live-classes");
 }

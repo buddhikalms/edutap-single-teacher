@@ -9,16 +9,16 @@ export async function GET(request: Request) {
   const error = url.searchParams.get("error");
 
   if (error) {
-    return NextResponse.redirect(new URL(`/live-classes/settings?error=${encodeURIComponent(error)}`, request.url));
+    return NextResponse.redirect(new URL(`/dashboard/settings/live-classes?error=${encodeURIComponent(error)}`, request.url));
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL("/live-classes/settings?error=missing-google-code", request.url));
+    return NextResponse.redirect(new URL("/dashboard/settings/live-classes?error=missing-google-code", request.url));
   }
 
   try {
     await exchangeGoogleCode({ code, state, origin: url.origin });
-    return NextResponse.redirect(new URL("/live-classes/settings?connected=google", request.url));
+    return NextResponse.redirect(new URL("/dashboard/settings/live-classes?connected=google", request.url));
   } catch (callbackError) {
     console.error(callbackError);
     try {
@@ -43,6 +43,6 @@ export async function GET(request: Request) {
       // Best effort only; the settings page still shows a generic callback error.
     }
 
-    return NextResponse.redirect(new URL("/live-classes/settings?error=google-callback", request.url));
+    return NextResponse.redirect(new URL("/dashboard/settings/live-classes?error=google-callback", request.url));
   }
 }

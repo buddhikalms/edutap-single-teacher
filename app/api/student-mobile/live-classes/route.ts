@@ -18,7 +18,7 @@ function serializeLiveClass(liveClass: Awaited<ReturnType<typeof getLiveClasses>
     endTime: liveClass.endTime.toISOString(),
     durationMinutes: liveClass.durationMinutes,
     className: liveClass.classGroup.name,
-    courseName: liveClass.course?.name ?? liveClass.classGroup.course.name,
+    courseName: liveClass.course?.name ?? liveClass.classGroup.subject.name,
     teacherName: liveClass.teacher?.name ?? liveClass.classGroup.teacher?.name ?? "Teacher",
     accessType: liveClass.accessType,
     price: Number(liveClass.price),
@@ -55,7 +55,7 @@ function getLiveClasses(instituteId: string, studentId: string) {
       }
     },
     include: {
-      classGroup: { include: { course: true, teacher: true } },
+      classGroup: { include: { subject: true, teacher: true } },
       course: true,
       teacher: true,
       attendances: { where: { studentId } },

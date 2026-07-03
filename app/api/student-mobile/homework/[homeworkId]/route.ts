@@ -12,7 +12,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { studentId } = await requireStudentMobileUser(request);
     const submission = await prisma.homeworkSubmission.findFirst({
       where: { homeworkId, studentId },
-      include: { homework: { include: { classGroup: true, course: true, attachments: true } } }
+      include: { homework: { include: { classGroup: true, subject: true, attachments: true } } }
     });
 
     if (!submission) return NextResponse.json({ ok: false, message: "Homework was not found." }, { status: 404 });
@@ -26,7 +26,7 @@ export async function GET(request: Request, context: RouteContext) {
         deadline: submission.homework.deadline.toISOString(),
         marks: submission.homework.marks,
         className: submission.homework.classGroup.name,
-        courseName: submission.homework.course?.name,
+        courseName: submission.homework.subject?.name,
         externalLinks: submission.homework.externalLinks,
         attachments: submission.homework.attachments,
         submission: {

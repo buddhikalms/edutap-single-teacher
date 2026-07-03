@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const [todayClasses, homework, quizzes, attendance, payments, notifications] = await Promise.all([
       prisma.enrollment.findMany({
         where: { studentId, active: true },
-        include: { classGroup: { include: { course: true, teacher: true } } },
+        include: { classGroup: { include: { subject: true, teacher: true } } },
         take: 5
       }),
       prisma.homeworkSubmission.findMany({
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
         id: enrollment.classGroup.id,
         name: enrollment.classGroup.name,
         schedule: enrollment.classGroup.schedule,
-        courseName: enrollment.classGroup.course.name,
+        courseName: enrollment.classGroup.subject.name,
         teacherName: enrollment.classGroup.teacher?.name ?? "Unassigned"
       })),
       pendingHomework: homework.map((item) => ({

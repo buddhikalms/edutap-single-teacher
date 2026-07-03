@@ -32,8 +32,14 @@ export async function POST(request: Request) {
       }
     });
 
-    if (!student?.user || student.user.role !== "STUDENT" || !(await bcrypt.compare(parsed.password, student.user.passwordHash))) {
+    if (!student?.user?.passwordHash || student.user.role !== "STUDENT" || !(await bcrypt.compare(parsed.password, student.user.passwordHash))) {
       return NextResponse.json({ ok: false, message: "Invalid student credentials." }, { status: 401 });
+    }
+    if (student.user.accountStatus === "PENDING_APPROVAL") {
+      return NextResponse.json({ ok: false, message: "Your enrollment request is pending teacher approval." }, { status: 403 });
+    }
+    if (student.user.accountStatus === "REJECTED") {
+      return NextResponse.json({ ok: false, message: "Your enrollment request was not approved. Please contact the teacher." }, { status: 403 });
     }
 
     const device = await createStudentDevice({

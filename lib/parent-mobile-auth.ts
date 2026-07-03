@@ -4,7 +4,7 @@ import { MobileAuthError, requireMobileUser } from "@/lib/mobile-auth";
 export async function requireParentMobileUser(request: Request) {
   const user = await requireMobileUser(request);
 
-  if (user.role !== "PARENT") {
+  if (user.role !== "PARENT" && user.role !== "FAMILY") {
     throw new MobileAuthError("Only parent accounts can access the parent app.", 403);
   }
 

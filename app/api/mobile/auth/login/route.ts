@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       }
     });
 
-    if (!user || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
+    if (!user?.passwordHash || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
       return NextResponse.json({ ok: false, message: "Invalid email or password." }, { status: 401 });
     }
 

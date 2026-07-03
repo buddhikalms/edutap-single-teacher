@@ -141,7 +141,8 @@ export async function createHomeworkAction(formData: FormData) {
       externalLinks: splitLines(parsed.externalLinks),
       instituteId,
       classGroupId: parsed.classGroupId,
-      courseId: parsed.courseId ?? classGroup.courseId,
+      courseId: parsed.courseId ?? null,
+      subjectId: classGroup.subjectId,
       createdById: userId,
       attachments: {
         create: linkAttachments(parsed.attachments)
@@ -197,7 +198,8 @@ export async function updateHomeworkAction(homeworkId: string, formData: FormDat
         status: parsed.status as HomeworkStatus,
         externalLinks: splitLines(parsed.externalLinks),
         classGroupId: parsed.classGroupId,
-        courseId: parsed.courseId ?? classGroup.courseId
+        courseId: parsed.courseId ?? null,
+        subjectId: classGroup.subjectId
       }
     });
 

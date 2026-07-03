@@ -41,6 +41,8 @@ coverage/
 .vercel/
 .eslintcache
 public/uploads/
+.private/
+storage/
 
 # Expo / React Native generated output
 apps/mobile/.expo/

@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useState } from "react";
+export function QuizTimer({endsAt,formId}:{endsAt:string;formId:string}){const[seconds,setSeconds]=useState(()=>Math.max(0,Math.floor((new Date(endsAt).getTime()-Date.now())/1000)));useEffect(()=>{const id=setInterval(()=>setSeconds(current=>{const next=Math.max(0,current-1);if(next===0){clearInterval(id);document.getElementById(formId)?.closest("form")?.requestSubmit()}return next}),1000);return()=>clearInterval(id)},[formId]);return <span id={formId} className="font-mono">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,"0")}</span>}

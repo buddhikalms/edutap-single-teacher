@@ -16,20 +16,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect("/portal");
   }
 
-  const institute = session.user.instituteId
-    ? await prisma.institute.findUnique({
+  const [institute, pendingEnrollmentCount] = session.user.instituteId
+    ? await Promise.all([prisma.institute.findUnique({
         where: { id: session.user.instituteId },
         select: { name: true }
-      })
-    : null;
+      }), prisma.enrollmentRequest.count({
+        where: { instituteId: session.user.instituteId, status: "PENDING" }
+      })])
+    : [null, 0];
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(20,184,166,0.16),_transparent_28%),linear-gradient(180deg,#f8fafc_0%,#f3f6f9_100%)]">
       <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <Sidebar className="sticky top-0 hidden self-start lg:flex" role={session.user.role} />
+        <Sidebar className="sticky top-0 hidden self-start lg:flex" role={session.user.role} pendingEnrollmentCount={pendingEnrollmentCount} />
         <div className="min-w-0">
           <DashboardHeader
-            instituteName={institute?.name ?? "EduTap Workspace"}
+            instituteName={institute?.name ?? "My Teaching Workspace"}
+            pendingEnrollmentCount={pendingEnrollmentCount}
             user={{
               name: session.user.name ?? "EduTap User",
               email: session.user.email ?? "user@edutap.test",

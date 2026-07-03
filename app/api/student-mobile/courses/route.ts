@@ -1,59 +1,45 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { requireStudentMobileUser, StudentMobileAuthError } from "@/lib/student-mobile-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   try {
-    const { studentId } = await requireStudentMobileUser(request);
-    const enrollments = await prisma.enrollment.findMany({
-      where: { studentId, active: true },
-      include: {
-        classGroup: {
-          include: {
-            course: true,
-            teacher: true,
-            notices: { orderBy: { createdAt: "desc" }, take: 3 },
-            materials: { orderBy: { createdAt: "desc" }, take: 8 }
-          }
-        }
+    const { studentId, instituteId } = await requireStudentMobileUser(request);
+    const now = new Date();
+    const resourceWhere: Prisma.CourseResourceWhereInput = {
+      OR: [
+        { visibility: { in: ["FREE_PREVIEW", "ENROLLED"] } },
+        { visibility: "SCHEDULED", publishAt: { lte: now } }
+      ]
+    };
+    const courses = await prisma.course.findMany({
+      where: {
+        instituteId, status: "PUBLISHED",
+        OR: [
+          { accessType: "FREE" },
+          { enrollments: { some: { studentId, status: { in: ["ACTIVE", "COMPLETED"] } } } },
+          { resources: { some: { visibility: "FREE_PREVIEW" } } }
+        ]
       },
-      orderBy: { enrolledAt: "desc" }
+      include: {
+        subjectRecord: true, gradeLevel: true,
+        modules: { include: { resources: { where: resourceWhere }, quizzes: true }, orderBy: { sortOrder: "asc" } },
+        resources: { where: { moduleId: null, ...resourceWhere }, orderBy: { sortOrder: "asc" } },
+        enrollments: { where: { studentId }, take: 1 }
+      },
+      orderBy: { createdAt: "desc" }
     });
-
-    return NextResponse.json({
-      ok: true,
-      courses: enrollments.map((enrollment) => ({
-        id: enrollment.classGroup.id,
-        className: enrollment.classGroup.name,
-        code: enrollment.classGroup.code,
-        timetable: enrollment.classGroup.schedule,
-        room: enrollment.classGroup.room,
-        teacherName: enrollment.classGroup.teacher?.name ?? "Unassigned",
-        course: {
-          id: enrollment.classGroup.course.id,
-          name: enrollment.classGroup.course.name,
-          subject: enrollment.classGroup.course.subject,
-          grade: enrollment.classGroup.course.grade,
-          description: enrollment.classGroup.course.description,
-          fee: Number(enrollment.classGroup.course.fee)
-        },
-        announcements: enrollment.classGroup.notices.map((notice) => ({
-          id: notice.id,
-          title: notice.title,
-          body: notice.body,
-          createdAt: notice.createdAt.toISOString()
-        })),
-        materials: enrollment.classGroup.materials.map((material) => ({
-          id: material.id,
-          title: material.title,
-          type: material.type,
-          url: material.url
-        }))
-      }))
-    });
+    return NextResponse.json({ ok: true, courses: courses.map(course => ({
+      id: course.id, name: course.name, subject: course.subjectRecord?.name, grade: course.gradeLevel?.name,
+      description: course.description, thumbnailUrl: course.thumbnailUrl, accessType: course.accessType,
+      price: Number(course.fee), progress: Number(course.enrollments[0]?.progress ?? 0),
+      locked: course.accessType !== "FREE" && !course.enrollments[0],
+      modules: course.modules.map(module => ({ ...module, quizCount: module.quizzes.length })),
+      resources: course.resources
+    })) });
   } catch (error) {
     if (error instanceof StudentMobileAuthError) return NextResponse.json({ ok: false, message: error.message }, { status: error.statusCode });
-    console.error(error);
     return NextResponse.json({ ok: false, message: "Could not load courses." }, { status: 500 });
   }
 }

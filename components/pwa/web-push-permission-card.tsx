@@ -21,8 +21,14 @@ export function WebPushPermissionCard() {
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
   const [loading, setLoading] = useState(false);
+  const [enabled, setEnabled] = useState(false);
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const browserSupported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && Boolean(publicKey);
+  const browserSupported =
+    typeof window !== "undefined" &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window &&
+    Boolean(publicKey);
 
   async function enableNotifications() {
     if (!browserSupported || !publicKey) {
@@ -61,9 +67,11 @@ export function WebPushPermissionCard() {
       });
 
       if (!response.ok) {
-        throw new Error("Could not save this browser subscription.");
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.message ?? "Could not save this browser subscription.");
       }
 
+      setEnabled(true);
       toast.success("Web alerts enabled", {
         description: "EduTap can now send class and payment alerts to this browser."
       });
@@ -74,7 +82,7 @@ export function WebPushPermissionCard() {
     }
   }
 
-  if (!browserSupported || permission === "granted") {
+  if (!browserSupported || enabled) {
     return null;
   }
 
@@ -85,11 +93,11 @@ export function WebPushPermissionCard() {
           <BellRing className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Allow EduTap alerts</p>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">Allow EduTap to send class and payment alerts to this browser.</p>
+          <p className="font-semibold">Enable class alerts</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">Receive class and attendance alerts for your linked children on this browser.</p>
           <Button type="button" className="mt-4" onClick={enableNotifications} disabled={loading || permission === "denied"}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {permission === "denied" ? "Notifications blocked" : "Enable alerts"}
+            {permission === "denied" ? "Notifications blocked" : permission === "granted" ? "Connect class alerts" : "Enable class alerts"}
           </Button>
         </div>
       </div>

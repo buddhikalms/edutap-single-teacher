@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { CalendarCheck2, CreditCard, DollarSign, UsersRound } from "lucide-react";
+import { BellRing, BookOpenCheck, CalendarCheck2, CreditCard, DollarSign, Radio, UsersRound } from "lucide-react";
 import { AttendanceStatus, PaymentStatus } from "@prisma/client";
 import { AttendanceChart } from "@/components/dashboard/attendance-chart";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
   endOfToday.setDate(endOfToday.getDate() + 1);
   const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
 
-  const [totalStudents, todayRecords, presentToday, pendingPayments, monthlyIncome, recentPayments, recentAttendance, classGroups, settings] =
+  const [totalStudents, todayRecords, presentToday, pendingPayments, monthlyIncome, recentPayments, recentAttendance, classGroups, settings, homeworkReview, upcomingLive, parentAlerts] =
     await Promise.all([
       prisma.student.count({ where: { instituteId } }),
       prisma.attendanceRecord.count({
@@ -91,7 +92,7 @@ export default async function DashboardPage() {
       prisma.classGroup.findMany({
         where: { instituteId },
         include: {
-          course: true,
+          subject: true,
           teacher: true,
           _count: {
             select: { enrollments: true }
@@ -99,7 +100,20 @@ export default async function DashboardPage() {
         },
         take: 4
       }),
-      prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+      prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } }),
+      prisma.homeworkSubmission.count({ where: { instituteId, status: { in: ["SUBMITTED", "LATE"] } } }),
+      prisma.liveClass.findMany({
+        where: { instituteId, status: "PUBLISHED", startTime: { gte: new Date() } },
+        include: { classGroup: true },
+        orderBy: { startTime: "asc" },
+        take: 3
+      }),
+      prisma.notificationLog.findMany({
+        where: { instituteId, parentId: { not: null } },
+        include: { parent: true, student: true },
+        orderBy: { createdAt: "desc" },
+        take: 4
+      })
     ]);
   const currency = settings?.currency ?? "USD";
 
@@ -122,10 +136,10 @@ export default async function DashboardPage() {
       <section className="glass-panel overflow-hidden rounded-2xl p-6 sm:p-8">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
-            <Badge variant="secondary">Today’s executive overview</Badge>
+            <Badge variant="secondary">Today&apos;s teaching overview</Badge>
             <h2 className="mt-4 text-3xl font-semibold tracking-normal sm:text-4xl">Good morning, {session.user.name?.split(" ")[0] ?? "Admin"}.</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Monitor enrollment, attendance quality, fee collection, and class utilization from a single calm command center.
+              Your classes, arrivals, learning reviews, payments, and parent communication in one calm command center.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:min-w-[320px]">
@@ -142,7 +156,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total students" value={String(totalStudents)} helper="Synced across active branches" icon={UsersRound} />
+        <StatCard title="Students" value={String(totalStudents)} helper="Active learner records" icon={UsersRound} />
         <StatCard title="Today attendance" value={attendanceRate} helper={`${presentToday} present from ${todayRecords} marks`} icon={CalendarCheck2} tone="teal" />
         <StatCard
           title="Pending payments"
@@ -152,6 +166,26 @@ export default async function DashboardPage() {
           tone="gold"
         />
         <StatCard title="Monthly income" value={formatCurrency(monthlyIncome._sum.amount?.toString() ?? 0, currency)} helper="Collected this month" icon={DollarSign} tone="rose" />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Link href="/attendance" className="rounded-2xl bg-primary p-6 text-white shadow-luxury transition hover:-translate-y-0.5">
+          <CalendarCheck2 className="h-7 w-7" />
+          <p className="mt-5 text-xl font-semibold">Open attendance terminal</p>
+          <p className="mt-2 text-sm text-white/70">Scan NFC or QR, or search by student ID.</p>
+        </Link>
+        <Link href="/homework" className="glass-panel rounded-2xl p-6 transition hover:-translate-y-0.5">
+          <BookOpenCheck className="h-7 w-7 text-primary" />
+          <p className="mt-5 text-xl font-semibold">{homeworkReview} submissions to review</p>
+          <p className="mt-2 text-sm text-muted-foreground">Mark work, leave feedback, or request resubmission.</p>
+        </Link>
+        <Link href="/live-classes" className="glass-panel rounded-2xl p-6 transition hover:-translate-y-0.5">
+          <Radio className="h-7 w-7 text-primary" />
+          <p className="mt-5 text-xl font-semibold">{upcomingLive.length} upcoming live classes</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {upcomingLive[0] ? `${upcomingLive[0].title} · ${upcomingLive[0].startTime.toLocaleString()}` : "Schedule Zoom, Google Meet, or an external link."}
+          </p>
+        </Link>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
@@ -166,7 +200,7 @@ export default async function DashboardPage() {
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <h3 className="font-semibold">Class utilization</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Enrollment load against room capacity.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Today&apos;s class list and enrollment load.</p>
               </div>
               <Badge variant="outline">Live model</Badge>
             </div>
@@ -179,7 +213,7 @@ export default async function DashboardPage() {
                       <div>
                         <p className="font-semibold">{group.name}</p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {group.course.name} · {group.teacher?.name ?? "Unassigned"}
+                          {group.subject.name} · {group.schedule}
                         </p>
                       </div>
                       <p className="text-sm font-semibold">{usage}%</p>
@@ -194,6 +228,29 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </section>
+
+      <Card className="glass-panel">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold">Recent parent alerts</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Arrival, class-ended, payment, homework, and quiz messages.</p>
+            </div>
+            <BellRing className="h-5 w-5 text-primary" />
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {parentAlerts.map((alert) => (
+              <div key={alert.id} className="rounded-xl border bg-white/70 p-4">
+                <p className="font-semibold">{alert.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {alert.parent?.name ?? "Parent"}{alert.student ? ` · ${alert.student.firstName} ${alert.student.lastName}` : ""}
+                </p>
+              </div>
+            ))}
+            {!parentAlerts.length ? <p className="text-sm text-muted-foreground">Parent alerts will appear here after messages are sent.</p> : null}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

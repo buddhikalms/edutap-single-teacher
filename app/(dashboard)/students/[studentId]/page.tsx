@@ -30,7 +30,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           include: {
             classGroup: {
               include: {
-                course: true,
+                subject: true,
                 teacher: true
               }
             }
@@ -150,12 +150,12 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           <CardContent className="space-y-3">
             {student.enrollments.length ? (
               student.enrollments.map((enrollment) => (
-                <Link key={enrollment.id} href={`/classes/${enrollment.classGroup.id}`} className="block rounded-xl border bg-white/70 p-4 transition hover:bg-muted/40">
+                <Link key={enrollment.id} href={`/dashboard/classes/${enrollment.classGroup.id}`} className="block rounded-xl border bg-white/70 p-4 transition hover:bg-muted/40">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-semibold">{enrollment.classGroup.name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {enrollment.classGroup.course.subject ?? enrollment.classGroup.course.name} · {enrollment.classGroup.teacher?.name ?? "Unassigned"}
+                        {enrollment.classGroup.subject.name ?? enrollment.classGroup.subject.name} · {enrollment.classGroup.teacher?.name ?? "Unassigned"}
                       </p>
                     </div>
                     <Badge variant={enrollment.active ? "success" : "outline"}>{enrollment.active ? "active" : "inactive"}</Badge>

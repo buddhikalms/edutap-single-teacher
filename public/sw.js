@@ -1,6 +1,6 @@
-const CACHE_NAME = "edutap-pwa-v1";
+const CACHE_NAME = "edutap-pwa-v2";
 const OFFLINE_URL = "/offline";
-const CORE_ASSETS = ["/", OFFLINE_URL, "/manifest.json", "/icons/icon-192.svg", "/icons/icon-512.svg"];
+const CORE_ASSETS = [OFFLINE_URL, "/manifest.json", "/icons/icon-192.svg", "/icons/icon-512.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -19,39 +19,29 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+  const url = new URL(request.url);
 
-  if (request.method !== "GET") {
+  if (request.method !== "GET" || url.origin !== self.location.origin) {
     return;
   }
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(async () => (await caches.match(request)) || caches.match(OFFLINE_URL))
+      fetch(request).catch(() => caches.match(OFFLINE_URL))
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
+  // Next.js chunks and API responses must always come from the network. Caching
+  // them independently can combine fresh server HTML with stale client code and
+  // cause hydration errors after a deployment.
+  if (url.pathname.startsWith("/_next/") || url.pathname.startsWith("/api/") || url.pathname === "/sw.js") {
+    return;
+  }
 
-      return fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-    })
-  );
+  if (CORE_ASSETS.includes(url.pathname)) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  }
 });
 
 self.addEventListener("push", (event) => {

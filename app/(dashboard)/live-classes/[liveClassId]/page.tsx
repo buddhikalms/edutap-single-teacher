@@ -2,10 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type React from "react";
 import { CalendarClock, Clock, ExternalLink, Lock, Radio, UserCheck, Video } from "lucide-react";
-import { addLiveClassRecording, setLiveClassStatus } from "@/app/(dashboard)/live-classes/actions";
+import {
+  addLiveClassRecording,
+  deleteImportedZoomRecordingAction,
+  deleteLiveClassAction,
+  publishImportedZoomRecordingAction,
+  setLiveClassStatus
+} from "@/app/(dashboard)/live-classes/actions";
+import { syncZoomRecordingAction } from "@/app/(dashboard)/live-classes/settings/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CopyJoinLink } from "@/components/live-classes/meeting-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -32,14 +40,15 @@ export default async function LiveClassDetailPage({ params }: PageProps) {
   const liveClass = await prisma.liveClass.findFirst({
     where: { id: liveClassId, instituteId, classGroup: scope },
     include: {
-      classGroup: true,
+      classGroup: { include: { subject: true } },
       course: true,
       teacher: true,
       attendances: {
         include: { student: true },
         orderBy: { joinedAt: "desc" }
       },
-      recordings: { orderBy: { createdAt: "desc" } }
+      recordings: { orderBy: { createdAt: "desc" } },
+      zoomMeeting: true
     }
   });
 
@@ -70,6 +79,26 @@ export default async function LiveClassDetailPage({ params }: PageProps) {
     await addLiveClassRecording(liveClassId, formData);
   }
 
+  async function deleteAction() {
+    "use server";
+    await deleteLiveClassAction(liveClassId);
+  }
+
+  async function syncRecordingAction() {
+    "use server";
+    await syncZoomRecordingAction(liveClassId);
+  }
+
+  async function publishImportedRecordingAction() {
+    "use server";
+    await publishImportedZoomRecordingAction(liveClassId);
+  }
+
+  async function deleteImportedRecordingAction() {
+    "use server";
+    await deleteImportedZoomRecordingAction(liveClassId);
+  }
+
   return (
     <div className="space-y-6">
       <section className="glass-panel rounded-2xl p-6 sm:p-8">
@@ -88,9 +117,9 @@ export default async function LiveClassDetailPage({ params }: PageProps) {
               <Link href={`/live-classes/${liveClass.id}/edit`}>Edit</Link>
             </Button>
             <Button asChild>
-              <a href={liveClass.meetingUrl} target="_blank" rel="noreferrer">
+              <a href={liveClass.startUrl ?? liveClass.meetingUrl} target="_blank" rel="noreferrer">
                 <ExternalLink className="h-4 w-4" />
-                Open room
+                Start Meeting
               </a>
             </Button>
           </div>
@@ -117,6 +146,32 @@ export default async function LiveClassDetailPage({ params }: PageProps) {
               <Info label="Password" value={liveClass.meetingPassword ?? "Not available"} />
               <Info label="Calendar event" value={liveClass.calendarEventId ?? "Not available"} />
               <Info label="Host start URL" value={liveClass.startUrl ? "Available to teacher" : "Not available"} href={liveClass.startUrl ?? undefined} />
+              <Info label="Zoom status" value={liveClass.zoomMeeting?.status ?? "Not synced"} />
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Meeting actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <CopyJoinLink url={liveClass.joinUrl ?? liveClass.meetingUrl} />
+              <div className="flex flex-wrap gap-2">
+                <Button asChild>
+                  <a href={liveClass.startUrl ?? liveClass.meetingUrl} target="_blank" rel="noreferrer">Start Meeting</a>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href={`/live-classes/${liveClass.id}/edit`}>Edit Meeting</Link>
+                </Button>
+                {liveClass.meetingProvider === "ZOOM_AUTO" ? (
+                  <form action={syncRecordingAction}>
+                    <Button type="submit" variant="outline">Import Recording</Button>
+                  </form>
+                ) : null}
+                <form action={deleteAction}>
+                  <Button type="submit" variant="destructive">Delete Meeting</Button>
+                </form>
+              </div>
             </CardContent>
           </Card>
 
@@ -178,7 +233,29 @@ export default async function LiveClassDetailPage({ params }: PageProps) {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">Add a recording URL after class. It will also become a course resource.</p>
+                <div className="space-y-3">
+                  {liveClass.zoomMeeting?.recordingUrl ? (
+                    <div className="rounded-xl border bg-white/80 p-4">
+                      <p className="font-semibold">Zoom recording found</p>
+                      <a href={liveClass.zoomMeeting.recordingUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-sm text-primary">
+                        {liveClass.zoomMeeting.recordingUrl}
+                      </a>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <form action={publishImportedRecordingAction}>
+                          <Button type="submit" size="sm">Publish to students</Button>
+                        </form>
+                        <Button type="button" variant="outline" size="sm">Keep private</Button>
+                        <form action={publishImportedRecordingAction}>
+                          <Button type="submit" variant="outline" size="sm">Add to Course</Button>
+                        </form>
+                        <form action={deleteImportedRecordingAction}>
+                          <Button type="submit" variant="destructive" size="sm">Delete</Button>
+                        </form>
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="text-sm text-muted-foreground">Add a recording URL after class or import Zoom recording metadata when it is available.</p>
+                </div>
               )}
             </CardContent>
           </Card>

@@ -9,8 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type QuizFormProps = {
   action: (formData: FormData) => Promise<void>;
-  classes: Array<{ id: string; name: string; courseId: string; course: { name: string } }>;
-  courses: Array<{ id: string; name: string }>;
+  classes: Array<{ id: string; name: string; subject: { name: string } }>;
   quiz?: {
     title: string;
     description: string | null;
@@ -33,7 +32,7 @@ function dateValue(date: Date) {
   return local.toISOString().slice(0, 16);
 }
 
-export function QuizForm({ action, classes, courses, quiz }: QuizFormProps) {
+export function QuizForm({ action, classes, quiz }: QuizFormProps) {
   return (
     <form action={action} className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <Card className="glass-panel">
@@ -65,12 +64,6 @@ export function QuizForm({ action, classes, courses, quiz }: QuizFormProps) {
             <Field label="Class" htmlFor="classGroupId">
               <Select id="classGroupId" name="classGroupId" defaultValue={quiz?.classGroupId ?? classes[0]?.id} required>
                 {classes.map((classGroup) => <option key={classGroup.id} value={classGroup.id}>{classGroup.name}</option>)}
-              </Select>
-            </Field>
-            <Field label="Course" htmlFor="courseId">
-              <Select id="courseId" name="courseId" defaultValue={quiz?.courseId ?? ""}>
-                <option value="">Use class course</option>
-                {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
               </Select>
             </Field>
             <Field label="Status" htmlFor="status">

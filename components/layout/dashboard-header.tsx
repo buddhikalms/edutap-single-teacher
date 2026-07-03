@@ -10,10 +10,12 @@ import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 export function DashboardHeader({
   instituteName,
-  user
+  user,
+  pendingEnrollmentCount
 }: {
   instituteName: string;
   user: { name: string; email: string; role: string };
+  pendingEnrollmentCount: number;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -25,7 +27,7 @@ export function DashboardHeader({
             <Menu className="h-5 w-5" />
           </Button>
           <div className="hidden min-w-[240px] md:block">
-            <p className="text-sm text-muted-foreground">Workspace</p>
+            <p className="text-sm text-muted-foreground">Teaching workspace</p>
             <h1 className="truncate text-lg font-semibold">{instituteName}</h1>
           </div>
           <div className="relative w-full max-w-xl">
@@ -43,7 +45,7 @@ export function DashboardHeader({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-primary/40 backdrop-blur-sm" aria-label="Close navigation" onClick={() => setOpen(false)} />
           <div className="relative h-full w-[300px] max-w-[86vw]">
-            <Sidebar role={user.role} />
+            <Sidebar role={user.role} pendingEnrollmentCount={pendingEnrollmentCount} />
             <Button
               variant="outline"
               size="icon"

@@ -20,7 +20,7 @@ const subscribeSchema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id || !session.user.instituteId) {
+  if (!session?.user?.id || !session.user.instituteId || !["PARENT", "FAMILY"].includes(session.user.role)) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
@@ -34,6 +34,9 @@ export async function POST(request: Request) {
     where: { userId: session.user.id, instituteId: session.user.instituteId },
     select: { id: true }
   });
+  if (!parent) {
+    return NextResponse.json({ message: "This parent account is not linked to a guardian profile." }, { status: 403 });
+  }
 
   const { endpoint, keys } = parsed.data.subscription;
   const subscription = await prisma.webPushSubscription.upsert({
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
     create: {
       instituteId: session.user.instituteId,
       userId: session.user.id,
-      parentId: parent?.id ?? null,
+      parentId: parent.id,
       endpoint,
       endpointHash: hashEndpoint(endpoint),
       p256dh: keys.p256dh,
@@ -53,7 +56,7 @@ export async function POST(request: Request) {
     update: {
       instituteId: session.user.instituteId,
       userId: session.user.id,
-      parentId: parent?.id ?? null,
+      parentId: parent.id,
       p256dh: keys.p256dh,
       auth: keys.auth,
       userAgent: parsed.data.userAgent ?? null,

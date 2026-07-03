@@ -31,6 +31,10 @@ export async function sendWebPushMessages(input: {
   body: string;
   data?: Record<string, unknown>;
 }) {
+  if (!input.parentId && !input.userId) {
+    return { sent: 0, failed: 0, skipped: true };
+  }
+
   if (!configureWebPush()) {
     return { sent: 0, failed: 0, skipped: true };
   }
@@ -39,7 +43,8 @@ export async function sendWebPushMessages(input: {
     where: {
       instituteId: input.instituteId,
       isActive: true,
-      ...(input.parentId ? { parentId: input.parentId } : input.userId ? { userId: input.userId } : {})
+      ...(input.parentId ? { parentId: input.parentId } : {}),
+      ...(input.userId ? { userId: input.userId } : {})
     }
   });
 
@@ -131,4 +136,83 @@ export async function sendWebPushMessages(input: {
   }
 
   return { sent, failed, skipped: false };
+}
+
+export async function sendParentWebPush(input: {
+  studentId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}) {
+  const student = await prisma.student.findUnique({
+    where: { id: input.studentId },
+    select: { instituteId: true }
+  });
+  if (!student) return { sent: 0, failed: 0, skipped: true, parents: 0 };
+
+  const links = await prisma.parentStudent.findMany({
+    where: {
+      studentId: input.studentId,
+      parent: { instituteId: student.instituteId, userId: { not: null } }
+    },
+    select: { parent: { select: { id: true, userId: true } } }
+  });
+  const parents = links
+    .map((link) => link.parent)
+    .filter((parent, index, all) => parent.userId && all.findIndex((item) => item.id === parent.id) === index);
+
+  let sent = 0;
+  let failed = 0;
+  for (const parent of parents) {
+    const notification = await prisma.notification.create({
+      data: {
+        instituteId: student.instituteId,
+        userId: parent.userId,
+        parentId: parent.id,
+        studentId: input.studentId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        message: input.body,
+        actionUrl: (input.data?.actionUrl as string | undefined) ?? "/portal/notifications",
+        dataJson: input.data as Prisma.InputJsonObject | undefined,
+        metadata: input.data as Prisma.InputJsonObject | undefined
+      }
+    });
+    await prisma.notificationLog.create({
+      data: {
+        instituteId: student.instituteId,
+        userId: parent.userId,
+        parentId: parent.id,
+        studentId: input.studentId,
+        notificationId: notification.id,
+        type: input.type,
+        channel: NotificationChannel.IN_APP,
+        status: NotificationStatus.SENT,
+        title: input.title,
+        body: input.body,
+        message: input.body,
+        recipientType: "PARENT",
+        recipientId: parent.id,
+        payloadJson: input.data as Prisma.InputJsonObject | undefined,
+        sentAt: new Date()
+      }
+    });
+    const result = await sendWebPushMessages({
+      instituteId: student.instituteId,
+      userId: parent.userId,
+      parentId: parent.id,
+      studentId: input.studentId,
+      notificationId: notification.id,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      data: input.data
+    });
+    sent += result.sent;
+    failed += result.failed;
+  }
+
+  return { sent, failed, skipped: false, parents: parents.length };
 }

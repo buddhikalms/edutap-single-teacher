@@ -2,9 +2,10 @@
 
 import type React from "react";
 import { useActionState, useEffect } from "react";
-import { BellRing, Building2, CreditCard, Palette, ReceiptText, Upload } from "lucide-react";
+import { BellRing, Building2, CreditCard, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { updateInstituteSettings } from "@/app/(dashboard)/settings/actions";
+import { ImageUploadInput } from "@/components/forms/image-upload-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +15,12 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 type SettingsFormProps = {
+  teacher: {
+    name: string;
+    specialty: string | null;
+    bio: string | null;
+    photoUrl: string | null;
+  };
   institute: {
     name: string;
     email: string;
@@ -49,25 +56,17 @@ type SettingsFormProps = {
     cardAllowQrOnly: boolean;
     cardAllowNfcOnly: boolean;
     cardAutoGenerateQrToken: boolean;
-    cardReplacementFee: unknown;
+    cardReplacementFee: number | null;
     cardNotifyParentOnReplacement: boolean;
     cardNotifyAdminOnLostOrStolenScan: boolean;
     currency: string;
     themeColor: string;
     logoPlaceholder: string | null;
   };
-  branches: Array<{
-    id: string;
-    name: string;
-    code: string;
-    phone: string | null;
-    address: string | null;
-  }>;
 };
 
-export function InstituteSettingsForm({ institute, settings, branches }: SettingsFormProps) {
+export function InstituteSettingsForm({ institute, teacher, settings }: SettingsFormProps) {
   const [state, formAction, pending] = useActionState(updateInstituteSettings, { ok: false, message: "" });
-  const primaryBranch = branches[0];
 
   useEffect(() => {
     if (!state.message) {
@@ -88,12 +87,18 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Institute profile
+              Teacher & brand profile
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <Field label="Institute name" htmlFor="instituteName">
+            <Field label="Brand / class name" htmlFor="instituteName">
               <Input id="instituteName" name="instituteName" defaultValue={institute.name} required />
+            </Field>
+            <Field label="Teacher name" htmlFor="teacherName">
+              <Input id="teacherName" name="teacherName" defaultValue={teacher.name} required />
+            </Field>
+            <Field label="Subject / specialization" htmlFor="teacherSpecialty">
+              <Input id="teacherSpecialty" name="teacherSpecialty" defaultValue={teacher.specialty ?? ""} required />
             </Field>
             <Field label="Email" htmlFor="email">
               <Input id="email" name="email" type="email" defaultValue={institute.email} required />
@@ -101,14 +106,17 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
             <Field label="Phone" htmlFor="phone">
               <Input id="phone" name="phone" defaultValue={institute.phone ?? ""} />
             </Field>
-            <Field label="Logo upload placeholder" htmlFor="logoPlaceholder">
-              <div className="flex gap-2">
-                <Input id="logoPlaceholder" name="logoPlaceholder" defaultValue={settings.logoPlaceholder ?? institute.logoUrl ?? ""} placeholder="Logo URL or upload note" />
-                <Button type="button" variant="outline" size="icon" aria-label="Logo upload placeholder">
-                  <Upload className="h-4 w-4" />
-                </Button>
-              </div>
+            <Field label="Logo" htmlFor="logoPlaceholder">
+              <ImageUploadInput name="logoPlaceholder" defaultValue={settings.logoPlaceholder ?? institute.logoUrl} />
             </Field>
+            <Field label="Profile photo" htmlFor="teacherPhotoUrl">
+              <ImageUploadInput name="teacherPhotoUrl" defaultValue={teacher.photoUrl} />
+            </Field>
+            <div className="md:col-span-2">
+              <Field label="Public bio" htmlFor="teacherBio">
+                <Textarea id="teacherBio" name="teacherBio" defaultValue={teacher.bio ?? ""} />
+              </Field>
+            </div>
             <div className="md:col-span-2">
               <Field label="Address" htmlFor="address">
                 <Textarea id="address" name="address" defaultValue={institute.address ?? ""} />
@@ -334,35 +342,6 @@ export function InstituteSettingsForm({ institute, settings, branches }: Setting
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Palette className="h-5 w-5" />
-              Branch settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            {primaryBranch ? (
-              <>
-                <input type="hidden" name="branchId" value={primaryBranch.id} />
-                <Field label="Primary branch" htmlFor="branchName">
-                  <Input id="branchName" name="branchName" defaultValue={primaryBranch.name} required />
-                </Field>
-                <Field label="Branch code" htmlFor="branchCode">
-                  <Input id="branchCode" name="branchCode" defaultValue={primaryBranch.code} required />
-                </Field>
-                <Field label="Branch phone" htmlFor="branchPhone">
-                  <Input id="branchPhone" name="branchPhone" defaultValue={primaryBranch.phone ?? ""} />
-                </Field>
-                <Field label="Branch address" htmlFor="branchAddress">
-                  <Input id="branchAddress" name="branchAddress" defaultValue={primaryBranch.address ?? ""} />
-                </Field>
-              </>
-            ) : (
-              <div className="md:col-span-2 rounded-xl border border-dashed bg-white/60 p-6 text-sm text-muted-foreground">Create a branch to manage branch-level settings.</div>
-            )}
-          </CardContent>
-        </Card>
       </section>
 
       <div className="flex justify-end">

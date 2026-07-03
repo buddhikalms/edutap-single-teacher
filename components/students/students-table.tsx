@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { createStudent, deleteStudent, updateStudent } from "@/app/(dashboard)/students/actions";
 import { QrCodeScanner } from "@/components/cards/camera-qr-scanner";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
+import { ImageUploadInput } from "@/components/forms/image-upload-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,7 +51,7 @@ export type StudentRow = {
   email: string | null;
   phone: string | null;
   dateOfBirth: string;
-  status: "ACTIVE" | "PAUSED" | "GRADUATED" | "ARCHIVED";
+  status: "PENDING_APPROVAL" | "ACTIVE" | "REJECTED" | "PAUSED" | "GRADUATED" | "ARCHIVED";
   avatarUrl: string | null;
   cardNumber: string | null;
   nfcUid: string | null;
@@ -498,8 +499,11 @@ function StudentPanel({
                   </FormField>
                 </div>
               </div>
-              <FormField label="Photo URL placeholder" error={form.formState.errors.avatarUrl?.message}>
-                <Input placeholder="Optional image URL" {...form.register("avatarUrl")} />
+              <FormField label="Student photo" error={form.formState.errors.avatarUrl?.message}>
+                <ImageUploadInput
+                  defaultValue={form.getValues("avatarUrl")}
+                  onUploaded={(url) => form.setValue("avatarUrl", url || undefined, { shouldDirty: true, shouldValidate: true })}
+                />
               </FormField>
             </div>
           </FormShell>

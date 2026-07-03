@@ -9,6 +9,7 @@ import { liveClassWindow } from "@/lib/live-classes";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
 import { liveClassRecordingSchema, liveClassSchema } from "@/lib/validations";
+import { requireOwnerTeacherId } from "@/lib/single-teacher";
 
 function liveClassInput(formData: FormData) {
   return liveClassSchema.parse({
@@ -25,6 +26,15 @@ function liveClassInput(formData: FormData) {
     price: formData.get("price"),
     status: formData.get("status"),
     recordingEnabled: formData.get("recordingEnabled") === "on",
+    waitingRoom: formData.get("waitingRoom") === "on",
+    passcode: formData.get("passcode") === "on",
+    joinBeforeHost: formData.get("joinBeforeHost") === "on",
+    muteOnEntry: formData.get("muteOnEntry") === "on",
+    recording: formData.get("recording") ?? "none",
+    hostVideo: formData.get("hostVideo") === "on",
+    participantVideo: formData.get("participantVideo") === "on",
+    alternativeHosts: formData.get("alternativeHosts"),
+    recurring: formData.get("recurring") === "on",
     studentIds: formData.getAll("studentIds").map(String)
   });
 }
@@ -63,7 +73,8 @@ type ExistingMeeting = Awaited<ReturnType<typeof assertLiveClass>>;
 async function liveClassData(formData: FormData, existing?: ExistingMeeting) {
   const { instituteId, userId, role, branchId } = await getTenantContext();
   const parsed = liveClassInput(formData);
-  const classGroup = await assertCanManageClass({ instituteId, classGroupId: parsed.classGroupId, userId, role, branchId });
+  await assertCanManageClass({ instituteId, classGroupId: parsed.classGroupId, userId, role, branchId });
+  const teacherId = await requireOwnerTeacherId(instituteId);
   await assertStudents(instituteId, parsed.classGroupId, parsed.studentIds);
 
   if (parsed.teacherId) {
@@ -94,10 +105,22 @@ async function liveClassData(formData: FormData, existing?: ExistingMeeting) {
       : isAutoMeetingProvider(parsed.meetingProvider)
         ? await createAutoMeeting(parsed.meetingProvider, {
             instituteId,
+            userId,
             title: parsed.title,
             description: parsed.description,
             startTime,
-            durationMinutes: parsed.durationMinutes
+            durationMinutes: parsed.durationMinutes,
+            settings: {
+              waitingRoom: parsed.waitingRoom,
+              passcode: parsed.passcode,
+              joinBeforeHost: parsed.joinBeforeHost,
+              muteOnEntry: parsed.muteOnEntry,
+              recording: parsed.recording,
+              hostVideo: parsed.hostVideo,
+              participantVideo: parsed.participantVideo,
+              alternativeHosts: parsed.alternativeHosts,
+              recurring: parsed.recurring
+            }
           })
         : externalUrlForProvider(parsed.meetingProvider, parsed.externalUrl ?? "");
 
@@ -108,8 +131,8 @@ async function liveClassData(formData: FormData, existing?: ExistingMeeting) {
       title: parsed.title,
       description: parsed.description ?? null,
       classGroupId: parsed.classGroupId,
-      courseId: parsed.courseId ?? classGroup.courseId,
-      teacherId: parsed.teacherId ?? classGroup.teacherId,
+      courseId: parsed.courseId ?? null,
+      teacherId,
       provider: meeting.provider,
       meetingProvider: parsed.meetingProvider,
       meetingUrl: meeting.meetingUrl,
@@ -128,7 +151,22 @@ async function liveClassData(formData: FormData, existing?: ExistingMeeting) {
       status: parsed.status,
       recordingEnabled: parsed.recordingEnabled,
       targetStudentIds: parsed.studentIds
-    }
+    },
+    zoomMeetingData:
+      parsed.meetingProvider === "ZOOM_AUTO" && meeting.meetingId
+        ? {
+            userId,
+            classGroupId: parsed.classGroupId,
+            zoomMeetingId: meeting.meetingId,
+            topic: parsed.title,
+            joinUrl: meeting.joinUrl ?? meeting.meetingUrl,
+            startUrl: meeting.startUrl ?? null,
+            password: meeting.meetingPassword ?? null,
+            status: "scheduled",
+            scheduledTime: startTime,
+            durationMinutes: parsed.durationMinutes
+          }
+        : null
   };
 }
 
@@ -141,6 +179,16 @@ export async function createLiveClassAction(formData: FormData) {
       createdById: input.userId
     }
   });
+  if (input.zoomMeetingData) {
+    const connection = await prisma.zoomConnection.findUnique({ where: { userId: input.userId }, select: { id: true } });
+    await prisma.zoomMeeting.create({
+      data: {
+        ...input.zoomMeetingData,
+        liveClassId: liveClass.id,
+        zoomConnectionId: connection?.id
+      }
+    });
+  }
 
   revalidatePath("/live-classes");
   redirect(`/live-classes/${liveClass.id}`);
@@ -154,6 +202,21 @@ export async function updateLiveClassAction(liveClassId: string, formData: FormD
     where: { id: liveClassId },
     data: input.data
   });
+  if (input.zoomMeetingData) {
+    const connection = await prisma.zoomConnection.findUnique({ where: { userId: input.userId }, select: { id: true } });
+    await prisma.zoomMeeting.upsert({
+      where: { liveClassId },
+      create: {
+        ...input.zoomMeetingData,
+        liveClassId,
+        zoomConnectionId: connection?.id
+      },
+      update: {
+        ...input.zoomMeetingData,
+        zoomConnectionId: connection?.id
+      }
+    });
+  }
 
   revalidatePath("/live-classes");
   revalidatePath(`/live-classes/${liveClassId}`);
@@ -171,6 +234,14 @@ export async function setLiveClassStatus(liveClassId: string, status: LiveClassS
   } catch (error) {
     return actionError(error, "Could not update live class.");
   }
+}
+
+export async function deleteLiveClassAction(liveClassId: string) {
+  const { instituteId } = await getTenantContext();
+  await assertLiveClass(instituteId, liveClassId);
+  await prisma.liveClass.delete({ where: { id: liveClassId } });
+  revalidatePath("/live-classes");
+  redirect("/live-classes?deleted=live-class");
 }
 
 export async function addLiveClassRecording(liveClassId: string, formData: FormData) {
@@ -225,4 +296,75 @@ export async function addLiveClassRecording(liveClassId: string, formData: FormD
   revalidatePath("/live-classes");
   revalidatePath(`/live-classes/${liveClassId}`);
   redirect(`/live-classes/${liveClassId}`);
+}
+
+export async function publishImportedZoomRecordingAction(liveClassId: string) {
+  const { instituteId, userId } = await getTenantContext();
+  const liveClass = await prisma.liveClass.findFirst({
+    where: { id: liveClassId, instituteId },
+    include: { zoomMeeting: true }
+  });
+
+  if (!liveClass?.zoomMeeting?.recordingUrl) {
+    throw new Error("No imported Zoom recording is available for this live class.");
+  }
+  const recordingUrl = liveClass.zoomMeeting.recordingUrl;
+
+  await prisma.$transaction(async (tx) => {
+    const material = await tx.courseMaterial.create({
+      data: {
+        title: `${liveClass.title} recording`,
+        description: `Zoom recording for ${liveClass.title}`,
+        type: "VIDEO",
+        url: recordingUrl,
+        instituteId,
+        classGroupId: liveClass.classGroupId,
+        courseId: liveClass.courseId,
+        createdById: userId
+      }
+    });
+
+    await tx.liveClassRecording.create({
+      data: {
+        instituteId,
+        liveClassId,
+        courseId: liveClass.courseId,
+        classGroupId: liveClass.classGroupId,
+        title: `${liveClass.title} recording`,
+        description: "Imported from Zoom.",
+        recordingUrl,
+        accessType: "FREE",
+        price: 0,
+        materialId: material.id
+      }
+    });
+
+    await tx.liveClass.update({
+      where: { id: liveClassId },
+      data: {
+        recordingUrl,
+        status: "COMPLETED"
+      }
+    });
+  });
+
+  revalidatePath("/live-classes");
+  revalidatePath(`/live-classes/${liveClassId}`);
+  redirect(`/live-classes/${liveClassId}?recording=published`);
+}
+
+export async function deleteImportedZoomRecordingAction(liveClassId: string) {
+  const { instituteId } = await getTenantContext();
+  await assertLiveClass(instituteId, liveClassId);
+  await prisma.zoomMeeting.updateMany({
+    where: { liveClassId },
+    data: {
+      recordingImported: false,
+      recordingUrl: null,
+      recordingMetadata: Prisma.JsonNull
+    }
+  });
+
+  revalidatePath(`/live-classes/${liveClassId}`);
+  redirect(`/live-classes/${liveClassId}?recording=deleted`);
 }

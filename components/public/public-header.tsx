@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, GraduationCap, LayoutDashboard, Menu, X } from "lucide-react";
+import { ArrowRight, GraduationCap, LogIn, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/explore/teachers", label: "Teachers" },
+  { href: "/classes", label: "Classes" },
   { href: "/courses", label: "Courses" },
-  { href: "/explore/classes", label: "Classes" },
-  { href: "/online-classes", label: "Online" },
-  { href: "/pricing", label: "Pricing" }
+  { href: "/teacher", label: "Teacher" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Contact" }
 ];
 
 export function PublicHeader() {
@@ -34,14 +34,14 @@ export function PublicHeader() {
         </nav>
         <div className="hidden items-center gap-2 md:flex">
           <Button asChild variant="ghost">
-            <Link href="/login">
-              <LayoutDashboard className="h-4 w-4" />
-              Sign in
+            <Link href="/family/login">
+              <LogIn className="h-4 w-4" />
+              Student login
             </Link>
           </Button>
           <Button asChild>
-            <Link href="/register/institute">
-              Start institute
+            <Link href="/student/register">
+              Request enrollment
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -74,14 +74,14 @@ export function PublicHeader() {
             ))}
             <div className="mt-2 grid gap-2 border-t pt-3 md:hidden">
               <Button asChild variant="ghost" className="justify-start">
-                <Link href="/login" onClick={() => setIsOpen(false)}>
-                  <LayoutDashboard className="h-4 w-4" />
-                  Sign in
+                <Link href="/family/login" onClick={() => setIsOpen(false)}>
+                  <LogIn className="h-4 w-4" />
+                  Student login
                 </Link>
               </Button>
               <Button asChild className="justify-start">
-                <Link href="/register/institute" onClick={() => setIsOpen(false)}>
-                  Start institute
+                <Link href="/student/register" onClick={() => setIsOpen(false)}>
+                  Request enrollment
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

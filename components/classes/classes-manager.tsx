@@ -1,238 +1,163 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  useReactTable
-} from "@tanstack/react-table";
+import { CalendarDays, Clock, Eye, Loader2, MapPin, Pencil, Plus, RotateCcw, Search, Trash2, UsersRound, X } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { BookOpen, Eye, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { createClassGroup, createCourse, deleteClassGroup, updateClassGroup, updateCourse } from "@/app/(dashboard)/classes/actions";
+import { createClassGroup, deleteClassGroup, updateClassGroup } from "@/app/(dashboard)/dashboard/classes/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { classGroupSchema, courseSchema, type ClassGroupInput, type CourseInput } from "@/lib/validations";
+import { classGroupSchema, type ClassGroupInput } from "@/lib/validations";
 import { formatCurrency } from "@/lib/utils";
 
-export type CourseRow = {
-  id: string;
-  name: string;
-  code: string;
-  subject: string | null;
-  grade: string | null;
-  gradeId: string | null;
-  description: string | null;
-  fee: number;
-  classes: number;
-};
+type Option = { id: string; name: string };
+type SubjectOption = Option & { color: string };
+type ScheduleParts = { day: string; startTime: string; endTime: string };
 
 export type ClassRow = {
   id: string;
   name: string;
   code: string;
+  gradeId: string;
+  grade: string;
+  subjectId: string;
+  subject: string;
+  subjectColor: string;
+  branchId: string;
+  branch: string;
   schedule: string;
   room: string | null;
   capacity: number;
-  branchId: string;
-  branch: string;
-  gradeId: string | null;
-  grade: string | null;
-  courseId: string;
-  course: string;
-  subject: string | null;
-  teacherId: string | null;
-  teacher: string;
   classType: "INHOUSE" | "ONLINE" | "HYBRID";
-  fee: number;
-  defaultFreePeriodType: "NONE" | "FIRST_WEEK" | "SECOND_WEEK" | "FIRST_MONTH" | "CUSTOM_DAYS";
-  defaultFreeDays: number;
-  defaultPaymentDueDay: number;
+  monthlyFee: number;
+  admissionFee: number | null;
+  paymentStartDate: string | null;
+  freePeriodType: "NONE" | "FIRST_WEEK" | "SECOND_WEEK" | "FIRST_MONTH" | "CUSTOM_DAYS";
+  freeDays: number;
+  dueDay: number;
+  status: "ACTIVE" | "DISABLED" | "ARCHIVED";
   enrolled: number;
 };
 
-export type BasicOption = { id: string; name: string };
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-const emptyCourse: CourseInput = {
-  name: "",
-  code: "",
-  subject: undefined,
-  grade: undefined,
-  gradeId: "",
-  description: undefined,
-  fee: 0
+const DAY_ALIASES: Record<string, string> = {
+  mon: "Monday",
+  monday: "Monday",
+  tue: "Tuesday",
+  tues: "Tuesday",
+  tuesday: "Tuesday",
+  wed: "Wednesday",
+  weds: "Wednesday",
+  wednesday: "Wednesday",
+  thu: "Thursday",
+  thur: "Thursday",
+  thurs: "Thursday",
+  thursday: "Thursday",
+  fri: "Friday",
+  friday: "Friday",
+  sat: "Saturday",
+  saturday: "Saturday",
+  sun: "Sunday",
+  sunday: "Sunday"
 };
 
-const emptyClass: ClassGroupInput = {
-  name: "",
-  code: "",
-  schedule: "",
-  room: undefined,
-  capacity: 30,
-  branchId: "",
-  gradeId: "",
-  courseId: "",
-  teacherId: undefined,
-  classType: "INHOUSE",
-  fee: 0,
-  defaultFreePeriodType: "NONE",
-  defaultFreeDays: 0,
-  defaultPaymentDueDay: 10
-};
+function parseSchedule(value?: string | null): ScheduleParts {
+  const schedule = value ?? "";
+  const dayMatch = schedule.toLowerCase().match(/\b(mon(?:day)?|tue(?:s|sday)?|wed(?:s|nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/);
+  const timeMatch = schedule.match(/\b(\d{1,2}:\d{2})\s*(?:-|to|--)\s*(\d{1,2}:\d{2})\b/i);
+
+  return {
+    day: dayMatch ? DAY_ALIASES[dayMatch[1]] ?? "Monday" : "Monday",
+    startTime: timeMatch?.[1]?.padStart(5, "0") ?? "08:00",
+    endTime: timeMatch?.[2]?.padStart(5, "0") ?? "10:00"
+  };
+}
+
+function formatSchedule(parts: ScheduleParts) {
+  return `${parts.day} ${parts.startTime}-${parts.endTime}`;
+}
 
 export function ClassesManager({
-  courses,
   classes,
   branches,
   grades,
-  teachers,
-  isTeacher,
+  subjects,
   currency
 }: {
-  courses: CourseRow[];
   classes: ClassRow[];
-  branches: BasicOption[];
-  grades: BasicOption[];
-  teachers: BasicOption[];
-  isTeacher: boolean;
+  branches: Option[];
+  grades: Option[];
+  subjects: SubjectOption[];
   currency: string;
 }) {
-  const [globalFilter, setGlobalFilter] = useState("");
-  const [coursePanel, setCoursePanel] = useState<CourseRow | "new" | null>(null);
-  const [classPanel, setClassPanel] = useState<ClassRow | "new" | null>(null);
+  const [panel, setPanel] = useState<ClassRow | "new" | null>(null);
   const [deleting, setDeleting] = useState<ClassRow | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
+  const [query, setQuery] = useState("");
+  const [day, setDay] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [gradeId, setGradeId] = useState("");
+  const [subjectId, setSubjectId] = useState("");
+  const [classType, setClassType] = useState("");
+  const [status, setStatus] = useState("");
 
-  const columns = useMemo<ColumnDef<ClassRow>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: "Class",
-        cell: ({ row }) => (
-          <div>
-            <Link href={`/classes/${row.original.id}`} className="font-semibold hover:underline">
-              {row.original.name}
-            </Link>
-            <p className="text-xs text-muted-foreground">{row.original.code}</p>
-          </div>
-        )
-      },
-      {
-        accessorKey: "course",
-        header: "Course / subject",
-        cell: ({ row }) => (
-          <div>
-            <p className="font-medium">{row.original.course}</p>
-            <p className="text-xs text-muted-foreground">
-              {row.original.branch} - {row.original.grade ?? "Grade not set"} - {row.original.subject ?? "Subject not set"}
-            </p>
-          </div>
-        )
-      },
-      {
-        accessorKey: "classType",
-        header: "Type / fee",
-        cell: ({ row }) => (
-          <div>
-            <Badge variant="outline">{row.original.classType.toLowerCase()}</Badge>
-            <p className="mt-1 text-xs font-semibold">{formatCurrency(row.original.fee, currency)}</p>
-          </div>
-        )
-      },
-      { accessorKey: "teacher", header: "Teacher" },
-      { accessorKey: "schedule", header: "Timetable" },
-      {
-        accessorKey: "enrolled",
-        header: "Enrollment",
-        cell: ({ row }) => (
-          <div>
-            <p className="font-semibold">{row.original.enrolled}/{row.original.capacity}</p>
-            <div className="mt-2 h-2 w-28 rounded-full bg-muted">
-              <div
-                className="h-2 rounded-full bg-teal-600"
-                style={{ width: `${Math.min(100, Math.round((row.original.enrolled / row.original.capacity) * 100))}%` }}
-              />
-            </div>
-          </div>
-        )
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-2">
-            <Button asChild variant="ghost" size="icon" aria-label="View class">
-              <Link href={`/classes/${row.original.id}`}>
-                <Eye className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setClassPanel(row.original)} aria-label="Edit class">
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setDeleting(row.original)} aria-label="Delete class">
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        )
-      }
-    ],
-    [currency]
-  );
+  const filteredClasses = useMemo(() => {
+    const term = query.trim().toLowerCase();
 
-  // TanStack Table intentionally returns function-heavy instances that React Compiler cannot memoize.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
-    data: classes,
-    columns,
-    state: { globalFilter },
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel()
-  });
+    return classes.filter((item) => {
+      const parsedSchedule = parseSchedule(item.schedule);
+      const searchable = [item.name, item.code, item.grade, item.subject, item.branch, item.schedule, item.room ?? ""].join(" ").toLowerCase();
 
-  function confirmDelete() {
-    if (!deleting) {
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await deleteClassGroup(deleting.id);
-      if (result.ok) {
-        toast.success(result.message);
-        setDeleting(null);
-      } else {
-        toast.error(result.message);
-      }
+      return (
+        (!term || searchable.includes(term)) &&
+        (!day || parsedSchedule.day === day) &&
+        (!branchId || item.branchId === branchId) &&
+        (!gradeId || item.gradeId === gradeId) &&
+        (!subjectId || item.subjectId === subjectId) &&
+        (!classType || item.classType === classType) &&
+        (!status || item.status === status)
+      );
     });
-  }
+  }, [branchId, classType, classes, day, gradeId, query, status, subjectId]);
+
+  const hasFilters = Boolean(query || day || branchId || gradeId || subjectId || classType || status);
+  const resetFilters = () => {
+    setQuery("");
+    setDay("");
+    setBranchId("");
+    setGradeId("");
+    setSubjectId("");
+    setClassType("");
+    setStatus("");
+  };
 
   return (
     <>
       <div className="space-y-6">
-        <section className="glass-panel rounded-2xl p-6">
-          <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+        <section className="glass-panel rounded-2xl p-6 sm:p-8">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <Badge variant="secondary">Academic structure</Badge>
-              <h2 className="mt-3 text-2xl font-semibold">Classes & courses</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Configure course fees, subjects, grades, teachers, timetable, and class capacity.</p>
+              <Badge variant="secondary">Recurring teaching</Badge>
+              <h2 className="mt-4 text-3xl font-semibold">Weekly & monthly classes</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Classes have schedules, attendance, enrollments, and monthly fees. They are separate from structured courses.
+              </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button variant="outline" onClick={() => setCoursePanel("new")}>
-                <Plus className="h-4 w-4" />
-                Add course
+            <div className="flex gap-3">
+              <Button asChild variant="outline">
+                <Link href="/settings">
+                  <MapPin className="h-4 w-4" />
+                  Locations
+                </Link>
               </Button>
-              <Button onClick={() => setClassPanel("new")}>
+              <Button onClick={() => setPanel("new")}>
                 <Plus className="h-4 w-4" />
                 Add class
               </Button>
@@ -240,80 +165,151 @@ export function ClassesManager({
           </div>
         </section>
 
+        <section className="glass-panel rounded-2xl p-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_repeat(3,minmax(150px,180px))_auto]">
+            <label className="relative">
+              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search classes" className="pl-9" />
+            </label>
+            <Select value={day} onChange={(event) => setDay(event.target.value)} aria-label="Filter by day">
+              <option value="">All days</option>
+              {DAYS.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </Select>
+            <Select value={branchId} onChange={(event) => setBranchId(event.target.value)} aria-label="Filter by location">
+              <option value="">All locations</option>
+              {branches.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+            <Select value={classType} onChange={(event) => setClassType(event.target.value)} aria-label="Filter by class type">
+              <option value="">All types</option>
+              <option value="INHOUSE">Inhouse</option>
+              <option value="ONLINE">Online</option>
+              <option value="HYBRID">Hybrid</option>
+            </Select>
+            <Button type="button" variant="outline" onClick={resetFilters} disabled={!hasFilters}>
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <Select value={gradeId} onChange={(event) => setGradeId(event.target.value)} aria-label="Filter by grade">
+              <option value="">All grades</option>
+              {grades.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+            <Select value={subjectId} onChange={(event) => setSubjectId(event.target.value)} aria-label="Filter by subject">
+              <option value="">All subjects</option>
+              {subjects.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+            <Select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="DISABLED">Disabled</option>
+              <option value="ARCHIVED">Archived</option>
+            </Select>
+          </div>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => (
-            <Card key={course.id} className="glass-panel">
+          {filteredClasses.map((item) => (
+            <Card key={item.id} className="glass-panel">
               <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-white">
-                    <BookOpen className="h-5 w-5" />
+                <div className="flex items-start justify-between">
+                  <Badge style={{ backgroundColor: `${item.subjectColor}18`, color: item.subjectColor }}>{item.subject}</Badge>
+                  <Badge variant={item.status === "ACTIVE" ? "success" : "outline"}>{item.status.toLowerCase()}</Badge>
+                </div>
+                <h3 className="mt-4 text-xl font-semibold">{item.name}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {item.grade} - {item.classType.toLowerCase()}
+                </p>
+                <div className="mt-4 space-y-2 rounded-xl border bg-white/70 p-4 text-sm">
+                  <p className="flex gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    {item.schedule}
+                  </p>
+                  <p className="flex gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    {item.branch}
+                  </p>
+                  <p className="flex gap-2">
+                    <UsersRound className="h-4 w-4 text-primary" />
+                    {item.enrolled} enrolled
+                  </p>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="font-semibold">
+                    {formatCurrency(item.monthlyFee, currency)}
+                    <span className="text-xs font-normal text-muted-foreground"> / month</span>
+                  </p>
+                  <div className="flex">
+                    <Button asChild size="icon" variant="ghost">
+                      <Link href={`/dashboard/classes/${item.id}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setPanel(item)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setDeleting(item)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => setCoursePanel(course)} aria-label="Edit course">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
                 </div>
-                <h3 className="mt-5 font-semibold">{course.name}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{course.subject ?? "Subject not set"} · {course.grade ?? "Grade not set"}</p>
-                <div className="mt-5 flex items-center justify-between rounded-xl border bg-white/70 p-3">
-                  <span className="text-sm text-muted-foreground">{course.code}</span>
-                  <span className="font-semibold">{formatCurrency(course.fee, currency)}</span>
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">{course.classes} active classes</p>
               </CardContent>
             </Card>
           ))}
         </section>
 
-        <Card className="glass-panel">
-          <CardContent className="p-6">
-            <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-              <div>
-                <h3 className="text-xl font-semibold">Class groups</h3>
-                <p className="mt-1 text-sm text-muted-foreground">View utilization and open enrolled student lists.</p>
-              </div>
-              <div className="relative md:w-[320px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input value={globalFilter} onChange={(event) => setGlobalFilter(event.target.value)} placeholder="Search classes..." className="pl-9" />
-              </div>
-            </div>
-            <ClassDataTable table={table} columns={columns} />
-          </CardContent>
-        </Card>
+        {!filteredClasses.length ? (
+          <Card className="glass-panel">
+            <CardContent className="p-10 text-center">
+              <CalendarDays className="mx-auto h-10 w-10 text-muted-foreground" />
+              <h3 className="mt-4 text-lg font-semibold">No classes found</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Adjust the filters or add a new class.</p>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
-      {coursePanel ? (
-        <CoursePanel
-          course={coursePanel === "new" ? null : coursePanel}
-          grades={grades}
-          onClose={() => setCoursePanel(null)}
-          onSubmit={(values) => (coursePanel === "new" ? createCourse(values) : updateCourse(coursePanel.id, values))}
-        />
-      ) : null}
-
-      {classPanel ? (
-        <ClassPanel
-          classGroup={classPanel === "new" ? null : classPanel}
-          branches={branches}
-          courses={courses.map((course) => ({ id: course.id, name: course.name }))}
-          grades={grades}
-          teachers={teachers}
-          isTeacher={isTeacher}
-          onClose={() => setClassPanel(null)}
-          onSubmit={(values) => (classPanel === "new" ? createClassGroup(values) : updateClassGroup(classPanel.id, values))}
-        />
-      ) : null}
-
+      {panel ? <ClassPanel item={panel === "new" ? null : panel} branches={branches} grades={grades} subjects={subjects} onClose={() => setPanel(null)} /> : null}
       {deleting ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/35 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-luxury">
-            <h3 className="text-lg font-semibold">Remove {deleting.name}?</h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Enrollments, attendance sessions, and class links will be removed.</p>
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setDeleting(null)} disabled={isPending}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/35 p-4">
+          <div className="rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="font-semibold">Remove {deleting.name}?</h3>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setDeleting(null)}>
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={confirmDelete} disabled={isPending}>
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <Button
+                variant="destructive"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const result = await deleteClassGroup(deleting.id);
+                    if (result.ok) {
+                      toast.success(result.message);
+                      setDeleting(null);
+                    } else {
+                      toast.error(result.message);
+                    }
+                  })
+                }
+              >
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Remove
               </Button>
             </div>
@@ -324,131 +320,71 @@ export function ClassesManager({
   );
 }
 
-function CoursePanel({
-  course,
-  grades,
-  onClose,
-  onSubmit
-}: {
-  course: CourseRow | null;
-  grades: BasicOption[];
-  onClose: () => void;
-  onSubmit: (values: CourseInput) => Promise<{ ok: boolean; message: string }>;
-}) {
-  const [isPending, startTransition] = useTransition();
-  const form = useForm<CourseInput>({
-    resolver: zodResolver(courseSchema),
-    defaultValues: course
-      ? {
-          name: course.name,
-          code: course.code,
-          subject: course.subject ?? undefined,
-          grade: course.grade ?? undefined,
-          gradeId: course.gradeId ?? grades[0]?.id ?? "",
-          description: course.description ?? undefined,
-          fee: course.fee
-        }
-      : { ...emptyCourse, gradeId: grades[0]?.id ?? "" }
-  });
-
-  function submit(values: CourseInput) {
-    startTransition(async () => {
-      const result = await onSubmit(values);
-      if (result.ok) {
-        toast.success(result.message);
-        onClose();
-      } else {
-        toast.error(result.message);
-      }
-    });
-  }
-
-  return (
-    <SidePanel title={course ? "Edit course" : "Add course"} onClose={onClose}>
-      <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-        <FormShell title="Course details" description="Subject, grade, code, and fee configuration.">
-          <div className="space-y-4">
-            <FieldRow>
-              <FormField label="Course name" error={form.formState.errors.name?.message}>
-                <Input {...form.register("name")} />
-              </FormField>
-              <FormField label="Course code" error={form.formState.errors.code?.message}>
-                <Input {...form.register("code")} />
-              </FormField>
-            </FieldRow>
-            <FieldRow>
-              <FormField label="Subject" error={form.formState.errors.subject?.message}>
-                <Input {...form.register("subject")} />
-              </FormField>
-              <FormField label="Grade" error={form.formState.errors.gradeId?.message}>
-                <Select {...form.register("gradeId")}>
-                  {grades.map((grade) => (
-                    <option key={grade.id} value={grade.id}>
-                      {grade.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            </FieldRow>
-            <FormField label="Fee" error={form.formState.errors.fee?.message}>
-              <Input type="number" step="0.01" {...form.register("fee")} />
-            </FormField>
-            <FormField label="Description" error={form.formState.errors.description?.message}>
-              <Textarea {...form.register("description")} />
-            </FormField>
-          </div>
-        </FormShell>
-        <PanelActions onClose={onClose} isPending={isPending} label="Save course" />
-      </form>
-    </SidePanel>
-  );
-}
-
 function ClassPanel({
-  classGroup,
+  item,
   branches,
-  courses,
   grades,
-  teachers,
-  isTeacher,
-  onClose,
-  onSubmit
+  subjects,
+  onClose
 }: {
-  classGroup: ClassRow | null;
-  branches: BasicOption[];
-  courses: BasicOption[];
-  grades: BasicOption[];
-  teachers: BasicOption[];
-  isTeacher: boolean;
+  item: ClassRow | null;
+  branches: Option[];
+  grades: Option[];
+  subjects: SubjectOption[];
   onClose: () => void;
-  onSubmit: (values: ClassGroupInput) => Promise<{ ok: boolean; message: string }>;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
+  const [scheduleParts, setScheduleParts] = useState<ScheduleParts>(() => parseSchedule(item?.schedule));
+  const schedule = formatSchedule(scheduleParts);
   const form = useForm<ClassGroupInput>({
     resolver: zodResolver(classGroupSchema),
-    defaultValues: classGroup
+    defaultValues: item
       ? {
-          name: classGroup.name,
-          code: classGroup.code,
-          schedule: classGroup.schedule,
-          room: classGroup.room ?? undefined,
-          capacity: classGroup.capacity,
-          branchId: classGroup.branchId,
-          gradeId: classGroup.gradeId ?? grades[0]?.id ?? "",
-          courseId: classGroup.courseId,
-          teacherId: classGroup.teacherId ?? undefined,
-          classType: classGroup.classType,
-          fee: classGroup.fee,
-          defaultFreePeriodType: classGroup.defaultFreePeriodType,
-          defaultFreeDays: classGroup.defaultFreeDays,
-          defaultPaymentDueDay: classGroup.defaultPaymentDueDay
+          name: item.name,
+          code: item.code,
+          schedule,
+          room: item.room ?? undefined,
+          capacity: item.capacity,
+          branchId: item.branchId,
+          gradeId: item.gradeId,
+          subjectId: item.subjectId,
+          classType: item.classType,
+          fee: item.monthlyFee,
+          admissionFee: item.admissionFee ?? undefined,
+          paymentStartDate: item.paymentStartDate ?? undefined,
+          defaultFreePeriodType: item.freePeriodType,
+          defaultFreeDays: item.freeDays,
+          defaultPaymentDueDay: item.dueDay,
+          status: item.status
         }
-      : { ...emptyClass, branchId: branches[0]?.id ?? "", gradeId: grades[0]?.id ?? "", courseId: courses[0]?.id ?? "" }
+      : {
+          name: "",
+          code: "",
+          schedule,
+          room: "",
+          capacity: 30,
+          branchId: branches[0]?.id ?? "",
+          gradeId: grades[0]?.id ?? "",
+          subjectId: subjects[0]?.id ?? "",
+          classType: "INHOUSE",
+          fee: 0,
+          admissionFee: 0,
+          paymentStartDate: new Date().toISOString().slice(0, 10),
+          defaultFreePeriodType: "NONE",
+          defaultFreeDays: 0,
+          defaultPaymentDueDay: 10,
+          status: "ACTIVE"
+        }
   });
 
-  function submit(values: ClassGroupInput) {
+  useEffect(() => {
+    form.setValue("schedule", schedule, { shouldDirty: true, shouldValidate: true });
+  }, [form, schedule]);
+
+  const updateSchedule = (patch: Partial<ScheduleParts>) => setScheduleParts((current) => ({ ...current, ...patch }));
+  const submit = (values: ClassGroupInput) =>
     startTransition(async () => {
-      const result = await onSubmit(values);
+      const result = item ? await updateClassGroup(item.id, { ...values, schedule }) : await createClassGroup({ ...values, schedule });
       if (result.ok) {
         toast.success(result.message);
         onClose();
@@ -456,209 +392,169 @@ function ClassPanel({
         toast.error(result.message);
       }
     });
-  }
 
   return (
-    <SidePanel title={classGroup ? "Edit class" : "Add class"} onClose={onClose}>
-      <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-        <FormShell title="Class details" description="Build the institute -> branch -> grade -> course -> class hierarchy.">
-          <div className="space-y-4">
-            <FieldRow>
-              <FormField label="Class name" error={form.formState.errors.name?.message}>
-                <Input {...form.register("name")} />
-              </FormField>
-              <FormField label="Class code" error={form.formState.errors.code?.message}>
-                <Input {...form.register("code")} />
-              </FormField>
-            </FieldRow>
-            <FieldRow>
-              <FormField label="Branch / location" error={form.formState.errors.branchId?.message}>
-                <Select {...form.register("branchId")}>
-                  {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="Grade" error={form.formState.errors.gradeId?.message}>
-                <Select {...form.register("gradeId")}>
-                  {grades.map((grade) => (
-                    <option key={grade.id} value={grade.id}>
-                      {grade.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            </FieldRow>
-            <FieldRow>
-              <FormField label="Subject / course" error={form.formState.errors.courseId?.message}>
-                <Select {...form.register("courseId")}>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="Class type" error={form.formState.errors.classType?.message}>
-                <Select {...form.register("classType")}>
-                  <option value="INHOUSE">Inhouse</option>
-                  <option value="ONLINE">Online</option>
-                  <option value="HYBRID">Hybrid</option>
-                </Select>
-              </FormField>
-            </FieldRow>
-            {!isTeacher ? (
+    <div className="fixed inset-0 z-50 overflow-hidden bg-primary/35">
+      <button className="absolute inset-0" onClick={onClose} aria-label="Close class form" />
+      <div className="absolute right-0 h-full w-full max-w-2xl overflow-y-auto bg-background p-6 shadow-xl">
+        <div className="mb-5 flex justify-between">
+          <div>
+            <Badge variant="secondary">Class setup</Badge>
+            <h2 className="mt-3 text-2xl font-semibold">{item ? "Edit class" : "Add class"}</h2>
+          </div>
+          <Button variant="outline" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
+          <FormShell title="Academic identity" description="Choose a grade and subject. No course link is required.">
+            <div className="space-y-4">
               <FieldRow>
-                <FormField label="Teacher" error={form.formState.errors.teacherId?.message}>
-                  <Select {...form.register("teacherId")}>
-                    <option value="">Unassigned</option>
-                    {teachers.map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>
-                        {teacher.name}
+                <FormField label="Class name" error={form.formState.errors.name?.message}>
+                  <Input {...form.register("name")} />
+                </FormField>
+                <FormField label="Class code" error={form.formState.errors.code?.message}>
+                  <Input {...form.register("code")} />
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Grade" error={form.formState.errors.gradeId?.message}>
+                  <Select {...form.register("gradeId")}>
+                    {grades.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
                       </option>
                     ))}
                   </Select>
                 </FormField>
-                <FormField label="Capacity" error={form.formState.errors.capacity?.message}>
+                <FormField label="Subject" error={form.formState.errors.subjectId?.message}>
+                  <Select {...form.register("subjectId")}>
+                    {subjects.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </FieldRow>
+            </div>
+          </FormShell>
+
+          <FormShell title="Schedule & location">
+            <div className="space-y-4">
+              <FieldRow>
+                <FormField label="Class type">
+                  <Select {...form.register("classType")}>
+                    <option value="INHOUSE">Inhouse</option>
+                    <option value="ONLINE">Online</option>
+                    <option value="HYBRID">Hybrid</option>
+                  </Select>
+                </FormField>
+                <FormField label="Institute / branch">
+                  <Select {...form.register("branchId")}>
+                    {branches.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </FieldRow>
+
+              <input type="hidden" {...form.register("schedule")} />
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <FormField label="Class day" error={form.formState.errors.schedule?.message}>
+                  <Select value={scheduleParts.day} onChange={(event) => updateSchedule({ day: event.target.value })}>
+                    {DAYS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Start time">
+                  <Input type="time" value={scheduleParts.startTime} onChange={(event) => updateSchedule({ startTime: event.target.value })} />
+                </FormField>
+                <FormField label="End time">
+                  <Input type="time" value={scheduleParts.endTime} onChange={(event) => updateSchedule({ endTime: event.target.value })} />
+                </FormField>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-lg border bg-white/70 px-3 py-2 text-sm font-medium">
+                <Clock className="h-4 w-4 text-primary" />
+                {schedule}
+              </div>
+
+              <FieldRow>
+                <FormField label="Room / online note">
+                  <Input {...form.register("room")} />
+                </FormField>
+                <FormField label="Capacity">
                   <Input type="number" {...form.register("capacity")} />
                 </FormField>
               </FieldRow>
-            ) : (
-              <FormField label="Capacity" error={form.formState.errors.capacity?.message}>
-                <Input type="number" {...form.register("capacity")} />
-              </FormField>
-            )}
-            <FieldRow>
-              <FormField label="Room" error={form.formState.errors.room?.message}>
-                <Input {...form.register("room")} />
-              </FormField>
-              <FormField label="Timetable" error={form.formState.errors.schedule?.message}>
-                <Input placeholder="Sunday 08:00-10:00" {...form.register("schedule")} />
-              </FormField>
-            </FieldRow>
-          </div>
-        </FormShell>
-        <FormShell title="Payment rules" description="Defaults copied into each new enrollment and used by due calculation.">
-          <div className="space-y-4">
-            <FieldRow>
-              <FormField label="Monthly fee" error={form.formState.errors.fee?.message}>
-                <Input type="number" step="0.01" {...form.register("fee")} />
-              </FormField>
-              <FormField label="Due day of month" error={form.formState.errors.defaultPaymentDueDay?.message}>
-                <Input type="number" min={1} max={28} {...form.register("defaultPaymentDueDay")} />
-              </FormField>
-            </FieldRow>
-            <FieldRow>
-              <FormField label="Free period" error={form.formState.errors.defaultFreePeriodType?.message}>
-                <Select {...form.register("defaultFreePeriodType")}>
-                  <option value="NONE">No free period</option>
-                  <option value="FIRST_WEEK">First week free</option>
-                  <option value="SECOND_WEEK">Second week free</option>
-                  <option value="FIRST_MONTH">First month free</option>
-                  <option value="CUSTOM_DAYS">Custom free days</option>
-                </Select>
-              </FormField>
-              <FormField label="Custom free days" error={form.formState.errors.defaultFreeDays?.message}>
-                <Input type="number" min={0} {...form.register("defaultFreeDays")} />
-              </FormField>
-            </FieldRow>
-          </div>
-        </FormShell>
-        <PanelActions onClose={onClose} isPending={isPending} label="Save class" />
-      </form>
-    </SidePanel>
-  );
-}
 
-function SidePanel({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-primary/35 backdrop-blur-sm">
-      <button className="absolute inset-0" aria-label="Close form" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto border-l bg-background p-5 shadow-luxury sm:p-7">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <Badge variant="secondary">Academic setup</Badge>
-            <h2 className="mt-3 text-2xl font-semibold">{title}</h2>
+              <FieldRow>
+                <FormField label="Status">
+                  <Select {...form.register("status")}>
+                    <option value="ACTIVE">Active</option>
+                    <option value="DISABLED">Disabled</option>
+                    <option value="ARCHIVED">Archived</option>
+                  </Select>
+                </FormField>
+                <div />
+              </FieldRow>
+            </div>
+          </FormShell>
+
+          <FormShell title="Class payments">
+            <div className="space-y-4">
+              <FieldRow>
+                <FormField label="Monthly fee">
+                  <Input type="number" step=".01" {...form.register("fee")} />
+                </FormField>
+                <FormField label="Admission fee (optional)">
+                  <Input type="number" step=".01" {...form.register("admissionFee")} />
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Payment start date">
+                  <Input type="date" {...form.register("paymentStartDate")} />
+                </FormField>
+                <FormField label="Due day">
+                  <Input type="number" min="1" max="28" {...form.register("defaultPaymentDueDay")} />
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Free period">
+                  <Select {...form.register("defaultFreePeriodType")}>
+                    <option value="NONE">None</option>
+                    <option value="FIRST_WEEK">First week</option>
+                    <option value="SECOND_WEEK">Second week</option>
+                    <option value="FIRST_MONTH">First month</option>
+                    <option value="CUSTOM_DAYS">Custom days</option>
+                  </Select>
+                </FormField>
+                <FormField label="Custom free days">
+                  <Input type="number" {...form.register("defaultFreeDays")} />
+                </FormField>
+              </FieldRow>
+            </div>
+          </FormShell>
+
+          <div className="flex justify-end gap-3 border-t pt-5">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button disabled={pending}>
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save class
+            </Button>
           </div>
-          <Button variant="outline" size="icon" onClick={onClose} aria-label="Close">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        {children}
+        </form>
       </div>
     </div>
-  );
-}
-
-function PanelActions({ onClose, isPending, label }: { onClose: () => void; isPending: boolean; label: string }) {
-  return (
-    <div className="sticky bottom-0 flex justify-end gap-3 border-t bg-background/92 py-4 backdrop-blur">
-      <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-        Cancel
-      </Button>
-      <Button type="submit" disabled={isPending}>
-        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-        {label}
-      </Button>
-    </div>
-  );
-}
-
-function ClassDataTable<TData>({ table, columns }: { table: ReturnType<typeof useReactTable<TData>>; columns: ColumnDef<TData>[] }) {
-  return (
-    <>
-      <div className="overflow-hidden rounded-xl border bg-white/75">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-sm">
-            <thead className="bg-muted/70">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th key={header.id} className="px-4 py-3 text-left font-semibold text-muted-foreground">
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="border-t transition hover:bg-muted/40">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-4">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={columns.length} className="px-4 py-14 text-center">
-                    <p className="font-semibold">No classes found</p>
-                    <p className="mt-1 text-sm text-muted-foreground">Add a course and class group to begin enrollments.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-            Previous
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-            Next
-          </Button>
-        </div>
-      </div>
-    </>
   );
 }

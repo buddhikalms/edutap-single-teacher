@@ -17,7 +17,7 @@ export default async function TeacherProfilePage({ params }: { params: Promise<{
       branch: true,
       classGroups: {
         include: {
-          course: true,
+          subject: true,
           _count: { select: { enrollments: true } }
         },
         orderBy: { name: "asc" }
@@ -74,12 +74,12 @@ export default async function TeacherProfilePage({ params }: { params: Promise<{
           <CardContent className="space-y-3">
             {teacher.classGroups.length ? (
               teacher.classGroups.map((classGroup) => (
-                <Link key={classGroup.id} href={`/classes/${classGroup.id}`} className="block rounded-xl border bg-white/70 p-4 transition hover:bg-muted/40">
+                <Link key={classGroup.id} href={`/dashboard/classes/${classGroup.id}`} className="block rounded-xl border bg-white/70 p-4 transition hover:bg-muted/40">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-semibold">{classGroup.name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {classGroup.course.subject ?? classGroup.course.name} · {classGroup.schedule}
+                        {classGroup.subject.name ?? classGroup.subject.name} · {classGroup.schedule}
                       </p>
                     </div>
                     <Badge variant="outline">{classGroup._count.enrollments} students</Badge>

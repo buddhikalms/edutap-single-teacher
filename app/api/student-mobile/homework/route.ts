@@ -13,7 +13,7 @@ export async function GET(request: Request) {
         status: status ? (status.toUpperCase() as never) : undefined,
         homework: { status: { in: ["PUBLISHED", "CLOSED"] } }
       },
-      include: { homework: { include: { classGroup: true, course: true, attachments: true } } },
+      include: { homework: { include: { classGroup: true, subject: true, attachments: true } } },
       orderBy: { homework: { deadline: "asc" } }
     });
 
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         deadline: submission.homework.deadline.toISOString(),
         marks: submission.homework.marks,
         className: submission.homework.classGroup.name,
-        courseName: submission.homework.course?.name,
+        courseName: submission.homework.subject?.name,
         status: submission.status,
         reviewStatus: submission.reviewStatus,
         marksAwarded: submission.marksAwarded ? Number(submission.marksAwarded) : null,

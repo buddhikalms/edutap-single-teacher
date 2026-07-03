@@ -127,7 +127,7 @@ export async function markDuePayment(input: DuePaymentInput): Promise<ActionStat
 
     const classGroup = await prisma.classGroup.findFirstOrThrow({
       where: { id: parsed.classGroupId, instituteId },
-      include: { course: true }
+      include: { subject: true }
     });
     const enrollment = await prisma.enrollment.findUnique({
       where: {
@@ -139,7 +139,7 @@ export async function markDuePayment(input: DuePaymentInput): Promise<ActionStat
       select: { monthlyFeeOverride: true, discount: true }
     });
     const dueDate = paymentDueDate(parsed.month, classGroup.defaultPaymentDueDay);
-    const amount = Number(enrollment?.monthlyFeeOverride ?? classGroup.monthlyFee ?? classGroup.course.fee);
+    const amount = Number(enrollment?.monthlyFeeOverride ?? classGroup.monthlyFee ?? 0);
     const computed = paymentStatus(amount, parsed.discount, parsed.paidAmount, dueDate);
 
     const existing = await prisma.payment.findFirst({

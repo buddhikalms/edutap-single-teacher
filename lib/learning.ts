@@ -42,7 +42,6 @@ export async function assertCanManageClass(input: {
       instituteId: input.instituteId
     },
     include: {
-      course: { select: { id: true } },
       teacher: { select: { userId: true } }
     }
   });

@@ -1,6 +1,8 @@
 # EduTap
 
-Premium student management SaaS foundation built with Next.js App Router, TypeScript, Tailwind CSS, shadcn-style components, Prisma, MySQL, NextAuth, Zod, Recharts, and TanStack Table.
+Self-hosted learning and tuition management for one private teacher, built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, MySQL, NextAuth, Zod, Recharts, and TanStack Table.
+
+Each installation has its own server/subdomain/database. The legacy `Institute` record is retained internally as one hidden workspace; there are no package limits, institute switching, or additional-teacher management flows.
 
 ## Folder Structure
 
@@ -84,26 +86,22 @@ NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 ```
 
-5. Push the Prisma schema and seed demo data:
+5. Push the Prisma schema:
 
 ```bash
 npm run prisma:generate
 npm run prisma:push
-npm run seed
 ```
 
-6. Start the dev server:
+6. Start the dev server and open the first-install wizard:
 
 ```bash
 npm run dev
 ```
 
-Demo login after seeding:
+Visit `http://localhost:3000`. A fresh installation redirects to `/setup`, where the teacher creates their profile, branding, default location, and owner credentials. Setup also seeds grades from Pre School through Grade 11 and redirects to the teacher dashboard.
 
-```text
-Email: admin@edutap.test
-Password: EduTap@2026
-```
+Uploaded profile photos, logos, and student images are stored in `public/uploads/images`. Ensure this directory is writable and persisted when deploying with containers or mounted storage. Supported formats are JPG, PNG, WebP, and GIF up to 5 MB.
 
 ## Prisma Commands
 
@@ -118,13 +116,16 @@ npm run seed
 ## First Version Includes
 
 - Credentials authentication with NextAuth and bcrypt.
-- Register institute flow with Zod validation.
+- One-time teacher owner setup wizard.
 - Role-aware route protection through Next proxy.
 - Premium dashboard shell with sidebar, top navbar, user menu, and search.
 - Dashboard overview stats, recent activity, Recharts visualizations, loading UI, and error UI.
 - Student management with list filters, add/edit/delete, profile pages, guardian details, NFC UID, QR code, assigned classes, payment summaries, and attendance summaries.
-- Teacher management with list, add/edit/delete, class assignment, and profile pages.
-- Course and class management with subject, grade, fee, timetable, teacher, capacity, and enrolled student views.
+- Public teacher profile and editable teacher/brand settings.
+- Independent Subject catalog with colors, icons, status, search, and linked class/course counts.
+- Recurring class management with subject, grade, location, schedule, attendance, monthly/admission fees, and payment-start/free-period rules. Classes do not reference courses.
+- Structured courses with independent access and pricing, modules, preview/lock rules, uploaded resources, recordings/papers, quizzes, manual unlocks, payments, and learner progress.
+- Student browser/PWA portal at `/student/login` with Student ID/mobile/email login, dashboard, classes, courses and secure player, homework uploads, timed quizzes, attendance, payments/receipts, notifications, web push, and profile security.
 - Enrollment management with manual assignment, bulk assignment, active/inactive status, and removal.
 - Attendance management with active sessions, manual attendance, NFC UID marking, secure QR token marking, terminal UI, audit logs, and daily/class/student reports.
 - Payment management with finance dashboard, student ledgers, due calculation, partial payments, printable receipts, reports, CSV export, and attendance payment-status integration.

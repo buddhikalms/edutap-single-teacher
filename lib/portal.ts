@@ -10,15 +10,20 @@ export async function getPortalContext() {
     redirect("/portal/login");
   }
 
-  if (session.user.role !== "PARENT" && session.user.role !== "STUDENT") {
+  if (!["PARENT", "STUDENT", "FAMILY"].includes(session.user.role)) {
     redirect("/dashboard");
   }
+  const account = await prisma.user.findUnique({ where: { id: session.user.id }, select: { accountStatus: true } });
+  if (session.user.role === "FAMILY" && account?.accountStatus !== "ACTIVE") redirect("/family/pending");
 
   const parent =
-    session.user.role === "PARENT"
+    session.user.role === "PARENT" || session.user.role === "FAMILY"
       ? await prisma.parent.findFirst({
           where: { userId: session.user.id, instituteId: session.user.instituteId },
-          include: { students: { orderBy: { firstName: "asc" } } }
+          include: {
+            students: { orderBy: { firstName: "asc" } },
+            studentLinks: { include: { student: true } }
+          }
         })
       : null;
 
@@ -29,7 +34,11 @@ export async function getPortalContext() {
         })
       : null;
 
-  const students = parent?.students ?? (student ? [student] : []);
+  const students = parent
+    ? [...parent.students, ...parent.studentLinks.map((link) => link.student)]
+        .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
+        .sort((a, b) => a.firstName.localeCompare(b.firstName))
+    : student ? [student] : [];
 
   if (students.length === 0) {
     redirect("/portal/login");

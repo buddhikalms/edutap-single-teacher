@@ -15,13 +15,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: parsed.data.email.toLowerCase() },
+    const identifier = parsed.data.email.trim();
+    const normalized = identifier.replace(/[^\d+]/g, "");
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier.toLowerCase() },
+          ...(normalized.length >= 6 ? [{ parent: { phone: { in: [identifier, normalized] } } }] : [])
+        ]
+      },
       select: {
         id: true,
         name: true,
         email: true,
         passwordHash: true,
+        accountStatus: true,
         role: true,
         instituteId: true,
         parent: {
@@ -55,8 +63,14 @@ export async function POST(request: Request) {
       }
     });
 
-    if (!user || user.role !== "PARENT" || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
+    if (!user?.passwordHash || !["PARENT", "FAMILY"].includes(user.role) || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
       return NextResponse.json({ ok: false, message: "Invalid parent credentials." }, { status: 401 });
+    }
+    if (user.accountStatus === "PENDING_APPROVAL") {
+      return NextResponse.json({ ok: false, message: "Your enrollment request is pending teacher approval." }, { status: 403 });
+    }
+    if (user.accountStatus === "REJECTED") {
+      return NextResponse.json({ ok: false, message: "Your enrollment request was not approved. Please contact the teacher." }, { status: 403 });
     }
 
     if (!user.instituteId || !user.parent) {

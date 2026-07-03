@@ -50,7 +50,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams?: Pr
       },
       include: {
         classGroup: true,
-        course: true,
+        subject: true,
         submissions: true
       },
       orderBy: { deadline: "asc" }
@@ -106,7 +106,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams?: Pr
                       <div>
                         <Badge variant={statusVariant(item.status)}>{item.status.toLowerCase()}</Badge>
                         <h3 className="mt-3 text-xl font-semibold">{item.title}</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">{item.classGroup.name} · {item.course?.name ?? "Class course"}</p>
+                        <p className="mt-2 text-sm text-muted-foreground">{item.classGroup.name} · {item.subject?.name ?? "Class homework"}</p>
                       </div>
                       <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">
                         <FileText className="h-5 w-5" />

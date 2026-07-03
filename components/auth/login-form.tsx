@@ -53,7 +53,7 @@ export function LoginForm() {
       <div className="mb-7">
         <h2 className="text-2xl font-semibold tracking-normal">Welcome back</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Sign in to your institute dashboard and continue managing today’s classes.
+          Sign in to your teaching dashboard and continue managing today&apos;s classes.
         </p>
       </div>
 
@@ -80,16 +80,10 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        New institute?{" "}
-        <Link href="/register" className="font-semibold text-primary hover:underline">
-          Register workspace
-        </Link>
-      </p>
       <p className="mt-3 text-center text-sm text-muted-foreground">
-        Student?{" "}
+        EduTap user?{" "}
         <Link href="/student/register" className="font-semibold text-primary hover:underline">
-          Create student account
+          Create EduTap Account
         </Link>
       </p>
     </div>

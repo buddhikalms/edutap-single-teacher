@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { Prisma, StudentStatus } from "@prisma/client";
 import { actionError, type ActionState, getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -81,6 +82,8 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
     await assertBranch(instituteId, parsed.branchId);
     await assertUniqueNfcUid(instituteId, parsed.nfcUid);
 
+    const temporaryPassword = `Edu${randomUUID().replace(/-/g, "").slice(0, 7)}!`;
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
     await prisma.$transaction(async (tx) => {
       const parent = await findOrCreateParent(tx, instituteId, {
         name: parsed.parentName,
@@ -104,6 +107,21 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
         }
       });
 
+      const loginEmail = parsed.email?.toLowerCase() ?? `${parsed.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, "")}@student.edutap.local`;
+      const user = await tx.user.create({
+        data: {
+          name: `${parsed.firstName} ${parsed.lastName}`,
+          email: loginEmail,
+          passwordHash,
+          role: "STUDENT",
+          mustChangePassword: true,
+          instituteId,
+          branchId: parsed.branchId,
+          image: parsed.avatarUrl ?? null
+        }
+      });
+      await tx.student.update({ where: { id: student.id }, data: { userId: user.id } });
+
       await tx.parentStudent.upsert({
         where: { parentId_studentId: { parentId: parent.id, studentId: student.id } },
         create: { parentId: parent.id, studentId: student.id, relation: parsed.parentRelationship },
@@ -125,7 +143,7 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
     });
 
     revalidatePath("/students");
-    return { ok: true, message: "Student added successfully." };
+    return { ok: true, message: `Student added. Login ID: ${parsed.admissionNo} · Temporary password: ${temporaryPassword}` };
   } catch (error) {
     const duplicate = uniqueMessage(error);
     if (duplicate) {
@@ -178,6 +196,17 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
           }
         }
       });
+
+      if (existing.userId) {
+        await tx.user.update({
+          where: { id: existing.userId },
+          data: {
+            name: `${parsed.firstName} ${parsed.lastName}`,
+            image: parsed.avatarUrl ?? null,
+            branchId: parsed.branchId
+          }
+        });
+      }
 
       await tx.parentStudent.upsert({
         where: { parentId_studentId: { parentId: parent.id, studentId: id } },

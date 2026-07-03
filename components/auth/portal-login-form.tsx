@@ -22,8 +22,8 @@ export function PortalLoginForm() {
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "avery.parent@edutap.test",
-      password: "EduTap@2026"
+      email: "",
+      password: ""
     }
   });
 
@@ -33,19 +33,19 @@ export function PortalLoginForm() {
       email: values.email,
       password: values.password,
       redirect: false,
-      callbackUrl: searchParams.get("callbackUrl") ?? "/portal"
+      callbackUrl: searchParams.get("callbackUrl") ?? "/family/dashboard"
     });
     setIsSubmitting(false);
 
     if (result?.error) {
       toast.error("Portal login failed", {
-        description: "Use the guardian/student email or linked mobile number."
+        description: result.error === "CredentialsSignin" ? "Use the guardian/student email or linked mobile number." : result.error
       });
       return;
     }
 
-    toast.success("Welcome to your EduTap portal");
-    router.push(result?.url ?? "/portal");
+    toast.success("Welcome to your EduTap Account");
+    router.push(result?.url ?? "/family/dashboard");
     router.refresh();
   }
 
@@ -56,9 +56,9 @@ export function PortalLoginForm() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-glow">
             <ShieldCheck className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-normal">Family portal</h1>
+          <h1 className="text-2xl font-semibold tracking-normal">EduTap Account</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Sign in with your parent or student email, or a linked mobile number.
+            Sign in with the family mobile number, email, or Google.
           </p>
         </div>
 
@@ -75,7 +75,11 @@ export function PortalLoginForm() {
           </div>
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-            Enter family portal
+            Sign in to EduTap Account
+          </Button>
+          <div className="relative text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t"><span className="relative bg-white px-3">or</span></div>
+          <Button type="button" size="lg" variant="outline" className="w-full" onClick={() => signIn("google", { callbackUrl: "/family/register/google" })}>
+            Continue with Google
           </Button>
         </form>
 

@@ -29,7 +29,7 @@ export default async function ParentDashboardPage() {
       where: { studentId: { in: context.studentIds }, active: true },
       include: {
         student: { select: { firstName: true, lastName: true } },
-        classGroup: { include: { course: true, teacher: true } }
+        classGroup: { include: { subject: true, teacher: true } }
       },
       take: 6
     })
@@ -78,7 +78,7 @@ export default async function ParentDashboardPage() {
                   </p>
                   <p className="text-xs text-muted-foreground">{enrollment.classGroup.teacher?.name ?? "Teacher pending"}</p>
                 </div>
-                <Badge variant="outline">{formatCurrency(Number(enrollment.classGroup.course.fee), context.currency)}</Badge>
+                <Badge variant="outline">{formatCurrency(Number(enrollment.classGroup.monthlyFee), context.currency)}</Badge>
               </div>
             ))}
           </CardContent>
