@@ -30,6 +30,13 @@ enum AuthProvider {
   BOTH
 }
 
+enum PasswordStatus {
+  NOT_SETUP
+  ACTIVE
+  RESET_REQUIRED
+  DISABLED
+}
+
 enum StudentStatus {
   PENDING_APPROVAL
   ACTIVE
@@ -473,6 +480,7 @@ model Institute {
   studentCards                StudentCard[]
   studentCardHistory          StudentCardHistory[]
   cardScanLogs                CardScanLog[]
+  studentActivationTokens     StudentActivationToken[]
   cardPrintBatches            CardPrintBatch[]
   cardPrintBatchItems         CardPrintBatchItem[]
   enrollmentRequests          EnrollmentRequest[]
@@ -672,12 +680,15 @@ model User {
   mobile                    String?                 @unique
   googleId                  String?                 @unique
   passwordHash              String?
+  passwordStatus            PasswordStatus          @default(ACTIVE)
   authProvider              AuthProvider            @default(PASSWORD)
   role                      UserRole                @default(STAFF)
   image                     String?
   emailVerified             DateTime?
   mustChangePassword        Boolean                 @default(false)
   accountStatus             UserAccountStatus       @default(ACTIVE)
+  lastLoginAt               DateTime?
+  lastLoginDevice           String?                 @db.Text
   instituteId               String?
   branchId                  String?
   createdAt                 DateTime                @default(now())
@@ -710,9 +721,11 @@ model User {
   familyStudents            Student[]               @relation("FamilyStudents")
   familyEnrollmentRequests  EnrollmentRequest[]     @relation("EnrollmentRequestFamilyUser")
   enrollmentPaymentSlips    EnrollmentPaymentSlip[]
+  studentActivationTokens   StudentActivationToken[]
 
   @@index([instituteId])
   @@index([branchId])
+  @@index([passwordStatus])
 }
 
 model MobileAuthToken {
@@ -741,6 +754,9 @@ model Student {
   nfcUid                      String?
   qrCode                      String?
   attendanceToken             String?                     @default(cuid())
+  firstLoginCompleted         Boolean                     @default(false)
+  firstLoginAt                DateTime?
+  activeDeviceInfo            String?                     @db.Text
   userId                      String?                     @unique
   familyUserId                String?
   instituteId                 String
@@ -770,6 +786,7 @@ model Student {
   cards                       StudentCard[]
   cardHistory                 StudentCardHistory[]
   cardScanLogs                CardScanLog[]
+  activationTokens            StudentActivationToken[]
   cardPrintBatchItems         CardPrintBatchItem[]
   convertedEnrollmentRequests EnrollmentRequest[]         @relation("ConvertedEnrollmentStudent")
   requestedEnrollment         EnrollmentRequest?          @relation("RequestedEnrollmentStudent")
@@ -1260,6 +1277,7 @@ model StudentCard {
   replacedBy        User?                @relation("StudentCardReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
   history           StudentCardHistory[]
   scanLogs          CardScanLog[]
+  activationTokens  StudentActivationToken[]
   printBatchItems   CardPrintBatchItem[]
 
   @@unique([instituteId, cardNumber])
@@ -1270,6 +1288,29 @@ model StudentCard {
   @@index([studentId, status])
   @@index([issuedById])
   @@index([replacedById])
+}
+
+model StudentActivationToken {
+  id          String      @id @default(cuid())
+  tokenHash   String      @unique
+  instituteId String
+  studentId   String
+  userId      String
+  cardId      String
+  method      CardScanType
+  deviceInfo  String?     @db.Text
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime    @default(now())
+  institute   Institute   @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card        StudentCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([userId])
+  @@index([cardId])
+  @@index([expiresAt])
 }
 
 model CardPrintBatch {

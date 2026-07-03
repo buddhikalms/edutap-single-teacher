@@ -47,6 +47,7 @@ export const authOptions: NextAuthOptions = {
             name: true,
             email: true,
             passwordHash: true,
+            passwordStatus: true,
             accountStatus: true,
             role: true,
             instituteId: true,
@@ -67,8 +68,14 @@ export const authOptions: NextAuthOptions = {
         if (!isValid) {
           return null;
         }
+        if (user.role === "STUDENT" && user.passwordStatus !== "ACTIVE") throw new Error("Activate your account with QR or NFC before using password login.");
         if (user.role !== "FAMILY" && user.accountStatus === "PENDING_APPROVAL") throw new Error(PENDING_ACCOUNT_MESSAGE);
         if (user.role !== "FAMILY" && user.accountStatus === "REJECTED") throw new Error(REJECTED_ACCOUNT_MESSAGE);
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date(), lastLoginDevice: "Password login" }
+        });
 
         return {
           id: user.id,
@@ -97,7 +104,8 @@ export const authOptions: NextAuthOptions = {
       const existing = await prisma.user.findFirst({
         where: { OR: [{ googleId: account.providerAccountId }, { email }] }
       });
-      if (existing && existing.role !== "FAMILY") return false;
+      if (existing && !["FAMILY", "STUDENT"].includes(existing.role)) return false;
+      if (existing?.role === "STUDENT" && existing.passwordStatus !== "ACTIVE") return false;
       if (existing) {
         await prisma.user.update({
           where: { id: existing.id },
@@ -105,7 +113,9 @@ export const authOptions: NextAuthOptions = {
             googleId: account.providerAccountId,
             image: googlePicture ?? existing.image,
             emailVerified: existing.emailVerified ?? new Date(),
-            authProvider: existing.passwordHash ? "BOTH" : "GOOGLE"
+            authProvider: existing.passwordHash ? "BOTH" : "GOOGLE",
+            lastLoginAt: new Date(),
+            lastLoginDevice: "Google"
           }
         });
       } else {
@@ -173,13 +183,14 @@ async function findPortalUser(identifier: string) {
       userId: { not: null },
       OR: [{ phone: identifier }, { phone: normalized }]
     },
-    select: {
+          select: {
       user: {
         select: {
           id: true,
           name: true,
           email: true,
           passwordHash: true,
+          passwordStatus: true,
           accountStatus: true,
           role: true,
           instituteId: true,
@@ -212,6 +223,7 @@ async function findPortalUser(identifier: string) {
           name: true,
           email: true,
           passwordHash: true,
+          passwordStatus: true,
           accountStatus: true,
           role: true,
           instituteId: true,

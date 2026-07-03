@@ -24,8 +24,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               Teach, manage, and grow from one calm workspace.
             </h1>
             <p className="mt-6 max-w-lg text-base leading-7 text-white/70">
-              Classes, courses, attendance, payments, homework, quizzes, resources, and parent
-              communication—together.
+              Classes, courses, attendance, payments, homework, quizzes, resources, and parent communication together.
             </p>
           </div>
 

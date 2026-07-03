@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     if (!student?.user?.passwordHash || student.user.role !== "STUDENT" || !(await bcrypt.compare(parsed.password, student.user.passwordHash))) {
       return NextResponse.json({ ok: false, message: "Invalid student credentials." }, { status: 401 });
     }
+    if (student.user.passwordStatus !== "ACTIVE") {
+      return NextResponse.json({ ok: false, message: "Activate your account with QR or NFC before using password login." }, { status: 403 });
+    }
     if (student.user.accountStatus === "PENDING_APPROVAL") {
       return NextResponse.json({ ok: false, message: "Your enrollment request is pending teacher approval." }, { status: 403 });
     }
@@ -48,6 +51,11 @@ export async function POST(request: Request) {
       deviceName: parsed.deviceName,
       platform: parsed.platform,
       pushToken: parsed.pushToken
+    });
+
+    await prisma.user.update({
+      where: { id: student.user.id },
+      data: { lastLoginAt: new Date(), lastLoginDevice: parsed.deviceName ?? parsed.platform ?? "Student mobile app" }
     });
 
     return NextResponse.json({

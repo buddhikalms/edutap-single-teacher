@@ -28,6 +28,11 @@ export async function createStudentDevice(input: {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + TOKEN_TTL_DAYS);
 
+  await prisma.studentDevice.updateMany({
+    where: { studentId: input.studentId, isActive: true },
+    data: { isActive: false }
+  });
+
   await prisma.studentDevice.create({
     data: {
       tokenHash: hashStudentToken(rawToken),
@@ -64,7 +69,7 @@ export async function requireStudentMobileUser(request: Request) {
     }
   });
 
-  if (!savedToken || !savedToken.studentId || !savedToken.student || !savedToken.expiresAt || savedToken.expiresAt < new Date()) {
+  if (!savedToken || !savedToken.isActive || !savedToken.studentId || !savedToken.student || !savedToken.expiresAt || savedToken.expiresAt < new Date()) {
     throw new StudentMobileAuthError("Your student session has expired. Please sign in again.");
   }
 

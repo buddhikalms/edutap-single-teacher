@@ -12,7 +12,7 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
-import { CreditCard, Eye, Loader2, Pencil, Plus, QrCode, Radio, Search, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { CreditCard, Eye, KeyRound, Loader2, Pencil, Plus, QrCode, Radio, Search, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createStudent, deleteStudent, updateStudent } from "@/app/(dashboard)/students/actions";
 import { QrCodeScanner } from "@/components/cards/camera-qr-scanner";
@@ -57,6 +57,12 @@ export type StudentRow = {
   nfcUid: string | null;
   qrCode: string | null;
   qrToken: string | null;
+  passwordStatus: "NOT_SETUP" | "ACTIVE" | "RESET_REQUIRED" | "DISABLED";
+  firstLoginCompleted: boolean;
+  firstLoginAt: string | null;
+  googleLinked: boolean;
+  lastLoginAt: string | null;
+  activeDevice: string | null;
   branchId: string;
   branch: string;
   classes: string;
@@ -168,6 +174,11 @@ export function StudentsTable({ data, branches, currency }: { data: StudentRow[]
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => <StatusBadge status={row.original.status} />
+      },
+      {
+        id: "activation",
+        header: "Activation",
+        cell: ({ row }) => <ActivationStatus student={row.original} />
       },
       {
         accessorKey: "pendingAmount",
@@ -640,4 +651,29 @@ function DataTable<TData>({
 function StatusBadge({ status }: { status: StudentRow["status"] }) {
   const variant = status === "ACTIVE" ? "success" : status === "PAUSED" ? "warning" : "outline";
   return <Badge variant={variant}>{status.toLowerCase()}</Badge>;
+}
+
+function ActivationStatus({ student }: { student: StudentRow }) {
+  const activated = student.firstLoginCompleted || student.passwordStatus === "ACTIVE";
+  const lastLogin = student.lastLoginAt ? new Date(student.lastLoginAt).toLocaleDateString() : "No login";
+
+  return (
+    <div className="min-w-[180px] space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        <Badge variant={activated ? "success" : "warning"}>
+          <ShieldCheck className="h-3 w-3" />
+          {activated ? "Activated" : "Not Activated"}
+        </Badge>
+        <Badge variant={student.passwordStatus === "ACTIVE" ? "outline" : "warning"}>
+          <KeyRound className="h-3 w-3" />
+          {student.passwordStatus === "ACTIVE" ? "Password Set" : "No Password"}
+        </Badge>
+        {student.googleLinked ? <Badge variant="secondary">Google Linked</Badge> : null}
+      </div>
+      <p className="text-xs text-muted-foreground">Last login: {lastLogin}</p>
+      <p className="max-w-[220px] truncate text-xs text-muted-foreground" title={student.activeDevice ?? undefined}>
+        Device: {student.activeDevice ?? "None"}
+      </p>
+    </div>
+  );
 }

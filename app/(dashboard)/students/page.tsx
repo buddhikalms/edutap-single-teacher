@@ -10,6 +10,12 @@ export default async function StudentsPage() {
       where: { instituteId },
       include: {
         branch: true,
+        user: true,
+        devices: {
+          where: { isActive: true },
+          orderBy: { lastUsedAt: "desc" },
+          take: 1
+        },
         parents: { take: 1 },
         payments: true,
         attendance: true,
@@ -51,6 +57,12 @@ export default async function StudentsPage() {
     nfcUid: student.nfcUid,
     qrCode: student.qrCode,
     qrToken: student.cards[0]?.qrToken ?? student.attendanceToken,
+    passwordStatus: student.user?.passwordStatus ?? "NOT_SETUP",
+    firstLoginCompleted: student.firstLoginCompleted,
+    firstLoginAt: student.firstLoginAt?.toISOString() ?? null,
+    googleLinked: Boolean(student.user?.googleId),
+    lastLoginAt: student.user?.lastLoginAt?.toISOString() ?? null,
+    activeDevice: student.activeDeviceInfo ?? student.user?.lastLoginDevice ?? student.devices[0]?.deviceName ?? student.devices[0]?.platform ?? null,
     dateOfBirth: student.dateOfBirth ? student.dateOfBirth.toISOString().slice(0, 10) : "",
     branchId: student.branchId,
     branch: student.branch.name,

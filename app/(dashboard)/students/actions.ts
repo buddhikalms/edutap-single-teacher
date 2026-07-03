@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import bcrypt from "bcryptjs";
 import { Prisma, StudentStatus } from "@prisma/client";
 import { actionError, type ActionState, getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -82,8 +81,7 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
     await assertBranch(instituteId, parsed.branchId);
     await assertUniqueNfcUid(instituteId, parsed.nfcUid);
 
-    const temporaryPassword = `Edu${randomUUID().replace(/-/g, "").slice(0, 7)}!`;
-    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    const qrToken = parsed.qrToken ?? `edutap_qr_${randomUUID()}`;
     await prisma.$transaction(async (tx) => {
       const parent = await findOrCreateParent(tx, instituteId, {
         name: parsed.parentName,
@@ -112,9 +110,11 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
         data: {
           name: `${parsed.firstName} ${parsed.lastName}`,
           email: loginEmail,
-          passwordHash,
+          passwordHash: null,
+          passwordStatus: "NOT_SETUP",
           role: "STUDENT",
-          mustChangePassword: true,
+          mustChangePassword: false,
+          accountStatus: parsed.status === "PENDING_APPROVAL" ? "PENDING_APPROVAL" : parsed.status === "REJECTED" ? "REJECTED" : "ACTIVE",
           instituteId,
           branchId: parsed.branchId,
           image: parsed.avatarUrl ?? null
@@ -136,14 +136,14 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
           cardNumber: parsed.cardNumber,
           nfcUid: parsed.nfcUid,
           qrCode: parsed.qrCode,
-          qrToken: parsed.qrToken
+          qrToken
         },
         requireCard: false
       });
     });
 
     revalidatePath("/students");
-    return { ok: true, message: `Student added. Login ID: ${parsed.admissionNo} · Temporary password: ${temporaryPassword}` };
+    return { ok: true, message: "Student added. First login must be activated with the assigned QR or NFC card." };
   } catch (error) {
     const duplicate = uniqueMessage(error);
     if (duplicate) {
@@ -203,7 +203,8 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
           data: {
             name: `${parsed.firstName} ${parsed.lastName}`,
             image: parsed.avatarUrl ?? null,
-            branchId: parsed.branchId
+            branchId: parsed.branchId,
+            accountStatus: parsed.status === "PENDING_APPROVAL" ? "PENDING_APPROVAL" : parsed.status === "REJECTED" ? "REJECTED" : "ACTIVE"
           }
         });
       }

@@ -64,7 +64,9 @@ export async function registerStudent(input: StudentSelfRegistrationInput) {
           name: `${parsed.firstName} ${parsed.lastName}`.trim(),
           email,
           passwordHash,
+          passwordStatus: "ACTIVE",
           role: UserRole.STUDENT,
+          accountStatus: "PENDING_APPROVAL",
           instituteId: institute.id,
           branchId: branch.id
         }
@@ -90,6 +92,7 @@ export async function registerStudent(input: StudentSelfRegistrationInput) {
           email,
           phone: parsed.phone ?? null,
           dateOfBirth: toDate(parsed.dateOfBirth),
+          status: "PENDING_APPROVAL",
           instituteId: institute.id,
           branchId: branch.id,
           attendanceToken: randomUUID(),
