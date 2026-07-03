@@ -16,7 +16,11 @@ function urlBase64ToUint8Array(value: string) {
   return output;
 }
 
-export function WebPushPermissionCard() {
+type WebPushPermissionCardProps = {
+  audience?: "parent" | "student";
+};
+
+export function WebPushPermissionCard({ audience = "parent" }: WebPushPermissionCardProps) {
   const [permission, setPermission] = useState<NotificationPermission>(() =>
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
@@ -73,7 +77,10 @@ export function WebPushPermissionCard() {
 
       setEnabled(true);
       toast.success("Web alerts enabled", {
-        description: "EduTap can now send class and payment alerts to this browser."
+        description:
+          audience === "student"
+            ? "EduTap can now send class, homework, and quiz alerts to this browser."
+            : "EduTap can now send class and payment alerts to this browser."
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not enable web notifications.");
@@ -93,11 +100,23 @@ export function WebPushPermissionCard() {
           <BellRing className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Enable class alerts</p>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">Receive class and attendance alerts for your linked children on this browser.</p>
+          <p className="font-semibold">{audience === "student" ? "Enable mobile alerts" : "Enable class alerts"}</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {audience === "student"
+              ? "Receive class, homework, quiz, and payment alerts on this mobile browser."
+              : "Receive class and attendance alerts for your linked children on this browser."}
+          </p>
           <Button type="button" className="mt-4" onClick={enableNotifications} disabled={loading || permission === "denied"}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {permission === "denied" ? "Notifications blocked" : permission === "granted" ? "Connect class alerts" : "Enable class alerts"}
+            {permission === "denied"
+              ? "Notifications blocked"
+              : permission === "granted"
+                ? audience === "student"
+                  ? "Connect mobile alerts"
+                  : "Connect class alerts"
+                : audience === "student"
+                  ? "Enable mobile alerts"
+                  : "Enable class alerts"}
           </Button>
         </div>
       </div>

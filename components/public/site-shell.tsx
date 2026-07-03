@@ -51,7 +51,7 @@ export function PublicFooter() {
             <Link href="/student/register" className="hover:text-white">
               Request class enrollment
             </Link>
-            <Link href="/family/login" className="hover:text-white">
+            <Link href="/student/login" className="hover:text-white">
               Student login
             </Link>
             <Link href="/login" className="hover:text-white">

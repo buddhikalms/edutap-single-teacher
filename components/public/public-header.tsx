@@ -34,7 +34,7 @@ export function PublicHeader() {
         </nav>
         <div className="hidden items-center gap-2 md:flex">
           <Button asChild variant="ghost">
-            <Link href="/family/login">
+            <Link href="/student/login">
               <LogIn className="h-4 w-4" />
               Student login
             </Link>
@@ -74,7 +74,7 @@ export function PublicHeader() {
             ))}
             <div className="mt-2 grid gap-2 border-t pt-3 md:hidden">
               <Button asChild variant="ghost" className="justify-start">
-                <Link href="/family/login" onClick={() => setIsOpen(false)}>
+                <Link href="/student/login" onClick={() => setIsOpen(false)}>
                   <LogIn className="h-4 w-4" />
                   Student login
                 </Link>

@@ -80,7 +80,7 @@ export function NotificationCenter({
       body: String(formData.get("body") ?? ""),
       audience: audience as "INSTITUTE" | "CLASS" | "STUDENTS",
       type: String(formData.get("type") ?? "NOTICE") as "NOTICE",
-      channel: String(formData.get("channel") ?? "IN_APP") as "IN_APP",
+      channel: String(formData.get("channel") ?? "IN_APP") as "IN_APP" | "PUSH" | "WEB_PUSH" | "SMS" | "WHATSAPP" | "EMAIL",
       classGroupId: audience === "CLASS" ? classGroupId : undefined,
       studentIds: audience === "STUDENTS" ? selectedStudents : []
     };
@@ -131,6 +131,7 @@ export function NotificationCenter({
                 <Label htmlFor="channel">Channel</Label>
                 <Select id="channel" name="channel" defaultValue="IN_APP">
                   <option value="IN_APP">In-app now</option>
+                  <option value="WEB_PUSH">Student web push now</option>
                   <option value="PUSH">Push queued</option>
                   <option value="SMS">SMS ready</option>
                   <option value="WHATSAPP">WhatsApp ready</option>

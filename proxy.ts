@@ -22,7 +22,6 @@ export default withAuth({
       if (pathname.startsWith("/dashboard/enrollment-requests")) {
         return canAccess(token.role, "enrollment");
       }
-      if (pathname.startsWith("/student/")) return token.role === "STUDENT";
       if (pathname.startsWith("/subjects")) {
         return canAccess(token.role, "subjects");
       }
@@ -84,7 +83,6 @@ export const config = {
     "/reports/:path*",
     "/settings/:path*",
     "/notifications/:path*",
-    "/student/:path*",
     "/admin/:path*"
   ]
 };

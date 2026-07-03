@@ -12,7 +12,7 @@ const unsubscribeSchema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id || !session.user.instituteId || !["PARENT", "FAMILY"].includes(session.user.role)) {
+  if (!session?.user?.id || !session.user.instituteId || !["PARENT", "FAMILY", "STUDENT"].includes(session.user.role)) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 

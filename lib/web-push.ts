@@ -31,7 +31,7 @@ export async function sendWebPushMessages(input: {
   body: string;
   data?: Record<string, unknown>;
 }) {
-  if (!input.parentId && !input.userId) {
+  if (!input.parentId && !input.studentId && !input.userId) {
     return { sent: 0, failed: 0, skipped: true };
   }
 
@@ -44,6 +44,7 @@ export async function sendWebPushMessages(input: {
       instituteId: input.instituteId,
       isActive: true,
       ...(input.parentId ? { parentId: input.parentId } : {}),
+      ...(input.studentId ? { studentId: input.studentId } : {}),
       ...(input.userId ? { userId: input.userId } : {})
     }
   });
@@ -58,9 +59,13 @@ export async function sendWebPushMessages(input: {
       data: {
         ...input.data,
         notificationId: input.notificationId,
-        actionUrl: (input.data?.actionUrl as string | undefined) ?? "/portal/notifications"
+        actionUrl:
+          (input.data?.actionUrl as string | undefined) ??
+          (input.studentId && !input.parentId ? "/student/notifications" : "/portal/notifications")
       }
     });
+    const recipientType = input.studentId && !input.parentId ? "STUDENT" : input.parentId ? "PARENT" : "USER";
+    const recipientId = input.studentId && !input.parentId ? input.studentId : input.parentId ?? subscription.parentId ?? input.userId ?? subscription.userId;
 
     try {
       const response = await webPush.sendNotification(
@@ -90,8 +95,8 @@ export async function sendWebPushMessages(input: {
           target: subscription.endpoint,
           provider: "web-push",
           providerRef: String(response.statusCode),
-          recipientType: "PARENT",
-          recipientId: input.parentId ?? subscription.parentId,
+          recipientType,
+          recipientId,
           payloadJson: input.data as Prisma.InputJsonObject | undefined,
           metadata: { subscriptionId: subscription.id, ...input.data } as Prisma.InputJsonObject,
           sentAt: new Date()
@@ -124,8 +129,8 @@ export async function sendWebPushMessages(input: {
           message: input.body,
           target: subscription.endpoint,
           provider: "web-push",
-          recipientType: "PARENT",
-          recipientId: input.parentId ?? subscription.parentId,
+          recipientType,
+          recipientId,
           payloadJson: input.data as Prisma.InputJsonObject | undefined,
           metadata: { subscriptionId: subscription.id, ...input.data } as Prisma.InputJsonObject,
           errorMessage: error instanceof Error ? error.message : "Web push failed.",
@@ -136,6 +141,39 @@ export async function sendWebPushMessages(input: {
   }
 
   return { sent, failed, skipped: false };
+}
+
+export async function sendStudentWebPush(input: {
+  instituteId: string;
+  studentId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  notificationId?: string | null;
+}) {
+  const student = await prisma.student.findFirst({
+    where: { id: input.studentId, instituteId: input.instituteId, userId: { not: null } },
+    select: { id: true, userId: true }
+  });
+
+  if (!student?.userId) {
+    return { sent: 0, failed: 0, skipped: true };
+  }
+
+  return sendWebPushMessages({
+    instituteId: input.instituteId,
+    userId: student.userId,
+    studentId: student.id,
+    notificationId: input.notificationId ?? null,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    data: {
+      ...input.data,
+      actionUrl: (input.data?.actionUrl as string | undefined) ?? "/student/notifications"
+    }
+  });
 }
 
 export async function sendParentWebPush(input: {

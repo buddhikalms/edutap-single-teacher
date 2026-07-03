@@ -1,6 +1,6 @@
 import { NotificationChannel, NotificationStatus, NotificationType, NoticeAudience, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { sendWebPushMessages } from "@/lib/web-push";
+import { sendStudentWebPush, sendWebPushMessages } from "@/lib/web-push";
 
 type NotificationRecipient = {
   userId?: string | null;
@@ -304,6 +304,41 @@ export async function createNoticeWithNotifications(input: {
     recipients,
     metadata: { audience: input.audience, classGroupId: input.classGroupId }
   });
+
+  if (input.channel === "WEB_PUSH") {
+    for (const student of students.filter((item) => item.user)) {
+      const data = {
+        noticeId: notice.id,
+        actionUrl: "/student/notifications",
+        audience: input.audience,
+        classGroupId: input.classGroupId
+      };
+      const notification = await prisma.notification.create({
+        data: {
+          instituteId: input.instituteId,
+          userId: student.user?.id,
+          studentId: student.id,
+          title: input.title,
+          body: input.body,
+          message: input.body,
+          type: input.type,
+          actionUrl: "/student/notifications",
+          dataJson: data as Prisma.InputJsonObject,
+          metadata: data as Prisma.InputJsonObject
+        }
+      });
+
+      await sendStudentWebPush({
+        instituteId: input.instituteId,
+        studentId: student.id,
+        notificationId: notification.id,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        data
+      });
+    }
+  }
 
   return notice;
 }

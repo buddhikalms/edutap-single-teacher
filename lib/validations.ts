@@ -327,7 +327,7 @@ export const noticeSchema = z.object({
   body: z.string().trim().min(8, "Notice message is required."),
   audience: z.enum(["INSTITUTE", "CLASS", "STUDENTS"]),
   type: z.enum(["NOTICE", "PAYMENT_DUE", "ABSENT_ALERT", "CLASS_NOTICE", "RECEIPT"]).default("NOTICE"),
-  channel: z.enum(["IN_APP", "PUSH", "SMS", "WHATSAPP", "EMAIL"]).default("IN_APP"),
+  channel: z.enum(["IN_APP", "PUSH", "WEB_PUSH", "SMS", "WHATSAPP", "EMAIL"]).default("IN_APP"),
   classGroupId: optionalText,
   studentIds: z.array(z.string()).optional().default([])
 });

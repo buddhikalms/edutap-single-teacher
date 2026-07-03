@@ -780,6 +780,7 @@ model Student {
   homeworkSubmissions         HomeworkSubmission[]
   quizAttempts                QuizAttempt[]
   notificationsV2             Notification[]
+  webPushSubscriptions        WebPushSubscription[]
   devices                     StudentDevice[]
   liveClassAttendances        LiveClassAttendance[]
   courseEnrollments           CourseEnrollment[]
@@ -837,6 +838,7 @@ model WebPushSubscription {
   instituteId  String
   userId       String
   parentId     String?
+  studentId    String?
   endpoint     String    @db.Text
   endpointHash String    @unique
   p256dh       String    @db.Text
@@ -849,10 +851,12 @@ model WebPushSubscription {
   institute    Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent       Parent?   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student      Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([instituteId])
   @@index([userId])
   @@index([parentId])
+  @@index([studentId])
   @@index([isActive])
 }
 
