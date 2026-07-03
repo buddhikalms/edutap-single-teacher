@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOwnerTeacherId } from "@/lib/single-teacher";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
 import { uploadDiskPath } from "@/lib/upload-storage";
+import { sendStudentWebPush } from "@/lib/web-push";
 import { courseSchema, type CourseInput } from "@/lib/validations";
 
 function slugify(value: string) {
@@ -376,16 +377,27 @@ export async function sendCourseNotification(courseId: string, enrollmentId: str
   });
   if (!enrollment) throw new Error("Enrollment not found.");
 
-  await prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: {
       instituteId,
       studentId: enrollment.studentId,
       title: `Course update: ${enrollment.course.name}`,
       message: `Your teacher has sent an update for ${enrollment.course.name}.`,
       type: "COURSE_RESOURCE_UPLOADED",
-      dataJson: { courseId }
+      actionUrl: `/student/courses/${courseId}`,
+      dataJson: { courseId, actionUrl: `/student/courses/${courseId}` }
     }
   });
+
+  await sendStudentWebPush({
+    instituteId,
+    studentId: enrollment.studentId,
+    notificationId: notification.id,
+    type: "COURSE_RESOURCE_UPLOADED",
+    title: `Course update: ${enrollment.course.name}`,
+    body: `Your teacher has sent an update for ${enrollment.course.name}.`,
+    data: { courseId, actionUrl: `/student/courses/${courseId}` }
+  }).catch((error) => console.error("Student course web push failed", error));
 
   revalidatePath(`/dashboard/courses/${courseId}`);
 }

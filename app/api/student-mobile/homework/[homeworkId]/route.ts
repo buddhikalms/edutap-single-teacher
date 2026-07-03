@@ -3,6 +3,7 @@ import { homeworkSubmitSchema } from "@/lib/validations";
 import { homeworkSubmissionStatus } from "@/lib/learning";
 import { requireStudentMobileUser, StudentMobileAuthError } from "@/lib/student-mobile-auth";
 import { prisma } from "@/lib/prisma";
+import { sendStudentWebPush } from "@/lib/web-push";
 
 type RouteContext = { params: Promise<{ homeworkId: string }> };
 
@@ -74,16 +75,26 @@ export async function POST(request: Request, context: RouteContext) {
       }
     });
 
-    await prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: {
         instituteId,
         studentId,
         title: "Homework submitted",
         message: `Your submission for ${submission.homework.title} was received.`,
         type: "NOTICE",
-        actionUrl: `/homework/${submission.homework.id}`
+        actionUrl: `/student/homework/${submission.homework.id}`
       }
     });
+
+    await sendStudentWebPush({
+      instituteId,
+      studentId,
+      notificationId: notification.id,
+      type: "NOTICE",
+      title: "Homework submitted",
+      body: `Your submission for ${submission.homework.title} was received.`,
+      data: { actionUrl: `/student/homework/${submission.homework.id}`, homeworkId: submission.homework.id }
+    }).catch((error) => console.error("Student homework web push failed", error));
 
     return NextResponse.json({ ok: true, message: "Homework submitted.", submissionId: saved.id, status: saved.status });
   } catch (error) {

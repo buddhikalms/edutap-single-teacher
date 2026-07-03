@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BellRing, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const browserSupported =
@@ -34,6 +35,52 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     "Notification" in window &&
     Boolean(publicKey);
 
+  async function saveSubscription(subscription: PushSubscription) {
+    const response = await fetch("/api/web-push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscription,
+        platform: navigator.platform || "web",
+        userAgent: navigator.userAgent
+      })
+    });
+
+    if (!response.ok) {
+      const result = await response.json().catch(() => null);
+      throw new Error(result?.message ?? "Could not save this browser subscription.");
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkSubscription() {
+      if (!browserSupported) {
+        if (active) setChecking(false);
+        return;
+      }
+
+      try {
+        setPermission(Notification.permission);
+        const registration =
+          (await navigator.serviceWorker.getRegistration()) ??
+          (Notification.permission === "granted" ? await navigator.serviceWorker.register("/sw.js") : null);
+        const subscription = await registration?.pushManager.getSubscription();
+        if (active) setEnabled(Boolean(subscription));
+      } catch {
+        if (active) setEnabled(false);
+      } finally {
+        if (active) setChecking(false);
+      }
+    }
+
+    checkSubscription();
+
+    return () => {
+      active = false;
+    };
+  }, [browserSupported]);
   async function enableNotifications() {
     if (!browserSupported || !publicKey) {
       toast.error("Web push is not available in this browser or VAPID key is missing.");
@@ -60,20 +107,7 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
           applicationServerKey: urlBase64ToUint8Array(publicKey)
         }));
 
-      const response = await fetch("/api/web-push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subscription,
-          platform: navigator.platform || "web",
-          userAgent: navigator.userAgent
-        })
-      });
-
-      if (!response.ok) {
-        const result = await response.json().catch(() => null);
-        throw new Error(result?.message ?? "Could not save this browser subscription.");
-      }
+      await saveSubscription(subscription);
 
       setEnabled(true);
       toast.success("Web alerts enabled", {
@@ -89,7 +123,7 @@ export function WebPushPermissionCard({ audience = "parent" }: WebPushPermission
     }
   }
 
-  if (!browserSupported || enabled) {
+  if (!browserSupported || checking || enabled) {
     return null;
   }
 

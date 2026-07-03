@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { autoMarkQuestion } from "@/lib/learning";
 import { requireStudentMobileUser, StudentMobileAuthError } from "@/lib/student-mobile-auth";
 import { prisma } from "@/lib/prisma";
+import { sendStudentWebPush } from "@/lib/web-push";
 
 type RouteContext = { params: Promise<{ attemptId: string }> };
 
@@ -48,16 +49,26 @@ export async function POST(request: Request, context: RouteContext) {
       }
     });
 
-    await prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: {
         instituteId,
         studentId,
         title: "Quiz submitted",
         message: `${attempt.quiz.title} was submitted successfully.`,
         type: "NOTICE",
-        actionUrl: `/quizzes/${attempt.quizId}/result`
+        actionUrl: `/student/quizzes/results/${attempt.id}`
       }
     });
+
+    await sendStudentWebPush({
+      instituteId,
+      studentId,
+      notificationId: notification.id,
+      type: "NOTICE",
+      title: "Quiz submitted",
+      body: `${attempt.quiz.title} was submitted successfully.`,
+      data: { actionUrl: `/student/quizzes/results/${attempt.id}`, quizId: attempt.quizId, attemptId: attempt.id }
+    }).catch((error) => console.error("Student quiz web push failed", error));
 
     return NextResponse.json({ ok: true, message: "Quiz submitted.", score: Number(saved.score), passed: saved.passed, needsManualReview: needsManual });
   } catch (error) {
