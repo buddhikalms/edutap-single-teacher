@@ -129,7 +129,8 @@ async function sendStudentAttendanceNotification(input: {
   }
 
   const title = "Attendance marked";
-  const body = `Your attendance for ${input.className} was marked as ${input.status.toLowerCase()}.`;
+  const paymentText = input.payment?.label ? ` Payment status: ${input.payment.label}.` : "";
+  const body = `Your attendance for ${input.className} was marked as ${input.status.toLowerCase()}.${paymentText}`;
   const actionUrl = "/student/attendance";
   const data = {
     actionUrl,
