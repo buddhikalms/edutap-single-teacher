@@ -350,30 +350,159 @@ export async function createReceiptNotification(input: {
   amount: number;
   receiptNo: string;
 }) {
-  const student = await prisma.student.findFirst({
-    where: { id: input.studentId, instituteId: input.instituteId },
-    include: {
-      user: { select: { id: true, email: true } },
-      parents: { include: { user: { select: { id: true, email: true } } } }
-    }
-  });
+  const [settings, student, receipt] = await Promise.all([
+    prisma.instituteSettings.findUnique({ where: { instituteId: input.instituteId } }),
+    prisma.student.findFirst({
+      where: { id: input.studentId, instituteId: input.instituteId },
+      include: {
+        user: { select: { id: true, email: true } },
+        parents: { include: { user: { select: { id: true, email: true } } } }
+      }
+    }),
+    prisma.receipt.findFirst({
+      where: { id: input.receiptId, instituteId: input.instituteId },
+      include: { payment: { include: { classGroup: true, course: true } } }
+    })
+  ]);
 
-  if (!student) {
-    return { count: 0 };
+  if (!student || !receipt) {
+    return { count: 0, webPush: 0 };
   }
 
-  return createNotificationLogs({
-    instituteId: input.instituteId,
+  const currency = settings?.currency ?? "LKR";
+  const studentName = `${student.firstName} ${student.lastName}`.trim();
+  const contextName = receipt.payment.classGroup?.name ?? receipt.payment.course?.name ?? receipt.payment.type.replaceAll("_", " ").toLowerCase();
+  const title = "Payment received";
+  const message = `Receipt ${input.receiptNo} was generated for ${studentName}. Amount paid: ${input.amount.toLocaleString("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0
+  })}.`;
+  const studentActionUrl = `/student/payments/receipts/${input.receiptId}`;
+  const parentActionUrl = `/portal/receipts/${input.receiptId}`;
+  const data = {
     receiptId: input.receiptId,
-    type: NotificationType.RECEIPT,
-    title: "Receipt generated",
-    message: `Receipt ${input.receiptNo} was generated for ${student.firstName} ${student.lastName}. Amount paid: $${input.amount.toFixed(0)}.`,
-    recipients: [
-      ...(student.user ? [{ userId: student.user.id, studentId: student.id, target: student.user.email }] : []),
-      ...student.parents
-        .filter((parent) => parent.user)
-        .map((parent) => ({ userId: parent.user?.id, parentId: parent.id, studentId: student.id, target: parent.user?.email ?? parent.email }))
-    ],
-    metadata: { pushReady: true, smsReady: true, whatsappReady: true }
-  });
+    receiptNo: input.receiptNo,
+    paymentId: receipt.paymentId,
+    studentId: student.id,
+    studentName,
+    contextName,
+    amount: input.amount
+  };
+
+  let inAppCount = 0;
+  let webPush = 0;
+
+  if (settings?.notificationInAppEnabled !== false && student.user) {
+    const notification = await prisma.notification.create({
+      data: {
+        instituteId: input.instituteId,
+        userId: student.user.id,
+        studentId: student.id,
+        title,
+        body: message,
+        message,
+        type: NotificationType.RECEIPT,
+        actionUrl: studentActionUrl,
+        dataJson: { ...data, actionUrl: studentActionUrl } as Prisma.InputJsonObject,
+        metadata: { ...data, actionUrl: studentActionUrl } as Prisma.InputJsonObject
+      }
+    });
+
+    await prisma.notificationLog.create({
+      data: {
+        instituteId: input.instituteId,
+        receiptId: input.receiptId,
+        userId: student.user.id,
+        studentId: student.id,
+        notificationId: notification.id,
+        type: NotificationType.RECEIPT,
+        channel: NotificationChannel.IN_APP,
+        status: NotificationStatus.SENT,
+        title,
+        body: message,
+        message,
+        recipientType: "STUDENT",
+        recipientId: student.id,
+        payloadJson: { ...data, actionUrl: studentActionUrl } as Prisma.InputJsonObject,
+        sentAt: new Date()
+      }
+    });
+    inAppCount += 1;
+  }
+
+  if (settings?.notificationWebPushEnabled !== false && student.user) {
+    const result = await sendStudentWebPush({
+      instituteId: input.instituteId,
+      studentId: student.id,
+      type: NotificationType.RECEIPT,
+      title,
+      body: message,
+      data: { ...data, actionUrl: studentActionUrl }
+    });
+    webPush += result.sent;
+  }
+
+  for (const parent of student.parents.filter((item) => item.user)) {
+    const parentData = { ...data, actionUrl: parentActionUrl };
+    const notification =
+      settings?.notificationInAppEnabled === false
+        ? null
+        : await prisma.notification.create({
+            data: {
+              instituteId: input.instituteId,
+              userId: parent.user?.id,
+              parentId: parent.id,
+              studentId: student.id,
+              title,
+              body: message,
+              message,
+              type: NotificationType.RECEIPT,
+              actionUrl: parentActionUrl,
+              dataJson: parentData as Prisma.InputJsonObject,
+              metadata: parentData as Prisma.InputJsonObject
+            }
+          });
+
+    if (notification) {
+      await prisma.notificationLog.create({
+        data: {
+          instituteId: input.instituteId,
+          receiptId: input.receiptId,
+          userId: parent.user?.id,
+          parentId: parent.id,
+          studentId: student.id,
+          notificationId: notification.id,
+          type: NotificationType.RECEIPT,
+          channel: NotificationChannel.IN_APP,
+          status: NotificationStatus.SENT,
+          title,
+          body: message,
+          message,
+          recipientType: "PARENT",
+          recipientId: parent.id,
+          payloadJson: parentData as Prisma.InputJsonObject,
+          sentAt: new Date()
+        }
+      });
+      inAppCount += 1;
+    }
+
+    if (settings?.notificationWebPushEnabled !== false) {
+      const result = await sendWebPushMessages({
+        instituteId: input.instituteId,
+        userId: parent.user?.id,
+        parentId: parent.id,
+        studentId: student.id,
+        notificationId: notification?.id ?? null,
+        type: NotificationType.RECEIPT,
+        title,
+        body: message,
+        data: parentData
+      });
+      webPush += result.sent;
+    }
+  }
+
+  return { count: inAppCount, webPush };
 }
