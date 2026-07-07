@@ -9,12 +9,15 @@ import {
   validatePaymentSlip
 } from "@/lib/payment-slips";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "FAMILY") {
     return NextResponse.json({ message: "Sign in with the family account to upload a payment slip." }, { status: 401 });
   }
+  const limit = checkRateLimit({ key: rateLimitKey(request, "family-payment-slip", session.user.id), limit: 10, windowMs: 60 * 60 * 1000 });
+  if (!limit.ok) return rateLimitResponse(limit.resetAt);
 
   const formData = await request.formData().catch(() => null);
   if (!formData) return NextResponse.json({ message: "Could not read the upload." }, { status: 400 });

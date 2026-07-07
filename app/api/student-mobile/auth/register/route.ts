@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { registerStudent } from "@/lib/student-registration";
 import { studentSelfRegistrationSchema } from "@/lib/validations";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const parsed = studentSelfRegistrationSchema.safeParse(await request.json());
+    const body = await request.json();
+    const parsed = studentSelfRegistrationSchema.safeParse(body);
+    const key = rateLimitKey(request, "student-mobile-auth-register", parsed.success ? parsed.data.email : null);
+    const limit = checkRateLimit({ key, limit: 5, windowMs: 60 * 60 * 1000 });
+    if (!limit.ok) return rateLimitResponse(limit.resetAt);
 
     if (!parsed.success) {
       return NextResponse.json(

@@ -3,10 +3,15 @@ import { NextResponse } from "next/server";
 import { createMobileToken } from "@/lib/mobile-auth";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const parsed = loginSchema.safeParse(await request.json());
+    const body = await request.json();
+    const parsed = loginSchema.safeParse(body);
+    const key = rateLimitKey(request, "parent-auth-login", parsed.success ? parsed.data.email : null);
+    const limit = checkRateLimit({ key, limit: 10, windowMs: 15 * 60 * 1000 });
+    if (!limit.ok) return rateLimitResponse(limit.resetAt);
 
     if (!parsed.success) {
       return NextResponse.json(

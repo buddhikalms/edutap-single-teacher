@@ -12,6 +12,7 @@ import {
 } from "@/lib/card-print-export";
 import { getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 const contentTypes: Record<CardPrintExportFormat, string> = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -34,6 +35,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ batc
   if (!canManageCardPrintExport(role)) {
     return NextResponse.json({ ok: false, message: "You do not have access to export card print batches." }, { status: 403 });
   }
+  const limit = checkRateLimit({ key: rateLimitKey(request, "card-print-export", `${instituteId}:${role}`), limit: 30, windowMs: 60 * 60 * 1000 });
+  if (!limit.ok) return rateLimitResponse(limit.resetAt);
 
   const { batchId } = await params;
   const format = (new URL(request.url).searchParams.get("format") || "xlsx") as CardPrintExportFormat;

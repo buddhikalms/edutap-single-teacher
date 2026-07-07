@@ -13,6 +13,7 @@ import {
   validatePaymentSlip,
   type ValidatedPaymentSlip
 } from "@/lib/payment-slips";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 const schema = z.object({
   parentMobile: z.string().trim().min(7).max(30),
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
   if (!session?.user?.id || session.user.role !== "FAMILY") {
     return NextResponse.json({ message: "Continue with Google before completing enrollment." }, { status: 401 });
   }
+  const limit = checkRateLimit({ key: rateLimitKey(request, "google-enrollment", session.user.id), limit: 5, windowMs: 60 * 60 * 1000 });
+  if (!limit.ok) return rateLimitResponse(limit.resetAt);
+
   const formData = await request.formData().catch(() => null);
   if (!formData) return NextResponse.json({ message: "Could not read the enrollment form." }, { status: 400 });
   const parsed = schema.safeParse(Object.fromEntries(formData.entries()));

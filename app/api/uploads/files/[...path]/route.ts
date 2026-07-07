@@ -25,18 +25,44 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const PUBLIC_UPLOAD_FOLDERS = new Set(["homework", "homework-submissions", "images"]);
+const BLOCKED_EXTENSIONS = new Set([
+  ".bat",
+  ".cmd",
+  ".com",
+  ".cpl",
+  ".exe",
+  ".hta",
+  ".jar",
+  ".js",
+  ".jse",
+  ".msi",
+  ".ps1",
+  ".scr",
+  ".sh",
+  ".vbs",
+  ".wsf"
+]);
+
+function isSafePath(segments: string[]) {
+  return segments.length > 1 && segments.every((segment) => segment && segment !== "." && segment !== ".." && !segment.includes("\\"));
+}
 
 export async function GET(_: Request, context: RouteContext) {
   try {
     const params = await context.params;
-    if (!PUBLIC_UPLOAD_FOLDERS.has(params.path[0] ?? "")) {
+    if (!isSafePath(params.path) || !PUBLIC_UPLOAD_FOLDERS.has(params.path[0] ?? "")) {
       return NextResponse.json({ message: "File not found." }, { status: 404 });
     }
 
     const relativePath = params.path.join("/");
     const filePath = uploadDiskPath(relativePath);
+    const extension = path.extname(filePath).toLowerCase();
+    const type = CONTENT_TYPES[extension];
+    if (!type || BLOCKED_EXTENSIONS.has(extension)) {
+      return NextResponse.json({ message: "File not found." }, { status: 404 });
+    }
+
     const file = await readFile(filePath);
-    const type = CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
 
     return new NextResponse(file, {
       headers: {

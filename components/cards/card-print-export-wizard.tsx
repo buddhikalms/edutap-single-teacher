@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState, useTransition } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Archive, CheckCircle2, Download, FileSpreadsheet, FileText, Loader2, Package, Printer, QrCode, Search, Send, Sparkles, UsersRound } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, Download, FileSpreadsheet, FileText, GraduationCap, IdCard, Loader2, Nfc, Package, Printer, QrCode, Search, Send, Sparkles, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { CardPrintBatchStatus } from "@prisma/client";
 import { generateCardPrintBatchAction, updateCardPrintBatchStatusAction } from "@/app/(dashboard)/dashboard/card-print-export/actions";
@@ -63,6 +64,7 @@ type FilterMode = "ALL" | "WITHOUT_CARD" | "ACTIVE_CARD" | "NEW" | "REISSUE";
 const steps = ["Select students", "Generate", "Preview", "Export", "Send to print"];
 
 export function CardPrintExportWizard({ grades, subjects, classes, students, batches, instituteName }: Props) {
+  const [openedAt] = useState(() => Date.now());
   const [step, setStep] = useState(0);
   const [gradeId, setGradeId] = useState("ALL");
   const [subjectId, setSubjectId] = useState("ALL");
@@ -79,7 +81,6 @@ export function CardPrintExportWizard({ grades, subjects, classes, students, bat
   const [pending, startTransition] = useTransition();
 
   const filteredStudents = useMemo(() => {
-    const now = Date.now();
     const needle = query.trim().toLowerCase();
     return students.filter((student) => {
       if (gradeId !== "ALL" && !student.gradeIds.includes(gradeId)) return false;
@@ -87,12 +88,12 @@ export function CardPrintExportWizard({ grades, subjects, classes, students, bat
       if (classId !== "ALL" && !student.classIds.includes(classId)) return false;
       if (filter === "WITHOUT_CARD" && student.cardStatus) return false;
       if (filter === "ACTIVE_CARD" && student.cardStatus !== "ACTIVE") return false;
-      if (filter === "NEW" && now - new Date(student.createdAt).getTime() > 1000 * 60 * 60 * 24 * 30) return false;
+      if (filter === "NEW" && openedAt - new Date(student.createdAt).getTime() > 1000 * 60 * 60 * 24 * 30) return false;
       if (filter === "REISSUE" && !student.isReissueCandidate) return false;
       if (!needle) return true;
       return [student.name, student.admissionNo, student.phone, student.parentMobile].some((value) => value.toLowerCase().includes(needle));
     });
-  }, [classId, filter, gradeId, query, students, subjectId]);
+  }, [classId, filter, gradeId, openedAt, query, students, subjectId]);
 
   const selectedStudents = useMemo(() => students.filter((student) => selectedIds.includes(student.id)), [selectedIds, students]);
   const allVisibleSelected = filteredStudents.length > 0 && filteredStudents.every((student) => selectedIds.includes(student.id));
@@ -251,13 +252,13 @@ export function CardPrintExportWizard({ grades, subjects, classes, students, bat
             <Card className="glass-panel">
               <CardContent className="p-5">
                 <div className="grid gap-4 lg:grid-cols-2">
-                  {selectedStudents.slice(0, 12).map((student, index) => {
+                  {selectedStudents.slice(0, 6).map((student, index) => {
                     const previewToken = student.qrToken || `EDUTAP-PREVIEW-${student.admissionNo}`;
                     const cardNo = cardNumberMode === "MANUAL" ? manualNumbers[student.id] || "Manual pending" : student.cardNumber || `${prefix || "EDU"}-${String(index + 1).padStart(6, "0")}`;
                     return <PreviewCard key={student.id} student={student} cardNo={cardNo} token={previewToken} instituteName={instituteName} />;
                   })}
                 </div>
-                {selectedStudents.length > 12 ? <p className="mt-4 text-sm text-muted-foreground">Showing 12 of {selectedStudents.length} selected cards.</p> : null}
+                {selectedStudents.length > 6 ? <p className="mt-4 text-sm text-muted-foreground">Showing 6 of {selectedStudents.length} selected card sets.</p> : null}
                 <div className="mt-5 flex justify-between gap-3">
                   <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
                   <Button onClick={generateBatch} disabled={pending || !selectedIds.length}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Generate secure QR batch</Button>
@@ -338,19 +339,114 @@ function Summary({ label, value }: { label: string; value: string }) {
 }
 
 function PreviewCard({ student, cardNo, token, instituteName }: { student: StudentRow; cardNo: string; token: string; instituteName: string }) {
+  const initials = student.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const enrolledOn = new Date(student.createdAt);
+  const validThrough = new Date(enrolledOn);
+  validThrough.setFullYear(validThrough.getFullYear() + 1);
+  const date = (value: Date) => value.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  const course = student.classNames[0] || student.subjectNames[0] || student.gradeNames[0] || "Student";
+
   return (
-    <div className="grid min-h-40 grid-cols-[minmax(0,1fr)_6.5rem] gap-4 rounded-lg border bg-white p-4 shadow-sm">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase text-primary">{instituteName}</p>
-        <h4 className="mt-3 truncate text-lg font-semibold">{student.name}</h4>
-        <p className="mt-1 text-sm text-muted-foreground">ID: {student.admissionNo}</p>
-        <p className="mt-1 truncate text-sm text-muted-foreground">{student.gradeNames[0] || "Grade"} - {student.classNames[0] || student.subjectNames[0] || "Class"}</p>
-        <p className="mt-5 text-sm font-semibold text-primary">{cardNo}</p>
+    <div className="rounded-2xl border bg-slate-100/80 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold">{student.name}</p>
+          <p className="text-xs text-muted-foreground">Front and back print preview</p>
+        </div>
+        <Badge variant="outline">{cardNo}</Badge>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-lg border bg-slate-50 p-2">
-        <QRCodeSVG value={qrPayloadForToken(token)} size={88} level="M" />
-        <QrCode className="mt-2 h-4 w-4 text-muted-foreground" />
+
+      <div className="grid justify-center gap-5 md:grid-cols-2">
+        <article className="relative aspect-[0.63/1] w-full max-w-[280px] overflow-hidden rounded-[20px] border border-slate-200 bg-white text-[#0b2140] shadow-xl">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-44 opacity-50 [background:radial-gradient(ellipse_at_top_right,rgba(212,157,50,.15),transparent_56%),repeating-radial-gradient(ellipse_at_top,transparent_0,transparent_8px,rgba(15,35,65,.055)_9px,transparent_10px)]" />
+          <div className="relative flex h-full flex-col px-5 pt-5">
+            <CardBrand instituteName={instituteName} dark={false} />
+
+            <div className="mt-5 grid grid-cols-[5.7rem_minmax(0,1fr)] gap-4">
+              <div className="relative h-36 overflow-hidden rounded-[16px] border-2 border-[#c9912d] bg-slate-100 shadow-sm">
+                {student.avatarUrl ? (
+                  <Image src={student.avatarUrl} alt={student.name} fill unoptimized className="object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-300 text-2xl font-bold text-primary">{initials}</div>
+                )}
+              </div>
+              <div className="min-w-0 pt-1">
+                <h4 className="break-words text-lg font-extrabold uppercase leading-5 tracking-tight">{student.name}</h4>
+                <div className="mt-2 h-px w-full bg-gradient-to-r from-[#c9912d] to-transparent" />
+                <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-[#b57d1c]">Student</p>
+                <CardDetail icon={IdCard} label="ID No." value={student.admissionNo} />
+                <CardDetail icon={CalendarDays} label="Enrolled" value={date(enrolledOn)} />
+                <CardDetail icon={GraduationCap} label="Course" value={course} />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px]">
+              <CalendarDays className="h-4 w-4 text-[#b57d1c]" />
+              <span className="text-slate-500">Valid through</span>
+              <span className="ml-auto font-bold">{date(validThrough)}</span>
+            </div>
+
+            <div className="relative -mx-5 mt-auto flex h-[5.8rem] items-center overflow-hidden bg-[#082342] px-6 text-white">
+              <div className="absolute -top-8 right-[-2rem] h-20 w-64 rotate-[-8deg] rounded-[50%] border-[10px] border-[#d9a33d]" />
+              <Nfc className="relative h-8 w-8" />
+              <div className="relative ml-3">
+                <p className="text-sm font-bold">NFC SMART CARD</p>
+                <p className="text-[9px] tracking-[0.16em] text-white/65">TAP TO CONNECT</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article className="relative aspect-[0.63/1] w-full max-w-[280px] overflow-hidden rounded-[20px] border border-[#17385c] bg-[#082342] text-white shadow-xl">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(36,77,119,.72),transparent_42%),linear-gradient(145deg,transparent_65%,rgba(212,157,50,.17)_65%,transparent_68%)]" />
+          <div className="pointer-events-none absolute -left-16 top-32 h-64 w-24 rotate-[-18deg] rounded-[50%] border border-white/10" />
+          <div className="pointer-events-none absolute -right-16 top-28 h-72 w-28 rotate-[18deg] rounded-[50%] border border-white/10" />
+          <div className="relative flex h-full flex-col items-center px-5 pt-6">
+            <CardBrand instituteName={instituteName} dark />
+            <div className="mt-5 rounded-[15px] border-2 border-[#d6a33f] bg-white p-2 shadow-lg">
+              <QRCodeSVG value={qrPayloadForToken(token)} size={126} level="M" fgColor="#06172b" />
+            </div>
+            <p className="mt-4 text-center text-xs font-semibold uppercase leading-5 tracking-[0.1em]">Scan to verify<br />or tap the card</p>
+            <div className="mt-3 h-px w-16 bg-[#d6a33f]" />
+            <div className="mt-auto w-[calc(100%+2.5rem)] border-t border-[#d6a33f]/80 bg-[#061c36]/80 px-5 py-4">
+              <div className="flex items-center justify-center gap-2 text-[10px] text-white/75">
+                <QrCode className="h-3.5 w-3.5 text-[#d6a33f]" />
+                <span className="truncate">{cardNo}</span>
+              </div>
+              <p className="mt-1 text-center text-[9px] text-white/50">Secure student identity • {instituteName}</p>
+            </div>
+          </div>
+        </article>
       </div>
+    </div>
+  );
+}
+
+function CardBrand({ instituteName, dark }: { instituteName: string; dark: boolean }) {
+  const initials = instituteName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  return (
+    <div className="flex flex-col items-center text-center">
+      <div className={`flex h-12 w-12 items-center justify-center rounded-b-[18px] rounded-t-md border-2 font-serif text-lg font-bold ${dark ? "border-[#d6a33f] bg-[#0a294e] text-white" : "border-[#c9912d] bg-[#0b2c50] text-white"}`}>
+        <span>{initials}</span>
+      </div>
+      <p className={`mt-2 max-w-[14rem] text-[11px] font-bold uppercase tracking-[0.13em] ${dark ? "text-white" : "text-[#0b2140]"}`}>{instituteName}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <span className="h-px w-7 bg-[#c9912d]" />
+        <GraduationCap className="h-3.5 w-3.5 text-[#c9912d]" />
+        <span className="h-px w-7 bg-[#c9912d]" />
+      </div>
+    </div>
+  );
+}
+
+function CardDetail({ icon: Icon, label, value }: { icon: typeof IdCard; label: string; value: string }) {
+  return (
+    <div className="mt-2 flex min-w-0 items-start gap-1.5 text-[9px] leading-3">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0b2c50]" />
+      <span className="min-w-0">
+        <span className="block text-slate-500">{label}</span>
+        <span className="block break-words font-semibold text-[#0b2140]">{value}</span>
+      </span>
     </div>
   );
 }

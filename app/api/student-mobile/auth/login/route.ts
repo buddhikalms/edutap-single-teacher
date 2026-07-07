@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createStudentDevice } from "@/lib/student-mobile-auth";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 const schema = z.object({
   identifier: z.string().trim().min(2),
@@ -14,7 +15,11 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const parsed = schema.parse(await request.json());
+    const body = await request.json();
+    const parsed = schema.parse(body);
+    const key = rateLimitKey(request, "student-mobile-auth-login", parsed.identifier);
+    const limit = checkRateLimit({ key, limit: 10, windowMs: 15 * 60 * 1000 });
+    if (!limit.ok) return rateLimitResponse(limit.resetAt);
     const normalized = parsed.identifier.toLowerCase();
     const student = await prisma.student.findFirst({
       where: {

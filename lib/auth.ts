@@ -4,15 +4,33 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { loginSchema } from "@/lib/validations";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "");
+}
+
+function authSecret() {
+  const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+  const isWeak = !secret || secret.length < 32 || /replace-with|change-me|changeme|your-secret/i.test(secret);
+  const isProductionRuntime = process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build";
+
+  if (isWeak && isProductionRuntime) {
+    throw new Error("Set NEXTAUTH_SECRET or AUTH_SECRET to at least 32 random bytes before starting production.");
+  }
+
+  if (isWeak && process.env.NODE_ENV !== "production") {
+    console.warn("NEXTAUTH_SECRET/AUTH_SECRET should be at least 32 random bytes before deployment.");
+  }
+
+  return secret;
 }
 
 export const PENDING_ACCOUNT_MESSAGE = "Your enrollment request is pending teacher approval.";
 export const REJECTED_ACCOUNT_MESSAGE = "Your enrollment request was not approved. Please contact the teacher.";
 
 export const authOptions: NextAuthOptions = {
+  secret: authSecret(),
   session: {
     strategy: "jwt"
   },
@@ -34,6 +52,11 @@ export const authOptions: NextAuthOptions = {
         }
 
         const identifier = parsed.data.email.trim();
+        const limit = checkRateLimit({ key: `nextauth-credentials:${identifier.toLowerCase()}`, limit: 10, windowMs: 15 * 60 * 1000 });
+        if (!limit.ok) {
+          throw new Error("Too many login attempts. Please try again shortly.");
+        }
+
         const normalized = normalizePhone(identifier);
         const userByEmail = await prisma.user.findFirst({
           where: {

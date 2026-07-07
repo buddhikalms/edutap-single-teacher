@@ -9,7 +9,15 @@ export default async function FamilyDashboardLayout({ children }: { children: Re
   return <main className="min-h-screen bg-slate-50">
     <header className="bg-primary text-white"><div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
       <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs text-white/60">EduTap Account</p><h1 className="text-xl font-semibold">Welcome, {context.userName}</h1></div>
-        <StudentSwitcher selectedId={context.selectedStudent.id} students={context.students.map((student) => ({ id: student.id, name: `${student.firstName} ${student.lastName}`.trim() }))} />
+        <StudentSwitcher
+          selectedId={context.selectedStudent.id}
+          students={context.students.map((student) => ({
+            id: student.id,
+            name: `${student.firstName} ${student.lastName}`.trim(),
+            admissionNo: student.admissionNo,
+            avatarUrl: student.avatarUrl
+          }))}
+        />
       </div>
       <FamilyNav />
     </div></header>

@@ -12,6 +12,7 @@ import {
   validatePaymentSlip,
   type ValidatedPaymentSlip
 } from "@/lib/payment-slips";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 
 const schema = z.object({
   classGroupId: z.string().trim().min(1, "Please select a class."),
@@ -38,6 +39,9 @@ function normalizeMobile(value: string) {
 }
 
 export async function POST(request: Request) {
+  const limit = checkRateLimit({ key: rateLimitKey(request, "public-enrollment-request"), limit: 5, windowMs: 60 * 60 * 1000 });
+  if (!limit.ok) return rateLimitResponse(limit.resetAt);
+
   const formData = await request.formData().catch(() => null);
   if (!formData) return NextResponse.json({ message: "Could not read the enrollment form." }, { status: 400 });
   const parsed = schema.safeParse(Object.fromEntries(formData.entries()));

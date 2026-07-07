@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { canAccess } from "@/lib/rbac";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -11,6 +16,16 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif"
 };
+
+async function canUploadImages() {
+  const session = await getServerSession(authOptions);
+  if (session?.user?.role && (canAccess(session.user.role, "dashboard") || canAccess(session.user.role, "settings"))) {
+    return true;
+  }
+
+  const existingUser = await prisma.user.findFirst({ select: { id: true } });
+  return !existingUser;
+}
 
 function hasValidSignature(type: string, bytes: Uint8Array) {
   if (type === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
@@ -22,6 +37,12 @@ function hasValidSignature(type: string, bytes: Uint8Array) {
 
 export async function POST(request: Request) {
   try {
+    if (!(await canUploadImages())) {
+      return NextResponse.json({ message: "Sign in before uploading images." }, { status: 401 });
+    }
+    const limit = checkRateLimit({ key: rateLimitKey(request, "image-upload"), limit: 30, windowMs: 60 * 60 * 1000 });
+    if (!limit.ok) return rateLimitResponse(limit.resetAt);
+
     const formData = await request.formData();
     const file = formData.get("file");
 
