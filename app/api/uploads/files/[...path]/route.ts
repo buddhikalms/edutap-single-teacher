@@ -1,74 +1,108 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { authOptions } from "@/lib/auth";
+import { contentTypeForPath } from "@/lib/file-security";
+import { prisma } from "@/lib/prisma";
+import { canAccess } from "@/lib/rbac";
+import { writeSecurityAudit } from "@/lib/security-audit";
+import { requireStudentMobileUser, StudentMobileAuthError } from "@/lib/student-mobile-auth";
 import { uploadDiskPath } from "@/lib/upload-storage";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
-const CONTENT_TYPES: Record<string, string> = {
-  ".gif": "image/gif",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".pdf": "application/pdf",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".xls": "application/vnd.ms-excel",
-  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ".ppt": "application/vnd.ms-powerpoint",
-  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  ".txt": "text/plain",
-  ".zip": "application/zip",
-  ".mp4": "video/mp4",
-  ".mov": "video/quicktime"
-};
-
-const PUBLIC_UPLOAD_FOLDERS = new Set(["homework", "homework-submissions", "images"]);
-const BLOCKED_EXTENSIONS = new Set([
-  ".bat",
-  ".cmd",
-  ".com",
-  ".cpl",
-  ".exe",
-  ".hta",
-  ".jar",
-  ".js",
-  ".jse",
-  ".msi",
-  ".ps1",
-  ".scr",
-  ".sh",
-  ".vbs",
-  ".wsf"
-]);
+const PUBLIC_UPLOAD_FOLDERS = new Set(["images"]);
+const AUTHORIZED_UPLOAD_FOLDERS = new Set(["homework", "homework-submissions"]);
 
 function isSafePath(segments: string[]) {
   return segments.length > 1 && segments.every((segment) => segment && segment !== "." && segment !== ".." && !segment.includes("\\"));
 }
 
-export async function GET(_: Request, context: RouteContext) {
+async function authorizedForHomework(request: Request, segments: string[]) {
+  const [folder, homeworkId, maybeStudentId] = segments;
+  if (!homeworkId) return false;
+
+  const session = await getServerSession(authOptions);
+  if (session?.user?.id) {
+    if (folder === "homework") {
+      const homework = await prisma.homework.findUnique({ where: { id: homeworkId }, select: { instituteId: true, classGroupId: true } });
+      if (!homework) return false;
+      if (session.user.instituteId === homework.instituteId && canAccess(session.user.role, "homework")) return true;
+      if (session.user.role === "STUDENT") {
+        return Boolean(
+          await prisma.homeworkSubmission.findFirst({
+            where: { homeworkId, student: { userId: session.user.id }, instituteId: homework.instituteId },
+            select: { id: true }
+          })
+        );
+      }
+    }
+
+    if (folder === "homework-submissions" && maybeStudentId) {
+      const submission = await prisma.homeworkSubmission.findUnique({
+        where: { homeworkId_studentId: { homeworkId, studentId: maybeStudentId } },
+        select: { instituteId: true, student: { select: { userId: true } } }
+      });
+      if (!submission) return false;
+      if (session.user.instituteId === submission.instituteId && canAccess(session.user.role, "homework")) return true;
+      return session.user.role === "STUDENT" && submission.student.userId === session.user.id;
+    }
+  }
+
+  try {
+    const mobile = await requireStudentMobileUser(request);
+    if (folder === "homework") {
+      return Boolean(await prisma.homeworkSubmission.findFirst({ where: { homeworkId, studentId: mobile.studentId }, select: { id: true } }));
+    }
+    if (folder === "homework-submissions" && maybeStudentId) {
+      return mobile.studentId === maybeStudentId;
+    }
+  } catch (error) {
+    if (!(error instanceof StudentMobileAuthError)) throw error;
+  }
+
+  await writeSecurityAudit({
+    action: "UPLOAD_FILE_ACCESS_DENIED",
+    resourceType: folder ?? "upload",
+    resourceId: homeworkId,
+    success: false,
+    message: "Unauthorized upload file access attempt.",
+    request,
+    metadata: { path: segments.join("/") }
+  });
+  return false;
+}
+
+export async function GET(request: Request, context: RouteContext) {
   try {
     const params = await context.params;
-    if (!isSafePath(params.path) || !PUBLIC_UPLOAD_FOLDERS.has(params.path[0] ?? "")) {
+    const folder = params.path[0] ?? "";
+    if (!isSafePath(params.path) || (!PUBLIC_UPLOAD_FOLDERS.has(folder) && !AUTHORIZED_UPLOAD_FOLDERS.has(folder))) {
+      return NextResponse.json({ message: "File not found." }, { status: 404 });
+    }
+
+    if (AUTHORIZED_UPLOAD_FOLDERS.has(folder) && !(await authorizedForHomework(request, params.path))) {
       return NextResponse.json({ message: "File not found." }, { status: 404 });
     }
 
     const relativePath = params.path.join("/");
     const filePath = uploadDiskPath(relativePath);
-    const extension = path.extname(filePath).toLowerCase();
-    const type = CONTENT_TYPES[extension];
-    if (!type || BLOCKED_EXTENSIONS.has(extension)) {
+    const type = contentTypeForPath(filePath);
+    if (!type) {
       return NextResponse.json({ message: "File not found." }, { status: 404 });
     }
 
     const file = await readFile(filePath);
+    const download = new URL(request.url).searchParams.get("download") === "1";
+    const safeName = path.basename(filePath).replace(/["\r\n]/g, "_");
 
     return new NextResponse(file, {
       headers: {
         "Content-Type": type,
         "Content-Length": String(file.byteLength),
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${safeName}"`,
+        "Cache-Control": PUBLIC_UPLOAD_FOLDERS.has(folder) ? "public, max-age=31536000, immutable" : "private, no-store",
         "X-Content-Type-Options": "nosniff"
       }
     });

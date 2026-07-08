@@ -1,10 +1,9 @@
-import { AttendanceSource, AttendanceStatus, CardScanType, NotificationChannel, NotificationStatus, NotificationType, PaymentStatus, Prisma } from "@prisma/client";
+import { AttendanceSource, AttendanceStatus, CardScanResult, CardScanType, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { nfcUidCandidates, normalizeNfcUid } from "@/lib/nfc";
-import { sendParentAttendanceNotification } from "@/lib/parent-attendance-notifications";
-import { sendStudentWebPush } from "@/lib/web-push";
+import { normalizeNfcUid } from "@/lib/nfc";
 import { formatCurrency } from "@/lib/utils";
-import { findActiveCardByCredential, logCardScan, scanResultForCardStatus } from "@/lib/student-cards";
+import { scanResultForCardStatus } from "@/lib/student-cards";
+import { enqueueAttendanceNotifications, type AttendanceNotificationPayload } from "@/lib/attendance-notification-queue";
 
 export type AttendanceMarkResult = {
   ok: boolean;
@@ -27,6 +26,8 @@ export type AttendanceMarkResult = {
     nfcUid?: string;
     normalizedNfcUid?: string;
   };
+  duplicate?: boolean;
+  idempotent?: boolean;
 };
 
 type MarkInput = {
@@ -37,6 +38,12 @@ type MarkInput = {
   nfcUid?: string;
   studentId?: string;
   searchMethod?: "NFC" | "QR" | "MANUAL_ID" | "MANUAL_SEARCH";
+  scanId?: string;
+  deviceId?: string;
+  scanType?: CardScanType;
+  scannedValue?: string;
+  timestamp?: string;
+  ipAddress?: string;
 };
 
 function todayRange() {
@@ -80,6 +87,7 @@ async function getPaymentStatus(studentId: string, classGroupId: string, institu
 }
 
 async function audit(input: {
+  tx?: Prisma.TransactionClient;
   instituteId: string;
   sessionId: string;
   studentId?: string;
@@ -90,7 +98,8 @@ async function audit(input: {
   message: string;
   metadata?: Record<string, unknown>;
 }) {
-  await prisma.attendanceAuditLog.create({
+  const client = input.tx ?? prisma;
+  await client.attendanceAuditLog.create({
     data: {
       instituteId: input.instituteId,
       sessionId: input.sessionId,
@@ -105,480 +114,434 @@ async function audit(input: {
   });
 }
 
-async function sendStudentAttendanceNotification(input: {
-  instituteId: string;
-  studentId: string;
-  attendanceRecordId: string;
-  attendanceSessionId: string;
-  classGroupId: string;
-  className: string;
-  status: AttendanceStatus;
-  markedAt: Date;
-  payment: AttendanceMarkResult["payment"];
-}) {
-  const [settings, student] = await Promise.all([
-    prisma.instituteSettings.findUnique({ where: { instituteId: input.instituteId } }),
-    prisma.student.findFirst({
-      where: { id: input.studentId, instituteId: input.instituteId },
-      include: { user: { select: { id: true } } }
-    })
-  ]);
-
-  if (!student) {
-    return { inApp: false, webPush: 0, skipped: true };
-  }
-
-  const title = "Attendance marked";
-  const paymentText = input.payment?.label ? ` Payment status: ${input.payment.label}.` : "";
-  const body = `Your attendance for ${input.className} was marked as ${input.status.toLowerCase()}.${paymentText}`;
-  const actionUrl = "/student/attendance";
-  const data = {
-    actionUrl,
-    attendanceRecordId: input.attendanceRecordId,
-    attendanceSessionId: input.attendanceSessionId,
-    classGroupId: input.classGroupId,
-    className: input.className,
-    status: input.status,
-    markedAt: input.markedAt.toISOString(),
-    payment: input.payment
-  };
-  const notification =
-    settings?.notificationInAppEnabled === false || !student.user
-      ? null
-      : await prisma.notification.create({
-          data: {
-            instituteId: input.instituteId,
-            userId: student.user.id,
-            studentId: student.id,
-            title,
-            body,
-            message: body,
-            type: NotificationType.STUDENT_ARRIVED,
-            actionUrl,
-            dataJson: data as Prisma.InputJsonObject,
-            metadata: data as Prisma.InputJsonObject
-          }
-        });
-
-  if (notification) {
-    await prisma.notificationLog.create({
-      data: {
-        instituteId: input.instituteId,
-        userId: student.user?.id,
-        studentId: student.id,
-        notificationId: notification.id,
-        type: NotificationType.STUDENT_ARRIVED,
-        channel: NotificationChannel.IN_APP,
-        status: NotificationStatus.SENT,
-        title,
-        body,
-        message: body,
-        recipientType: "STUDENT",
-        recipientId: student.id,
-        payloadJson: data as Prisma.InputJsonObject,
-        sentAt: new Date()
-      }
-    });
-  }
-
-  const webPushResult =
-    settings?.notificationWebPushEnabled === false
-      ? { sent: 0, failed: 0, skipped: true }
-      : await sendStudentWebPush({
-          instituteId: input.instituteId,
-          studentId: student.id,
-          notificationId: notification?.id ?? null,
-          type: NotificationType.STUDENT_ARRIVED,
-          title,
-          body,
-          data
-        });
-
-  return {
-    inApp: Boolean(notification),
-    webPush: webPushResult.sent,
-    skipped: false
-  };
-}
-
 export async function markAttendanceByCredential(input: MarkInput): Promise<AttendanceMarkResult> {
   const status = input.status ?? AttendanceStatus.PRESENT;
   const { start, end } = todayRange();
-
-  const classGroup = await prisma.classGroup.findUnique({
-    where: { id: input.classGroupId },
-    select: { id: true, instituteId: true, name: true, branchId: true }
-  });
-
-  if (!classGroup) {
-    return { ok: false, statusCode: 404, message: "Class was not found." };
-  }
-
-  const session = await prisma.attendanceSession.findFirst({
-    where: {
-      classGroupId: input.classGroupId,
-      status: "ACTIVE",
-      sessionDate: {
-        gte: start,
-        lt: end
-      }
-    },
-    select: { id: true }
-  });
-
-  if (!session) {
-    return { ok: false, statusCode: 409, message: "No active attendance session for this class today." };
-  }
-
-  const scannedValue = input.nfcUid ?? input.token ?? "";
   const scanType = input.source === AttendanceSource.NFC ? CardScanType.NFC : input.source === AttendanceSource.QR ? CardScanType.QR : null;
-  const scannedCard = scanType
-    ? await findActiveCardByCredential({
-        instituteId: classGroup.instituteId,
-        scanType,
-        value: scannedValue
-      })
-    : null;
+  const scannedValue = input.scannedValue ?? input.nfcUid ?? input.token ?? "";
+  const normalizedScannedValue = scanType === CardScanType.NFC ? normalizeNfcUid(scannedValue) : scannedValue.trim();
 
-  if (scanType && !scannedCard) {
-    const normalizedNfcUid = input.nfcUid ? normalizeNfcUid(input.nfcUid) : undefined;
-    await Promise.all([
-      audit({
-        instituteId: classGroup.instituteId,
-        sessionId: session.id,
-        source: input.source,
-        status,
-        success: false,
-        message: input.token ? "QR card was not recognized." : "NFC card was not recognized.",
-        metadata: { token: input.token, nfcUid: input.nfcUid, normalizedNfcUid }
-      }),
-      logCardScan({
-        instituteId: classGroup.instituteId,
-        scanType,
-        scannedValue,
-        result: "CARD_NOT_FOUND",
-        classGroupId: classGroup.id,
-        attendanceSessionId: session.id,
-        notes: input.token ? "QR card was not recognized." : "NFC card was not recognized."
-      })
-    ]);
+  if (input.scanId) {
+    const replay = await prisma.scanRequestLog.findUnique({ where: { scanId: input.scanId } });
+    if (replay?.responseJson) {
+      return { ...(replay.responseJson as unknown as AttendanceMarkResult), idempotent: true };
+    }
 
-    return {
-      ok: false,
-      statusCode: 404,
-      message: input.token ? "QR card was not recognized." : `NFC card was not recognized${normalizedNfcUid ? `: ${normalizedNfcUid}` : "."}`,
-      credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid } : undefined
-    };
+    if (replay) {
+      return { ok: false, statusCode: 202, message: "This scan is already being processed.", idempotent: true };
+    }
   }
 
-  if (scanType && scannedCard && scannedCard.status !== "ACTIVE") {
-    const result = scanResultForCardStatus(scannedCard.status);
-    const message = `This card is no longer active. Status: ${scannedCard.status}.`;
+  const queuePayloads: AttendanceNotificationPayload[] = [];
 
-    await Promise.all([
-      audit({
-        instituteId: classGroup.instituteId,
-        sessionId: session.id,
-        studentId: scannedCard.studentId,
-        source: input.source,
-        status,
-        success: false,
-        message,
-        metadata: { cardId: scannedCard.id, cardStatus: scannedCard.status }
-      }),
-      logCardScan({
-        instituteId: classGroup.instituteId,
-        cardId: scannedCard.id,
-        studentId: scannedCard.studentId,
-        scanType,
-        scannedValue,
-        result,
-        classGroupId: classGroup.id,
-        attendanceSessionId: session.id,
-        notes: message
-      })
-    ]);
-
-    return {
-      ok: false,
-      statusCode: 403,
-      message,
-      student: {
-        id: scannedCard.student.id,
-        name: `${scannedCard.student.firstName} ${scannedCard.student.lastName}`,
-        admissionNo: scannedCard.student.admissionNo
-      }
-    };
-  }
-
-  const student = scannedCard
-    ? scannedCard.student
-    : input.studentId
-    ? await prisma.student.findFirst({
-        where: { id: input.studentId, instituteId: classGroup.instituteId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          admissionNo: true,
-          status: true
+  const txResult = await prisma.$transaction(
+    async (tx) => {
+      const finish = async (
+        result: AttendanceMarkResult,
+        context?: {
+          instituteId?: string | null;
+          sessionId?: string | null;
+          recordId?: string | null;
+          studentId?: string | null;
+          scanResult?: string;
         }
-      })
-    : await findStudentByNfcUid(classGroup.instituteId, input.nfcUid);
+      ) => {
+        if (input.scanId && scanType) {
+          await tx.scanRequestLog.upsert({
+            where: { scanId: input.scanId },
+            create: {
+              scanId: input.scanId,
+              instituteId: context?.instituteId ?? null,
+              deviceId: input.deviceId ?? "unknown",
+              scanType,
+              scannedValue: normalizedScannedValue,
+              result: context?.scanResult ?? result.message,
+              responseJson: result as unknown as Prisma.InputJsonObject,
+              statusCode: result.statusCode,
+              attendanceSessionId: context?.sessionId ?? null,
+              attendanceRecordId: context?.recordId ?? null,
+              studentId: context?.studentId ?? null,
+              ipAddress: input.ipAddress ?? null,
+              processedAt: new Date()
+            },
+            update: {
+              instituteId: context?.instituteId ?? undefined,
+              result: context?.scanResult ?? result.message,
+              responseJson: result as unknown as Prisma.InputJsonObject,
+              statusCode: result.statusCode,
+              attendanceSessionId: context?.sessionId ?? undefined,
+              attendanceRecordId: context?.recordId ?? undefined,
+              studentId: context?.studentId ?? undefined,
+              processedAt: new Date()
+            }
+          });
+        }
+        return result;
+      };
 
-  if (!student) {
-    const normalizedNfcUid = input.nfcUid ? normalizeNfcUid(input.nfcUid) : undefined;
-    await audit({
-      instituteId: classGroup.instituteId,
-      sessionId: session.id,
-      source: input.source,
-      status,
-      success: false,
-      message: input.studentId ? "Student was not recognized." : input.token ? "QR token was not recognized." : "NFC UID was not recognized.",
-      metadata: { token: input.token, nfcUid: input.nfcUid, normalizedNfcUid }
-    });
+      const classGroup = await tx.classGroup.findUnique({
+        where: { id: input.classGroupId },
+        select: { id: true, instituteId: true, name: true, branchId: true }
+      });
 
-    return {
-      ok: false,
-      statusCode: 404,
-      message: input.studentId
-        ? "Student was not recognized."
-        : input.token
-        ? "QR token was not recognized."
-        : `NFC UID was not recognized${normalizedNfcUid ? `: ${normalizedNfcUid}` : "."}`,
-      credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid } : undefined
-    };
-  }
-
-  if (student.status !== "ACTIVE") {
-    await audit({
-      instituteId: classGroup.instituteId,
-      sessionId: session.id,
-      studentId: student.id,
-      source: input.source,
-      status,
-      success: false,
-      message: "Student is not active."
-    });
-
-    return {
-      ok: false,
-      statusCode: 403,
-      message: "Student is not active.",
-      student: { id: student.id, name: `${student.firstName} ${student.lastName}`, admissionNo: student.admissionNo }
-    };
-  }
-
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      studentId_classGroupId: {
-        studentId: student.id,
-        classGroupId: input.classGroupId
+      if (!classGroup) {
+        return finish({ ok: false, statusCode: 404, message: "Class was not found." }, { scanResult: "CLASS_NOT_FOUND" });
       }
-    },
-    select: { id: true, active: true, status: true }
-  });
 
-  if (!enrollment?.active || enrollment.status !== "ACTIVE") {
-    await audit({
-      instituteId: classGroup.instituteId,
-      sessionId: session.id,
-      studentId: student.id,
-      source: input.source,
-      status,
-      success: false,
-      message: "Student is not actively enrolled in this class."
-    });
+      if (scanType && input.deviceId) {
+        const settings = await tx.instituteSettings.findUnique({
+          where: { instituteId: classGroup.instituteId },
+          select: { attendanceReaderValidationEnabled: true }
+        });
+        const reader = await tx.readerDevice.findUnique({ where: { deviceCode: input.deviceId } });
+        const readerMatchesType = reader?.type === "BOTH" || reader?.type === scanType;
 
-    return {
-      ok: false,
-      statusCode: 403,
-      message: "Student is not actively enrolled in this class.",
-      student: { id: student.id, name: `${student.firstName} ${student.lastName}`, admissionNo: student.admissionNo }
-    };
-  }
+        if (settings?.attendanceReaderValidationEnabled && (!reader || reader.instituteId !== classGroup.instituteId || !reader.isActive || !readerMatchesType)) {
+          return finish(
+            { ok: false, statusCode: 403, message: "This reader is not active for attendance scans." },
+            { instituteId: classGroup.instituteId, scanResult: "READER_INACTIVE" }
+          );
+        }
 
-  const duplicate = await prisma.attendanceRecord.findUnique({
-    where: {
-      sessionId_studentId: {
-        sessionId: session.id,
-        studentId: student.id
+        if (reader && reader.instituteId === classGroup.instituteId) {
+          await tx.readerDevice.update({ where: { id: reader.id }, data: { lastSeenAt: new Date() } });
+        }
       }
-    },
-    select: { id: true, markedAt: true, status: true }
-  });
 
-  const payment = await getPaymentStatus(student.id, input.classGroupId, classGroup.instituteId);
-  const studentPayload = {
-    id: student.id,
-    name: `${student.firstName} ${student.lastName}`,
-    admissionNo: student.admissionNo
-  };
+      const session = await tx.attendanceSession.findFirst({
+        where: {
+          classGroupId: input.classGroupId,
+          status: "ACTIVE",
+          sessionDate: {
+            gte: start,
+            lt: end
+          }
+        },
+        select: { id: true }
+      });
 
-  if (duplicate) {
-    await Promise.all([
-      audit({
+      if (!session) {
+        return finish(
+          { ok: false, statusCode: 409, message: "No active attendance session for this class today." },
+          { instituteId: classGroup.instituteId, scanResult: "NO_ACTIVE_SESSION" }
+        );
+      }
+
+      const scannedCard = scanType
+        ? await tx.studentCard.findFirst({
+            where:
+              scanType === CardScanType.NFC
+                ? { instituteId: classGroup.instituteId, nfcUid: normalizedScannedValue }
+                : { instituteId: classGroup.instituteId, OR: [{ qrToken: normalizedScannedValue }, { qrCode: normalizedScannedValue }] },
+            include: {
+              student: {
+                select: { id: true, firstName: true, lastName: true, admissionNo: true, status: true }
+              }
+            }
+          })
+        : null;
+
+      if (scanType && !scannedCard) {
+        const normalizedNfcUid = input.nfcUid ? normalizeNfcUid(input.nfcUid) : undefined;
+        const message = input.token ? "QR card was not recognized." : "NFC card was not recognized.";
+        await audit({
+          tx,
+          instituteId: classGroup.instituteId,
+          sessionId: session.id,
+          source: input.source,
+          status,
+          success: false,
+          message,
+          metadata: { token: input.token, nfcUid: input.nfcUid, normalizedNfcUid, scanId: input.scanId, deviceId: input.deviceId }
+        });
+        await tx.cardScanLog.create({
+          data: {
+            instituteId: classGroup.instituteId,
+            scanType,
+            scannedValue: normalizedScannedValue,
+            result: CardScanResult.CARD_NOT_FOUND,
+            classGroupId: classGroup.id,
+            attendanceSessionId: session.id,
+            deviceInfo: input.deviceId ?? null,
+            notes: message
+          }
+        });
+
+        return finish(
+          {
+            ok: false,
+            statusCode: 404,
+            message: input.token ? "QR card was not recognized." : `NFC card was not recognized${normalizedNfcUid ? `: ${normalizedNfcUid}` : "."}`,
+            credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid } : undefined
+          },
+          { instituteId: classGroup.instituteId, sessionId: session.id, scanResult: CardScanResult.CARD_NOT_FOUND }
+        );
+      }
+
+      if (scanType && scannedCard && scannedCard.status !== "ACTIVE") {
+        const result = scanResultForCardStatus(scannedCard.status);
+        const message = `This card is no longer active. Status: ${scannedCard.status}.`;
+        await audit({
+          tx,
+          instituteId: classGroup.instituteId,
+          sessionId: session.id,
+          studentId: scannedCard.studentId,
+          source: input.source,
+          status,
+          success: false,
+          message,
+          metadata: { cardId: scannedCard.id, cardStatus: scannedCard.status, scanId: input.scanId, deviceId: input.deviceId }
+        });
+        await tx.cardScanLog.create({
+          data: {
+            instituteId: classGroup.instituteId,
+            cardId: scannedCard.id,
+            studentId: scannedCard.studentId,
+            scanType,
+            scannedValue: normalizedScannedValue,
+            result,
+            classGroupId: classGroup.id,
+            attendanceSessionId: session.id,
+            deviceInfo: input.deviceId ?? null,
+            notes: message
+          }
+        });
+
+        return finish(
+          {
+            ok: false,
+            statusCode: 403,
+            message,
+            student: {
+              id: scannedCard.student.id,
+              name: `${scannedCard.student.firstName} ${scannedCard.student.lastName}`,
+              admissionNo: scannedCard.student.admissionNo
+            }
+          },
+          { instituteId: classGroup.instituteId, sessionId: session.id, studentId: scannedCard.studentId, scanResult: result }
+        );
+      }
+
+      const student = scannedCard
+        ? scannedCard.student
+        : input.studentId
+        ? await tx.student.findFirst({
+            where: { id: input.studentId, instituteId: classGroup.instituteId },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              admissionNo: true,
+              status: true
+            }
+          })
+        : null;
+
+      if (!student) {
+        const normalizedNfcUid = input.nfcUid ? normalizeNfcUid(input.nfcUid) : undefined;
+        await audit({
+          tx,
+          instituteId: classGroup.instituteId,
+          sessionId: session.id,
+          source: input.source,
+          status,
+          success: false,
+          message: input.studentId ? "Student was not recognized." : input.token ? "QR token was not recognized." : "NFC UID was not recognized.",
+          metadata: { token: input.token, nfcUid: input.nfcUid, normalizedNfcUid, scanId: input.scanId, deviceId: input.deviceId }
+        });
+
+        return finish(
+          {
+            ok: false,
+            statusCode: 404,
+            message: input.studentId
+              ? "Student was not recognized."
+              : input.token
+              ? "QR token was not recognized."
+              : `NFC UID was not recognized${normalizedNfcUid ? `: ${normalizedNfcUid}` : "."}`,
+            credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid } : undefined
+          },
+          { instituteId: classGroup.instituteId, sessionId: session.id, scanResult: "STUDENT_NOT_FOUND" }
+        );
+      }
+
+      const studentPayload = {
+        id: student.id,
+        name: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo
+      };
+
+      if (student.status !== "ACTIVE") {
+        await audit({
+          tx,
+          instituteId: classGroup.instituteId,
+          sessionId: session.id,
+          studentId: student.id,
+          source: input.source,
+          status,
+          success: false,
+          message: "Student is not active.",
+          metadata: { scanId: input.scanId, deviceId: input.deviceId }
+        });
+
+        return finish(
+          { ok: false, statusCode: 403, message: "Student is not active.", student: studentPayload },
+          { instituteId: classGroup.instituteId, sessionId: session.id, studentId: student.id, scanResult: "STUDENT_INACTIVE" }
+        );
+      }
+
+      const enrollment = await tx.enrollment.findUnique({
+        where: {
+          studentId_classGroupId: {
+            studentId: student.id,
+            classGroupId: input.classGroupId
+          }
+        },
+        select: { id: true, active: true, status: true }
+      });
+
+      if (!enrollment?.active || enrollment.status !== "ACTIVE") {
+        await audit({
+          tx,
+          instituteId: classGroup.instituteId,
+          sessionId: session.id,
+          studentId: student.id,
+          source: input.source,
+          status,
+          success: false,
+          message: "Student is not actively enrolled in this class.",
+          metadata: { scanId: input.scanId, deviceId: input.deviceId }
+        });
+
+        return finish(
+          { ok: false, statusCode: 403, message: "Student is not actively enrolled in this class.", student: studentPayload },
+          { instituteId: classGroup.instituteId, sessionId: session.id, studentId: student.id, scanResult: "NOT_ENROLLED" }
+        );
+      }
+
+      let record: { id: string; markedAt: Date; status: AttendanceStatus };
+      let duplicate = false;
+
+      try {
+        record = await tx.attendanceRecord.create({
+          data: {
+            sessionId: session.id,
+            studentId: student.id,
+            status,
+            source: input.source,
+            searchMethod: input.searchMethod ?? (input.source === AttendanceSource.NFC ? "NFC" : input.source === AttendanceSource.QR ? "QR" : "MANUAL_SEARCH")
+          },
+          select: { id: true, markedAt: true, status: true }
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+          throw error;
+        }
+        const existing = await tx.attendanceRecord.findUniqueOrThrow({
+          where: { sessionId_studentId: { sessionId: session.id, studentId: student.id } },
+          select: { id: true, markedAt: true, status: true }
+        });
+        record = existing;
+        duplicate = true;
+      }
+
+      const auditMessage = duplicate ? "Attendance already marked." : "Attendance marked successfully.";
+      await audit({
+        tx,
         instituteId: classGroup.instituteId,
         sessionId: session.id,
         studentId: student.id,
-        recordId: duplicate.id,
+        recordId: record.id,
         source: input.source,
-        status: duplicate.status,
-        success: false,
-        message: "Attendance already marked for this session."
-      }),
-      scanType
-        ? logCardScan({
+        status: record.status,
+        success: !duplicate,
+        message: auditMessage,
+        metadata: { scanId: input.scanId, deviceId: input.deviceId, duplicate }
+      });
+
+      if (scanType) {
+        await tx.cardScanLog.create({
+          data: {
             instituteId: classGroup.instituteId,
             cardId: scannedCard?.id,
             studentId: student.id,
             scanType,
-            scannedValue,
-            result: "DUPLICATE_ATTENDANCE",
+            scannedValue: normalizedScannedValue,
+            result: duplicate ? CardScanResult.DUPLICATE_ATTENDANCE : CardScanResult.SUCCESS,
             classGroupId: classGroup.id,
             attendanceSessionId: session.id,
-            notes: "Attendance already marked for this session."
-          })
-        : Promise.resolve()
-    ]);
+            deviceInfo: input.deviceId ?? null,
+            notes: auditMessage
+          }
+        });
+      }
 
-    return {
-      ok: false,
-      statusCode: 409,
-      message: "Attendance already marked for this session.",
-      student: studentPayload,
-      status: duplicate.status,
-      source: input.source,
-      markedAt: duplicate.markedAt.toISOString(),
-      payment,
-      credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid: normalizeNfcUid(input.nfcUid) } : undefined
-    };
-  }
+      const result: AttendanceMarkResult = {
+        ok: true,
+        statusCode: 200,
+        message: auditMessage,
+        student: studentPayload,
+        status: record.status,
+        source: input.source,
+        markedAt: record.markedAt.toISOString(),
+        credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid: normalizeNfcUid(input.nfcUid) } : undefined,
+        duplicate
+      };
 
-  const record = await prisma.attendanceRecord.create({
-    data: {
-      sessionId: session.id,
-      studentId: student.id,
-      status,
-      source: input.source,
-      searchMethod: input.searchMethod ?? (input.source === AttendanceSource.NFC ? "NFC" : input.source === AttendanceSource.QR ? "QR" : "MANUAL_SEARCH")
-    }
-  });
-
-  await Promise.all([
-    audit({
-      instituteId: classGroup.instituteId,
-      sessionId: session.id,
-      studentId: student.id,
-      recordId: record.id,
-      source: input.source,
-      status,
-      success: true,
-      message: "Attendance marked successfully."
-    }),
-    scanType
-      ? logCardScan({
+      if (!duplicate) {
+        queuePayloads.push({
           instituteId: classGroup.instituteId,
-          cardId: scannedCard?.id,
-          studentId: student.id,
-          scanType,
-          scannedValue,
-          result: "SUCCESS",
-          classGroupId: classGroup.id,
+          attendanceRecordId: record.id,
           attendanceSessionId: session.id,
-          notes: "Attendance marked successfully."
+          studentId: student.id,
+          classGroupId: classGroup.id,
+          branchId: classGroup.branchId,
+          className: classGroup.name,
+          status: record.status,
+          markedAt: record.markedAt.toISOString()
+        });
+      }
+
+      return finish(result, {
+        instituteId: classGroup.instituteId,
+        sessionId: session.id,
+        recordId: record.id,
+        studentId: student.id,
+        scanResult: duplicate ? CardScanResult.DUPLICATE_ATTENDANCE : CardScanResult.SUCCESS
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
+  );
+
+  if (txResult.student) {
+    const queuePayload = queuePayloads[0];
+    const instituteId =
+      queuePayload?.instituteId ??
+      (
+        await prisma.classGroup.findUnique({
+          where: { id: input.classGroupId },
+          select: { instituteId: true }
         })
-      : Promise.resolve()
-  ]);
+      )?.instituteId;
+    const payment = instituteId ? await getPaymentStatus(txResult.student.id, input.classGroupId, instituteId) : undefined;
+    txResult.payment = payment;
+    if (queuePayload) {
+      queuePayload.payment = payment;
+      try {
+        await enqueueAttendanceNotifications(queuePayload);
+      } catch (error) {
+        console.error("Attendance notification enqueue failed", error);
+      }
+    }
 
-  try {
-    await sendParentAttendanceNotification({
-      instituteId: classGroup.instituteId,
-      attendanceRecordId: record.id,
-      studentId: student.id,
-      classGroupId: classGroup.id,
-      branchId: classGroup.branchId,
-      markedAt: record.markedAt
-    });
-  } catch (error) {
-    console.error("Parent attendance notification failed", error);
+    if (input.scanId) {
+      await prisma.scanRequestLog.updateMany({
+        where: { scanId: input.scanId },
+        data: { responseJson: txResult as unknown as Prisma.InputJsonObject }
+      });
+    }
   }
 
-  try {
-    await sendStudentAttendanceNotification({
-      instituteId: classGroup.instituteId,
-      studentId: student.id,
-      attendanceRecordId: record.id,
-      attendanceSessionId: session.id,
-      classGroupId: classGroup.id,
-      className: classGroup.name,
-      status,
-      markedAt: record.markedAt,
-      payment
-    });
-  } catch (error) {
-    console.error("Student attendance notification failed", error);
-  }
-
-  return {
-    ok: true,
-    statusCode: 200,
-    message: "Attendance marked successfully.",
-    student: studentPayload,
-    status,
-    source: input.source,
-    markedAt: record.markedAt.toISOString(),
-    payment,
-    credential: input.nfcUid ? { nfcUid: input.nfcUid, normalizedNfcUid: normalizeNfcUid(input.nfcUid) } : undefined
-  };
+  return txResult;
 }
 
-async function findStudentByNfcUid(instituteId: string, nfcUid: string | undefined) {
-  const candidates = nfcUidCandidates(nfcUid);
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const exact = await prisma.student.findFirst({
-    where: { instituteId, nfcUid: { in: candidates } },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      admissionNo: true,
-      status: true
-    }
-  });
-
-  if (exact) {
-    return exact;
-  }
-
-  const normalizedCandidates = new Set(candidates.map((candidate) => normalizeNfcUid(candidate)));
-  const students = await prisma.student.findMany({
-    where: { instituteId, nfcUid: { not: null } },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      admissionNo: true,
-      status: true,
-      nfcUid: true
-    }
-  });
-
-  const matched = students.find((student) => normalizedCandidates.has(normalizeNfcUid(student.nfcUid)));
-
-  if (!matched) {
-    return null;
-  }
-
-  return {
-    id: matched.id,
-    firstName: matched.firstName,
-    lastName: matched.lastName,
-    admissionNo: matched.admissionNo,
-    status: matched.status
-  };
-}

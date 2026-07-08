@@ -2,12 +2,18 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
+import { createHash } from "node:crypto";
 import { loginSchema } from "@/lib/validations";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { writeSecurityAudit } from "@/lib/security-audit";
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "");
+}
+
+function identifierHash(value: string) {
+  return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 }
 
 function authSecret() {
@@ -32,7 +38,9 @@ export const REJECTED_ACCOUNT_MESSAGE = "Your enrollment request was not approve
 export const authOptions: NextAuthOptions = {
   secret: authSecret(),
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
+    maxAge: 8 * 60 * 60,
+    updateAge: 15 * 60
   },
   pages: {
     signIn: "/login"
@@ -83,12 +91,30 @@ export const authOptions: NextAuthOptions = {
           (await findPortalUser(identifier));
 
         if (!user) {
+          await writeSecurityAudit({
+            action: "LOGIN_FAILED",
+            resourceType: "User",
+            success: false,
+            message: "Credentials login failed for an unknown account.",
+            metadata: { provider: "credentials", identifierHash: identifierHash(identifier) }
+          });
           return null;
         }
 
         const isValid = user.passwordHash ? await bcrypt.compare(parsed.data.password, user.passwordHash) : false;
 
         if (!isValid) {
+          await writeSecurityAudit({
+            instituteId: user.instituteId,
+            actorUserId: user.id,
+            actorRole: user.role,
+            action: "LOGIN_FAILED",
+            resourceType: "User",
+            resourceId: user.id,
+            success: false,
+            message: "Credentials login failed.",
+            metadata: { provider: "credentials" }
+          });
           return null;
         }
         if (user.role === "STUDENT" && user.passwordStatus !== "ACTIVE") throw new Error("Activate your account with QR or NFC before using password login.");
@@ -98,6 +124,17 @@ export const authOptions: NextAuthOptions = {
         await prisma.user.update({
           where: { id: user.id },
           data: { lastLoginAt: new Date(), lastLoginDevice: "Password login" }
+        });
+        await writeSecurityAudit({
+          instituteId: user.instituteId,
+          actorUserId: user.id,
+          actorRole: user.role,
+          action: "LOGIN_SUCCESS",
+          resourceType: "User",
+          resourceId: user.id,
+          success: true,
+          message: "Credentials login succeeded.",
+          metadata: { provider: "credentials" }
         });
 
         return {
@@ -140,6 +177,17 @@ export const authOptions: NextAuthOptions = {
             lastLoginAt: new Date(),
             lastLoginDevice: "Google"
           }
+        });
+        await writeSecurityAudit({
+          instituteId: existing.instituteId,
+          actorUserId: existing.id,
+          actorRole: existing.role,
+          action: "LOGIN_SUCCESS",
+          resourceType: "User",
+          resourceId: existing.id,
+          success: true,
+          message: "Google login succeeded.",
+          metadata: { provider: "google" }
         });
       } else {
         await prisma.user.create({

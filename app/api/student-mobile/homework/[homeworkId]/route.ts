@@ -7,6 +7,14 @@ import { sendStudentWebPush } from "@/lib/web-push";
 
 type RouteContext = { params: Promise<{ homeworkId: string }> };
 
+function ownHomeworkAttachmentUrl(value: string | null | undefined, homeworkId: string, studentId: string, request: Request) {
+  if (!value) return null;
+  const url = new URL(value, request.url);
+  if (url.origin !== new URL(request.url).origin) return null;
+  const expected = `/api/uploads/files/homework-submissions/${homeworkId}/${studentId}/`;
+  return url.pathname.startsWith(expected) ? url.pathname : null;
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { homeworkId } = await context.params;
@@ -64,11 +72,16 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const now = new Date();
+    const attachmentUrl = ownHomeworkAttachmentUrl(parsed.attachmentUrl, homeworkId, studentId, request);
+    if (parsed.attachmentUrl && !attachmentUrl) {
+      return NextResponse.json({ ok: false, message: "Attachment URL is not valid for this homework submission." }, { status: 422 });
+    }
+
     const saved = await prisma.homeworkSubmission.update({
       where: { id: submission.id },
       data: {
         answerText: parsed.answerText ?? null,
-        attachmentUrl: parsed.attachmentUrl ?? null,
+        attachmentUrl,
         submittedAt: now,
         status: homeworkSubmissionStatus(submission.homework.deadline, now),
         reviewStatus: null

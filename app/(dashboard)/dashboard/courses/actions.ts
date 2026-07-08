@@ -10,6 +10,7 @@ import { nextInvoiceNo } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerTeacherId } from "@/lib/single-teacher";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { COURSE_RESOURCE_POLICY, assertUploadSignature, safeUploadExtension, scanFileForViruses } from "@/lib/file-security";
 import { uploadDiskPath } from "@/lib/upload-storage";
 import { sendStudentWebPush } from "@/lib/web-push";
 import { courseSchema, type CourseInput } from "@/lib/validations";
@@ -128,16 +129,16 @@ export async function deleteModule(courseId: string, moduleId: string) {
 
 async function storeResource(courseId: string, file: FormDataEntryValue | null) {
   if (!(file instanceof File) || !file.size) return null;
-  if (file.size > 100 * 1024 * 1024) throw new Error("Resource files must be 100 MB or smaller.");
-
-  const ext = path.extname(file.name).toLowerCase().replace(/[^.a-z0-9]/g, "");
-  const allowed = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov"];
-  if (!allowed.includes(ext)) throw new Error("Unsupported resource file type.");
+  const ext = safeUploadExtension(file, COURSE_RESOURCE_POLICY);
+  const bytes = Buffer.from(await file.arrayBuffer());
+  assertUploadSignature(file, bytes);
+  const scan = await scanFileForViruses();
+  if (!scan.clean) throw new Error("The resource file could not be accepted.");
 
   const folder = uploadDiskPath("courses", courseId);
   await mkdir(folder, { recursive: true });
   const name = `${randomUUID()}${ext}`;
-  await writeFile(path.join(folder, name), Buffer.from(await file.arrayBuffer()), { flag: "wx" });
+  await writeFile(path.join(folder, name), bytes, { flag: "wx" });
   return `/courses/${courseId}/${name}`;
 }
 

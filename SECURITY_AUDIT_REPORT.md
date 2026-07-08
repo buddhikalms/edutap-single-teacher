@@ -1,111 +1,123 @@
 # Security Audit Report
 
-Date: 2026-07-07
+Date: 2026-07-08
 
-## Summary
+## Executive Summary
 
-Completed a security pass across dependencies, environment variables, authentication, authorization, API routes, database access, uploads, XSS, CSRF/CORS posture, and runtime headers.
+EduTap Single Teacher Edition was audited across authentication, authorization, NFC/QR attendance, upload handling, payment slips, course resources, OAuth credentials, PWA headers, notification targeting, abuse controls, deployment settings, and audit logging.
 
-No critical or high `npm audit` vulnerabilities were found. Several practical hardening fixes were applied: security headers, rate limiting, stronger auth secret validation, removal of committed OAuth placeholder credentials, authenticated image uploads, and safer public upload file serving.
+The highest-risk issues found in this pass were public serving of homework and student submission uploads, inconsistent upload type validation, insufficient audit coverage for security-sensitive events, and several production hardening gaps. Fixes were applied without removing features.
 
-## Vulnerabilities Found
+## Critical Findings
 
-- `.env.example` contained real-looking Zoom OAuth credentials. These were removed and replaced with empty placeholders.
-- Generic image uploads were publicly reachable after setup. The endpoint now allows uploads only for the first-install state or authenticated dashboard/settings users.
-- Login, registration, enrollment, payment-slip upload, and export endpoints had no application-level rate limiting. In-memory rate limiting was added to sensitive routes.
-- NextAuth did not explicitly set or validate `NEXTAUTH_SECRET` / `AUTH_SECRET`. A runtime check now enforces at least 32 characters outside production builds.
-- Public uploaded-file serving accepted any known public upload folder path and could fall back to `application/octet-stream`. It now rejects unsafe path segments, unknown extensions, and executable-like extensions.
-- Security headers were minimal. Global headers now include frame, content sniffing, referrer, permissions, and a conservative CSP.
+- Public homework submission files could be fetched through the generic upload route if the URL was known.
+  - Fixed by requiring teacher/student/mobile authorization for `homework` and `homework-submissions` files.
+- Mobile homework submission uploads stored files outside the student-scoped folder and accepted weak extension fallbacks.
+  - Fixed by storing under `homework-submissions/{homeworkId}/{studentId}` and enforcing shared file policy validation.
 
-## Dependency Audit
+## High Findings
 
-- `npm audit`: 0 critical, 0 high, 5 moderate, 1 low.
-- High/critical fixes: none required.
-- Moderate/low advisories remain because the suggested npm fixes are unsafe or non-actionable in this app context, including major downgrades for `next`, `next-auth`, or `exceljs`.
-- `npm outdated` found available updates, including patch updates for `next`, `eslint-config-next`, `postcss`, `react-hook-form`, and Radix packages, plus major updates for several libraries.
-- `npx depcheck --json` reported `autoprefixer` and `postcss` as unused, but `postcss.config.mjs` uses `autoprefixer`; no dependencies were removed.
+- Upload validation was inconsistent across homework, mobile homework, and course resources.
+  - Fixed with shared extension, MIME, executable-blocklist, file-signature checks, random filenames, and a virus-scan hook.
+- Course resource serving did not explicitly enforce institute scoping and lacked content-type/private-cache headers.
+  - Fixed by requiring resource institute match and serving with `Content-Type`, `nosniff`, and `private, no-store`.
+- Authentication audit coverage was incomplete for login success/failure.
+  - Fixed by adding `SecurityAuditLog` and logging credential/Google login outcomes.
+- New password creation allowed 8-character passwords in several setup paths.
+  - Fixed by adding a stronger password policy for new registrations, student activation, enrollment requests, and student password changes.
 
-## Environment Variables
+## Medium Findings
 
-- `.env` is ignored and not tracked by Git.
-- `.env.example` remains tracked but no longer contains Zoom credentials.
-- Server-only variables reviewed include database, NextAuth/Auth secret, provider encryption key, VAPID private key, Google/Zoom client secrets, upload roots, and payment slip storage.
-- Frontend-exposed variables use `NEXT_PUBLIC_` only for public VAPID key and payment slip max size.
-- Local `NEXTAUTH_SECRET` is present and at least 32 characters based on non-secret inspection. Rotate it before production if it was ever shared or copied from a template.
+- Mobile homework attachment upload lacked per-student upload rate limiting.
+  - Fixed with route-level rate limiting.
+- Security headers lacked HSTS.
+  - Fixed with `Strict-Transport-Security`.
+- Generic upload access denials were not logged.
+  - Fixed with security audit entries for denied protected upload access.
+- Attendance high-traffic handling needed production-grade transaction/idempotency/queue controls.
+  - Fixed in the previous pass with transactional marking, `ScanRequestLog`, reader devices, rate limiting, queue-backed notifications, and monitoring.
+
+## Low Findings
+
+- CSP still allows `unsafe-inline` and `unsafe-eval` for current Next.js compatibility.
+  - Accepted for now; tighten after nonce/hash testing.
+- In-memory rate limiting remains process-local.
+  - Use Redis/WAF/platform rate limits in production.
+- Lint warnings remain in unrelated legacy UI files.
+  - No security impact identified in this pass.
 
 ## Fixes Applied
 
-- Added `lib/rate-limit.ts` with a small in-memory limiter and `Retry-After` responses.
-- Added rate limiting to:
-  - NextAuth credentials login
-  - mobile admin login
-  - parent mobile login
-  - student mobile login
-  - student mobile registration
-  - public enrollment requests
-  - Google enrollment completion
-  - family payment-slip resubmission
-  - card print export
-  - image upload
-- Added global security headers in `next.config.mjs`:
-  - `X-Frame-Options: DENY`
-  - `X-Content-Type-Options: nosniff`
-  - `Referrer-Policy: strict-origin-when-cross-origin`
-  - `Permissions-Policy`
-  - `Content-Security-Policy`
-- Added explicit NextAuth secret validation in `lib/auth.ts`.
-- Removed Zoom OAuth values from `.env.example`.
-- Required authenticated dashboard/settings access for image uploads after initial setup.
-- Hardened `/api/uploads/files/[...path]` path and extension handling.
+- Added `SecurityAuditLog` model and migration SQL.
+- Added `lib/security-audit.ts`.
+- Added `lib/file-security.ts` with shared upload policies and malware-scan hook.
+- Hardened protected upload serving for homework and submissions.
+- Hardened mobile homework attachment upload.
+- Hardened student web homework upload.
+- Hardened teacher homework attachment upload.
+- Hardened course resource upload and serving.
+- Added stronger password validation on new-password flows.
+- Added login success/failure security audit logs.
+- Added explicit JWT session max age/update age.
+- Added HSTS and adjusted Permissions-Policy to preserve same-origin camera/microphone features.
 
-## Files Changed
+## Changed Files
 
 - `.env.example`
+- `SECURITY_AUDIT_REPORT.md`
 - `next.config.mjs`
+- `package.json`
+- `package-lock.json`
+- `prisma/schema.prisma`
+- `prisma/migrations/20260708010000_high_traffic_attendance/migration.sql`
+- `ecosystem.config.cjs`
+- `docs/production-attendance-deployment.md`
 - `lib/auth.ts`
+- `lib/file-security.ts`
+- `lib/security-audit.ts`
 - `lib/rate-limit.ts`
-- `app/api/uploads/images/route.ts`
+- `lib/validations.ts`
+- `lib/attendance.ts`
+- `lib/attendance-notification-queue.ts`
+- `lib/student-attendance-notifications.ts`
 - `app/api/uploads/files/[...path]/route.ts`
-- `app/api/mobile/auth/login/route.ts`
-- `app/api/parent/auth/login/route.ts`
-- `app/api/student-mobile/auth/login/route.ts`
-- `app/api/student-mobile/auth/register/route.ts`
+- `app/api/student-mobile/homework/[homeworkId]/attachment/route.ts`
+- `app/api/student-mobile/homework/[homeworkId]/route.ts`
+- `app/api/student-web/resources/[resourceId]/route.ts`
 - `app/api/public/enrollment-requests/route.ts`
-- `app/api/public/google-enrollment/route.ts`
-- `app/api/family/enrollment-payment-slip/route.ts`
-- `app/api/card-print-export/batches/[batchId]/export/route.ts`
+- `app/api/student-auth/activation/complete/route.ts`
+- `app/(student-portal)/student/actions.ts`
+- `app/(dashboard)/homework/actions.ts`
+- `app/(dashboard)/dashboard/courses/actions.ts`
+- `app/(dashboard)/admin/page.tsx`
+- `app/api/attendance/nfc/route.ts`
+- `app/api/attendance/qr/route.ts`
+- `components/attendance/attendance-terminal.tsx`
+- `scripts/load-test-attendance.mjs`
+- `scripts/process-notification-queue.ts`
 
-## Areas Reviewed
+## Production Security Checklist
 
-- Authentication: NextAuth credentials and Google provider, session/JWT callbacks, password hashing with bcrypt, mobile token storage.
-- Authorization: dashboard middleware, portal/student server layouts, family/student ownership checks, card/export role checks, payment slip access checks.
-- API validation: many API routes already use Zod or domain validation helpers. Newly touched sensitive routes retained existing validation and gained throttling.
-- Database security: no raw SQL usage found. Reviewed Prisma queries for institute/user scoping in sensitive paths.
-- XSS: no `dangerouslySetInnerHTML` or direct `innerHTML` usage found.
-- CSRF/CORS: no broad CORS headers found. NextAuth handles its own CSRF. Same-origin headers and CSP were added globally.
-- File upload: payment slips already validate type, size, signatures, and private storage; generic image uploads now require auth/rate limiting and already validate signatures.
+- Run `npx prisma migrate deploy` before production start.
+- Rotate all production secrets: `NEXTAUTH_SECRET`, `PROVIDER_CREDENTIAL_KEY`, VAPID private key, OAuth secrets, SMS credentials, database password.
+- Use HTTPS only and keep HSTS enabled.
+- Use a least-privilege MySQL user; do not use root.
+- Set `DATABASE_URL` with production pool settings, for example `connection_limit=20&pool_timeout=20`.
+- Put private payment slip storage outside public web roots.
+- Configure Redis/BullMQ or platform/WAF rate limiting for multi-instance deployments.
+- Run the notification worker separately from the web process.
+- Register active reader devices before enabling reader validation.
+- Disable demo seed credentials in production.
+- Protect upload directories from direct Nginx/static serving.
+- Back up MySQL and private upload storage.
+- Monitor `SecurityAuditLog`, `ScanRequestLog`, `CardScanLog`, and `NotificationQueue`.
+- Revisit CSP to remove `unsafe-inline` and `unsafe-eval` after nonce/hash testing.
+- Add a real malware scanner behind `scanFileForViruses`.
 
 ## Verification
 
-- `npm audit --json`: completed, no high/critical vulnerabilities.
-- `npm outdated --json`: completed.
-- `npx depcheck --json`: completed; no removals made due PostCSS false positive.
-- `npm run lint`: passed with 22 existing warnings.
-- `npm run build`: passed. Build still reports one Turbopack tracing warning involving filesystem path tracing from upload-related code.
+- `npx prisma generate`: passed after stopping the local dev server/worker that held the Prisma DLL lock.
+- `npx prisma validate`: passed.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with existing warnings only.
 
-## Remaining Risks
-
-- In-memory rate limiting is per-process only. Use Redis, Upstash, a WAF, or platform rate limiting for multi-instance production deployments.
-- Moderate npm advisories remain. Revisit after compatible upstream releases or planned framework upgrades.
-- CSP currently allows `'unsafe-inline'` and `'unsafe-eval'` for Next.js compatibility. Tighten after testing nonce/hash-based scripts and production build behavior.
-- `PAYMENT_SLIP_STORAGE_DIR` should be outside any public web root in production.
-- Public upload folders include homework submissions by design. Confirm whether all homework attachments should be public or move sensitive submissions behind authorized APIs.
-- Demo credentials remain in seed/demo documentation. They should never be enabled in production data.
-
-## Recommended Next Steps
-
-1. Rotate any real Zoom credentials that were committed in `.env.example`.
-2. Replace in-memory rate limiting with shared production storage.
-3. Upgrade safe patch/minor dependencies in a separate maintenance pass, then rerun `npm audit`.
-4. Review public homework attachment access rules with product requirements.
-5. Add automated tests for rate-limited routes, upload rejection cases, and payment slip authorization.

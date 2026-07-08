@@ -2,6 +2,8 @@ import { AttendanceSource, AttendanceStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { AttendanceAccessError, requireAttendanceScannerAccess } from "@/lib/attendance-access";
 import { markAttendanceByCredential } from "@/lib/attendance";
+import { prisma } from "@/lib/prisma";
+import { checkAttendanceScanRateLimit, clientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { nfcAttendanceSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
@@ -17,13 +19,33 @@ export async function POST(request: Request) {
     }
 
     await requireAttendanceScannerAccess(request, parsed.data.classGroupId);
+    if (parsed.data.scanId) {
+      const replay = await prisma.scanRequestLog.findUnique({ where: { scanId: parsed.data.scanId } });
+      if (replay?.responseJson) {
+        const response = replay.responseJson as Record<string, unknown>;
+        return NextResponse.json({ ...response, idempotent: true }, { status: Number(response.statusCode ?? replay.statusCode) });
+      }
+    }
+    const deviceId = parsed.data.deviceId ?? request.headers.get("x-reader-device-id") ?? "dashboard";
+    const scannedValue = parsed.data.scannedValue ?? parsed.data.nfcUid;
+    const rateLimit = checkAttendanceScanRateLimit({ request, deviceId, scannedValue, scanType: "nfc" });
+
+    if (!rateLimit.ok) {
+      return rateLimitResponse(rateLimit.resetAt);
+    }
 
     const result = await markAttendanceByCredential({
       classGroupId: parsed.data.classGroupId,
       nfcUid: parsed.data.nfcUid,
       status: parsed.data.status as AttendanceStatus,
       source: AttendanceSource.NFC,
-      searchMethod: "NFC"
+      searchMethod: "NFC",
+      scanId: parsed.data.scanId,
+      deviceId,
+      scanType: "NFC",
+      scannedValue,
+      timestamp: parsed.data.timestamp,
+      ipAddress: clientIp(request)
     });
 
     return NextResponse.json(result, { status: result.statusCode });

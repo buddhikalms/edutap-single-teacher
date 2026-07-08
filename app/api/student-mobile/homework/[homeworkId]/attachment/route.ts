@@ -2,30 +2,21 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { HOMEWORK_ATTACHMENT_POLICY, assertUploadSignature, safeUploadExtension, scanFileForViruses } from "@/lib/file-security";
 import { requireStudentMobileUser, StudentMobileAuthError } from "@/lib/student-mobile-auth";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
+import { writeSecurityAudit } from "@/lib/security-audit";
 
 type RouteContext = { params: Promise<{ homeworkId: string }> };
-
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-
-function extensionFor(file: File) {
-  const fromName = path.extname(file.name).toLowerCase();
-  if (fromName && /^[a-z0-9.]+$/.test(fromName)) return fromName.slice(0, 20);
-
-  if (file.type === "application/pdf") return ".pdf";
-  if (file.type === "image/jpeg") return ".jpg";
-  if (file.type === "image/png") return ".png";
-  if (file.type === "image/webp") return ".webp";
-
-  return ".bin";
-}
 
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { homeworkId } = await context.params;
     const { studentId } = await requireStudentMobileUser(request);
+    const limit = checkRateLimit({ key: rateLimitKey(request, "student-homework-attachment", studentId), limit: 20, windowMs: 60 * 60 * 1000 });
+    if (!limit.ok) return rateLimitResponse(limit.resetAt);
 
     const submission = await prisma.homeworkSubmission.findFirst({
       where: { homeworkId, studentId },
@@ -43,24 +34,33 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ ok: false, message: "Select a file to upload." }, { status: 400 });
     }
 
-    if (file.size <= 0) {
-      return NextResponse.json({ ok: false, message: "The selected file is empty." }, { status: 400 });
+    const extension = safeUploadExtension(file, HOMEWORK_ATTACHMENT_POLICY);
+    const bytes = Buffer.from(await file.arrayBuffer());
+    assertUploadSignature(file, bytes);
+    const scan = await scanFileForViruses();
+    if (!scan.clean) {
+      await writeSecurityAudit({
+        instituteId: submission.instituteId,
+        action: "HOMEWORK_ATTACHMENT_BLOCKED",
+        resourceType: "HomeworkSubmission",
+        resourceId: submission.id,
+        success: false,
+        message: "Homework attachment failed malware scan.",
+        request,
+        metadata: { homeworkId, studentId, fileName: file.name, fileType: file.type, fileSize: file.size }
+      });
+      return NextResponse.json({ ok: false, message: "The selected file could not be accepted." }, { status: 415 });
     }
 
-    if (file.size > MAX_UPLOAD_BYTES) {
-      return NextResponse.json({ ok: false, message: "Uploads must be 10 MB or smaller." }, { status: 413 });
-    }
-
-    const uploadDir = uploadDiskPath("homework-submissions", homeworkId);
+    const uploadDir = uploadDiskPath("homework-submissions", homeworkId, studentId);
     await mkdir(uploadDir, { recursive: true });
 
-    const filename = `${randomUUID()}${extensionFor(file)}`;
+    const filename = `${randomUUID()}${extension}`;
     const diskPath = path.join(uploadDir, filename);
-    const bytes = Buffer.from(await file.arrayBuffer());
 
-    await writeFile(diskPath, bytes);
+    await writeFile(diskPath, bytes, { flag: "wx" });
 
-    const publicPath = uploadPublicUrl("homework-submissions", homeworkId, filename);
+    const publicPath = uploadPublicUrl("homework-submissions", homeworkId, studentId, filename);
 
     return NextResponse.json({
       ok: true,

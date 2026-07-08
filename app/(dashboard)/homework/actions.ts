@@ -9,25 +9,11 @@ import { redirect } from "next/navigation";
 import { assertCanManageClass, homeworkSubmissionStatus, parseDateTime, splitLines } from "@/lib/learning";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { HOMEWORK_ATTACHMENT_POLICY, assertUploadSignature, safeUploadExtension, scanFileForViruses } from "@/lib/file-security";
 import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
 import { homeworkSchema, homeworkSubmissionReviewSchema } from "@/lib/validations";
 
 const MAX_HOMEWORK_ATTACHMENT_BYTES = 15 * 1024 * 1024;
-const ALLOWED_HOMEWORK_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "text/plain",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-]);
-
 async function assignmentStudentIds(classGroupId: string, selectedIds: string[]) {
   if (selectedIds.length > 0) {
     return selectedIds;
@@ -62,19 +48,6 @@ function isUploadedFile(value: FormDataEntryValue): value is File {
   return typeof value === "object" && "arrayBuffer" in value && "size" in value && value.size > 0;
 }
 
-function safeExtension(file: File) {
-  const extension = path.extname(file.name).toLowerCase();
-  if (extension && /^[a-z0-9.]+$/.test(extension)) return extension.slice(0, 20);
-
-  if (file.type === "application/pdf") return ".pdf";
-  if (file.type === "image/jpeg") return ".jpg";
-  if (file.type === "image/png") return ".png";
-  if (file.type === "image/webp") return ".webp";
-  if (file.type === "image/gif") return ".gif";
-
-  return ".bin";
-}
-
 async function saveHomeworkAttachmentFiles(homeworkId: string, files: FormDataEntryValue[]) {
   const uploads = files.filter(isUploadedFile);
   if (!uploads.length) return [];
@@ -88,14 +61,14 @@ async function saveHomeworkAttachmentFiles(homeworkId: string, files: FormDataEn
     if (file.size > MAX_HOMEWORK_ATTACHMENT_BYTES) {
       throw new Error("Homework attachments must be 15 MB or smaller.");
     }
-
-    if (file.type && !ALLOWED_HOMEWORK_TYPES.has(file.type)) {
-      throw new Error("Homework attachments must be images, PDFs, Office documents, or text files.");
-    }
-
-    const filename = `${randomUUID()}${safeExtension(file)}`;
+    const extension = safeUploadExtension(file, { ...HOMEWORK_ATTACHMENT_POLICY, maxBytes: MAX_HOMEWORK_ATTACHMENT_BYTES });
+    const bytes = Buffer.from(await file.arrayBuffer());
+    assertUploadSignature(file, bytes);
+    const scan = await scanFileForViruses();
+    if (!scan.clean) throw new Error("A homework attachment could not be accepted.");
+    const filename = `${randomUUID()}${extension}`;
     const diskPath = path.join(uploadDir, filename);
-    await writeFile(diskPath, Buffer.from(await file.arrayBuffer()));
+    await writeFile(diskPath, bytes, { flag: "wx" });
 
     attachments.push({
       name: file.name || filename,

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { completeStudentActivation } from "@/lib/student-activation";
+import { strongPasswordSchema } from "@/lib/validations";
 
 const schema = z
   .object({
     activationToken: z.string().trim().min(1),
-    password: z.string().min(8, "Password must be at least 8 characters."),
-    confirmPassword: z.string().min(8, "Confirm your password.")
+    password: strongPasswordSchema,
+    confirmPassword: z.string().min(1, "Confirm your password.")
   })
   .refine((value) => value.password === value.confirmPassword, {
     path: ["confirmPassword"],

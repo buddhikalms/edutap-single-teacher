@@ -171,6 +171,11 @@ export function AttendanceTerminal({
         body: JSON.stringify({
           classGroupId: selectedClass?.id,
           status: "PRESENT",
+          scanId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+          deviceId: "dashboard-terminal",
+          scanType: endpoint === "nfc" ? "NFC" : "QR",
+          scannedValue: payload.nfcUid ?? payload.token ?? "",
+          timestamp: new Date().toISOString(),
           ...payload
         })
       });

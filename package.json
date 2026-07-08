@@ -14,7 +14,10 @@
     "prisma:studio": "prisma studio",
     "generate:vapid": "node scripts/generate-vapid-keys.mjs",
     "seed": "tsx prisma/seed.ts",
-    "demo:data": "tsx prisma/demo-data.ts"
+    "demo:data": "tsx prisma/demo-data.ts",
+    "worker:notifications": "tsx scripts/process-notification-queue.ts",
+    "load:test:nfc": "node scripts/load-test-attendance.mjs nfc",
+    "load:test:qr": "node scripts/load-test-attendance.mjs qr"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -29,9 +32,11 @@
     "@types/web-push": "^3.6.4",
     "@zxing/browser": "^0.2.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.34.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
+    "ioredis": "^5.4.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "next": "^16.2.9",
@@ -54,6 +59,7 @@
     "@types/node": "^22.10.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "autocannon": "^8.0.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.9",

@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const strongPasswordSchema = z
+  .string()
+  .min(10, "Password must be at least 10 characters.")
+  .regex(/[a-z]/, "Password must include a lowercase letter.")
+  .regex(/[A-Z]/, "Password must include an uppercase letter.")
+  .regex(/\d/, "Password must include a number.")
+  .regex(/[^A-Za-z0-9]/, "Password must include a symbol.");
+
 export const loginSchema = z.object({
   email: z.string().trim().min(3, "Enter your email or mobile number."),
   password: z.string().min(8, "Password must be at least 8 characters.")
@@ -16,7 +24,7 @@ export const registerInstituteSchema = z.object({
   address: z.string().optional(),
   adminName: z.string().min(2, "Admin name is required."),
   adminEmail: z.string().email("Enter a valid admin email."),
-  password: z.string().min(8, "Password must be at least 8 characters.")
+  password: strongPasswordSchema
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -29,12 +37,11 @@ const optionalEmail = z
   .optional()
   .transform((value) => (value ? value : undefined))
   .pipe(z.string().email("Enter a valid email.").optional());
-
 export const publicTeacherRegistrationSchema = z.object({
   fullName: z.string().trim().min(2, "Full name is required."),
   email: z.string().trim().email("Enter a valid email."),
   phone: z.string().trim().min(6, "Phone number is required."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: strongPasswordSchema,
   profilePhotoUrl: optionalText,
   subject: z.string().trim().min(2, "Subject is required."),
   gradesTaught: z.string().trim().min(2, "Grades taught are required."),
@@ -54,7 +61,7 @@ export const publicInstituteRegistrationSchema = z.object({
   branchCount: z.coerce.number().int().min(1, "At least one branch is required."),
   studentCount: z.coerce.number().int().min(0, "Student count must be zero or more."),
   preferredPackage: z.enum(["SINGLE_TEACHER", "INSTITUTE_STARTER", "INSTITUTE_PRO", "ENTERPRISE"]),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: strongPasswordSchema,
   address: z.string().trim().min(3, "Address is required."),
   logoUrl: optionalText
 });
@@ -73,7 +80,7 @@ export const studentSelfRegistrationSchema = z.object({
   email: z.string().trim().email("Enter a valid student email."),
   phone: optionalText,
   dateOfBirth: optionalText,
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: strongPasswordSchema,
   parentName: z.string().trim().min(1, "Parent or guardian name is required."),
   parentRelationship: z.enum(["Father", "Mother", "Guardian", "Other"]),
   parentEmail: optionalEmail,
@@ -254,15 +261,25 @@ export const manualAttendanceSchema = z.object({
   records: z.array(attendanceRecordInputSchema).min(1, "At least one record is required.")
 });
 
-export const qrAttendanceSchema = z.object({
+const scanRequestMetadataSchema = z.object({
+  scanId: z.string().trim().min(8, "Scan ID is required.").optional(),
+  deviceId: z.string().trim().min(1, "Device ID is required.").optional(),
+  timestamp: z.string().datetime().optional()
+});
+
+export const qrAttendanceSchema = scanRequestMetadataSchema.extend({
   classGroupId: z.string().min(1, "Class is required."),
   token: z.string().trim().min(8, "QR token is required."),
+  scannedValue: z.string().trim().optional(),
+  scanType: z.literal("QR").optional(),
   status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT")
 });
 
-export const nfcAttendanceSchema = z.object({
+export const nfcAttendanceSchema = scanRequestMetadataSchema.extend({
   classGroupId: z.string().min(1, "Class is required."),
   nfcUid: z.string().trim().min(1, "NFC UID is required."),
+  scannedValue: z.string().trim().optional(),
+  scanType: z.literal("NFC").optional(),
   status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT")
 });
 

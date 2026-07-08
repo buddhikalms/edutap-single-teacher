@@ -13,6 +13,7 @@ import {
   type ValidatedPaymentSlip
 } from "@/lib/payment-slips";
 import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
+import { strongPasswordSchema } from "@/lib/validations";
 
 const schema = z.object({
   classGroupId: z.string().trim().min(1, "Please select a class."),
@@ -20,7 +21,7 @@ const schema = z.object({
   parentName: z.string().trim().min(2, "Parent or guardian name is required.").max(120),
   parentMobile: z.string().trim().min(7, "Parent mobile is required.").max(30),
   parentEmail: z.string().trim().email("Enter a valid parent email.").optional().or(z.literal("")),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  password: strongPasswordSchema,
   confirmPassword: z.string(),
   studentName: z.string().trim().min(2, "Student name is required.").max(120),
   studentMobile: z.string().trim().max(30).optional().or(z.literal("")),
