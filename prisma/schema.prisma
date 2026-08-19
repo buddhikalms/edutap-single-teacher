@@ -51,10 +51,16 @@ enum AttendanceStatus {
   ABSENT
   LATE
   EXCUSED
+  PENDING_REVIEW
 }
 
 enum AttendanceSessionStatus {
+  DRAFT
+  SCHEDULED
   ACTIVE
+  PAUSED
+  CLOSED
+  CANCELLED
   ENDED
 }
 
@@ -62,13 +68,9 @@ enum AttendanceSource {
   MANUAL
   QR
   NFC
+  FACE
+  FINGERPRINT
   BULK
-}
-
-enum ClassType {
-  INHOUSE
-  ONLINE
-  HYBRID
 }
 
 enum FreePeriodType {
@@ -102,8 +104,28 @@ enum AttendanceSessionType {
 enum AttendanceSearchMethod {
   NFC
   QR
+  FACE
+  FINGERPRINT
   MANUAL_ID
   MANUAL_SEARCH
+}
+
+enum FaceProfileStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  DELETED
+}
+
+enum FaceVerificationResult {
+  VERIFIED
+  UNCERTAIN
+  REJECTED
+  LIVENESS_FAILED
+  QUALITY_FAILED
+  RATE_LIMITED
+  ERROR
 }
 
 enum PaymentStatus {
@@ -405,7 +427,14 @@ enum CardScanType {
 enum ReaderDeviceType {
   NFC
   QR
+  FINGERPRINT
   BOTH
+}
+
+enum FingerprintCredentialStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
 }
 
 enum CardScanResult {
@@ -439,16 +468,16 @@ enum CardPrintBatchItemStatus {
 }
 
 model Institute {
-  id                          String                       @id @default(cuid())
+  id                          String                         @id @default(cuid())
   name                        String
-  slug                        String                       @unique
+  slug                        String                         @unique
   email                       String
   phone                       String?
   address                     String?
   logoUrl                     String?
-  active                      Boolean                      @default(true)
-  createdAt                   DateTime                     @default(now())
-  updatedAt                   DateTime                     @updatedAt
+  active                      Boolean                        @default(true)
+  createdAt                   DateTime                       @default(now())
+  updatedAt                   DateTime                       @updatedAt
   branches                    Branch[]
   grades                      Grade[]
   subjects                    Subject[]
@@ -492,6 +521,9 @@ model Institute {
   enrollmentRequests          EnrollmentRequest[]
   readerDevices               ReaderDevice[]
   scanRequestLogs             ScanRequestLog[]
+  fingerprintCredentials      StudentFingerprintCredential[]
+  fingerprintAttendanceEvents FingerprintAttendanceEvent[]
+  recognitionDevices          RecognitionDevice[]
   notificationQueue           NotificationQueue[]
   securityAuditLogs           SecurityAuditLog[]
 }
@@ -514,6 +546,27 @@ model InstituteSettings {
   attendanceParentSendOnPresent              Boolean   @default(true)
   attendanceParentSendOnLate                 Boolean   @default(true)
   attendanceParentMessageTemplate            String?   @db.Text
+  faceAttendanceEnabled                      Boolean   @default(false)
+  faceAllowStudentSelfEnrollment             Boolean   @default(false)
+  faceRequireParentConsent                   Boolean   @default(true)
+  faceConsentAge                             Int       @default(16)
+  faceMatchThreshold                         Float     @default(0.82)
+  faceManualReviewThreshold                  Float     @default(0.72)
+  faceLivenessThreshold                      Float     @default(0.85)
+  faceMaximumAttempts                        Int       @default(3)
+  faceAttemptCooldownSeconds                 Int       @default(30)
+  faceVerificationTokenTtlSeconds            Int       @default(60)
+  faceRequireClassroomQrChallenge            Boolean   @default(false)
+  faceRequireRegisteredDevice                Boolean   @default(false)
+  faceRequireLocation                        Boolean   @default(false)
+  faceLocationRadiusMeters                   Int       @default(150)
+  faceTemporaryImageRetentionSeconds         Int       @default(0)
+  faceRecognitionModel                       String    @default("insightface")
+  faceRecognitionModelVersion                String    @default("configured-version")
+  faceTemplateRefreshDays                    Int       @default(365)
+  faceDuplicateReviewEnabled                 Boolean   @default(true)
+  faceFallbackMethods                        Json?
+  classTypeOptions                           Json?
   classEndedNotificationEnabled              Boolean   @default(true)
   classEndedIncludePaymentSummary            Boolean   @default(true)
   classEndedSendToPresent                    Boolean   @default(true)
@@ -685,27 +738,27 @@ model Subject {
 }
 
 model User {
-  id                        String                  @id @default(cuid())
+  id                        String                   @id @default(cuid())
   name                      String
-  email                     String?                 @unique
-  mobile                    String?                 @unique
-  googleId                  String?                 @unique
+  email                     String?                  @unique
+  mobile                    String?                  @unique
+  googleId                  String?                  @unique
   passwordHash              String?
-  passwordStatus            PasswordStatus          @default(ACTIVE)
-  authProvider              AuthProvider            @default(PASSWORD)
-  role                      UserRole                @default(STAFF)
+  passwordStatus            PasswordStatus           @default(ACTIVE)
+  authProvider              AuthProvider             @default(PASSWORD)
+  role                      UserRole                 @default(STAFF)
   image                     String?
   emailVerified             DateTime?
-  mustChangePassword        Boolean                 @default(false)
-  accountStatus             UserAccountStatus       @default(ACTIVE)
+  mustChangePassword        Boolean                  @default(false)
+  accountStatus             UserAccountStatus        @default(ACTIVE)
   lastLoginAt               DateTime?
-  lastLoginDevice           String?                 @db.Text
+  lastLoginDevice           String?                  @db.Text
   instituteId               String?
   branchId                  String?
-  createdAt                 DateTime                @default(now())
-  updatedAt                 DateTime                @updatedAt
-  institute                 Institute?              @relation(fields: [instituteId], references: [id], onDelete: SetNull)
-  branch                    Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  institute                 Institute?               @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  branch                    Branch?                  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   teacher                   Teacher?
   parent                    Parent?
   student                   Student?
@@ -715,22 +768,22 @@ model User {
   notifications             NotificationLog[]
   notificationsV2           Notification[]
   webPushSubscriptions      WebPushSubscription[]
-  homeworkCreated           Homework[]              @relation("HomeworkCreatedBy")
-  quizzesCreated            Quiz[]                  @relation("QuizCreatedBy")
-  courseMaterialsCreated    CourseMaterial[]        @relation("CourseMaterialCreatedBy")
-  liveClassesCreated        LiveClass[]             @relation("LiveClassCreatedBy")
+  homeworkCreated           Homework[]               @relation("HomeworkCreatedBy")
+  quizzesCreated            Quiz[]                   @relation("QuizCreatedBy")
+  courseMaterialsCreated    CourseMaterial[]         @relation("CourseMaterialCreatedBy")
+  liveClassesCreated        LiveClass[]              @relation("LiveClassCreatedBy")
   zoomConnection            ZoomConnection?
   zoomMeetingSettings       ZoomMeetingSettings?
   zoomMeetings              ZoomMeeting[]
-  studentCardsIssued        StudentCard[]           @relation("StudentCardIssuedBy")
-  studentCardsReplaced      StudentCard[]           @relation("StudentCardReplacedBy")
-  studentCardHistory        StudentCardHistory[]    @relation("StudentCardHistoryPerformedBy")
-  cardPrintBatchesExported  CardPrintBatch[]        @relation("CardPrintBatchExportedBy")
-  cardScanLogs              CardScanLog[]           @relation("CardScanLogScannedBy")
-  studentEnrollmentRequests EnrollmentRequest[]     @relation("EnrollmentRequestStudentUser")
-  parentEnrollmentRequests  EnrollmentRequest[]     @relation("EnrollmentRequestParentUser")
-  familyStudents            Student[]               @relation("FamilyStudents")
-  familyEnrollmentRequests  EnrollmentRequest[]     @relation("EnrollmentRequestFamilyUser")
+  studentCardsIssued        StudentCard[]            @relation("StudentCardIssuedBy")
+  studentCardsReplaced      StudentCard[]            @relation("StudentCardReplacedBy")
+  studentCardHistory        StudentCardHistory[]     @relation("StudentCardHistoryPerformedBy")
+  cardPrintBatchesExported  CardPrintBatch[]         @relation("CardPrintBatchExportedBy")
+  cardScanLogs              CardScanLog[]            @relation("CardScanLogScannedBy")
+  studentEnrollmentRequests EnrollmentRequest[]      @relation("EnrollmentRequestStudentUser")
+  parentEnrollmentRequests  EnrollmentRequest[]      @relation("EnrollmentRequestParentUser")
+  familyStudents            Student[]                @relation("FamilyStudents")
+  familyEnrollmentRequests  EnrollmentRequest[]      @relation("EnrollmentRequestFamilyUser")
   enrollmentPaymentSlips    EnrollmentPaymentSlip[]
   studentActivationTokens   StudentActivationToken[]
 
@@ -753,37 +806,43 @@ model MobileAuthToken {
 }
 
 model Student {
-  id                          String                      @id @default(cuid())
+  id                          String                         @id @default(cuid())
   admissionNo                 String
   firstName                   String
   lastName                    String
   email                       String?
   phone                       String?
   dateOfBirth                 DateTime?
-  status                      StudentStatus               @default(ACTIVE)
+  status                      StudentStatus                  @default(ACTIVE)
   avatarUrl                   String?
   nfcUid                      String?
   qrCode                      String?
-  attendanceToken             String?                     @default(cuid())
-  firstLoginCompleted         Boolean                     @default(false)
+  attendanceToken             String?                        @default(cuid())
+  firstLoginCompleted         Boolean                        @default(false)
   firstLoginAt                DateTime?
-  activeDeviceInfo            String?                     @db.Text
-  userId                      String?                     @unique
+  activeDeviceInfo            String?                        @db.Text
+  userId                      String?                        @unique
   familyUserId                String?
   instituteId                 String
   branchId                    String
-  createdAt                   DateTime                    @default(now())
-  updatedAt                   DateTime                    @updatedAt
-  institute                   Institute                   @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  branch                      Branch                      @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  user                        User?                       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  familyUser                  User?                       @relation("FamilyStudents", fields: [familyUserId], references: [id], onDelete: SetNull)
+  createdAt                   DateTime                       @default(now())
+  updatedAt                   DateTime                       @updatedAt
+  institute                   Institute                      @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  branch                      Branch                         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user                        User?                          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  familyUser                  User?                          @relation("FamilyStudents", fields: [familyUserId], references: [id], onDelete: SetNull)
   parents                     Parent[]
   parentLinks                 ParentStudent[]
   enrollments                 Enrollment[]
   attendance                  AttendanceRecord[]
   attendanceNotificationLogs  AttendanceNotificationLog[]
   classEndNotificationLogs    ClassEndNotificationLog[]
+  faceProfile                 StudentFaceProfile?
+  biometricConsents           BiometricConsent[]
+  faceVerificationAttempts    FaceVerificationAttempt[]
+  faceVerificationTokens      FaceVerificationToken[]
+  fingerprintCredentials      StudentFingerprintCredential[]
+  fingerprintAttendanceEvents FingerprintAttendanceEvent[]
   payments                    Payment[]
   auditLogs                   AttendanceAuditLog[]
   noticeRecipients            NoticeRecipient[]
@@ -800,8 +859,8 @@ model Student {
   cardScanLogs                CardScanLog[]
   activationTokens            StudentActivationToken[]
   cardPrintBatchItems         CardPrintBatchItem[]
-  convertedEnrollmentRequests EnrollmentRequest[]         @relation("ConvertedEnrollmentStudent")
-  requestedEnrollment         EnrollmentRequest?          @relation("RequestedEnrollmentStudent")
+  convertedEnrollmentRequests EnrollmentRequest[]            @relation("ConvertedEnrollmentStudent")
+  requestedEnrollment         EnrollmentRequest?             @relation("RequestedEnrollmentStudent")
   enrollmentPaymentSlips      EnrollmentPaymentSlip[]
 
   @@unique([instituteId, admissionNo])
@@ -977,24 +1036,24 @@ model CourseModule {
 }
 
 model CourseResource {
-  id           String             @id @default(cuid())
+  id           String                   @id @default(cuid())
   instituteId  String
   courseId     String
   moduleId     String?
   resourceType CourseResourceType
   title        String
-  description  String?            @db.Text
+  description  String?                  @db.Text
   fileUrl      String?
   externalUrl  String?
-  accessType   CourseAccessType   @default(PAID)
+  accessType   CourseAccessType         @default(PAID)
   visibility   CourseResourceVisibility @default(ENROLLED)
   publishAt    DateTime?
-  sortOrder    Int                @default(0)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  institute    Institute          @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  course       Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  module       CourseModule?      @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  sortOrder    Int                      @default(0)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  institute    Institute                @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  course       Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module       CourseModule?            @relation(fields: [moduleId], references: [id], onDelete: SetNull)
 
   @@index([courseId, sortOrder])
   @@index([moduleId])
@@ -1003,21 +1062,21 @@ model CourseResource {
 }
 
 model CourseEnrollment {
-  id          String                 @id @default(cuid())
-  instituteId String
-  courseId    String
-  studentId   String
-  status      CourseEnrollmentStatus @default(PENDING)
-  unlockedAt  DateTime?
-  lockedAt    DateTime?
+  id             String                 @id @default(cuid())
+  instituteId    String
+  courseId       String
+  studentId      String
+  status         CourseEnrollmentStatus @default(PENDING)
+  unlockedAt     DateTime?
+  lockedAt       DateTime?
   lastActivityAt DateTime?
-  paidAmount  Decimal                @default(0) @db.Decimal(10, 2)
-  progress    Decimal                @default(0) @db.Decimal(5, 2)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  institute   Institute              @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  student     Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  paidAmount     Decimal                @default(0) @db.Decimal(10, 2)
+  progress       Decimal                @default(0) @db.Decimal(5, 2)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  institute      Institute              @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  course         Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student        Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([courseId, studentId])
   @@index([instituteId, status])
@@ -1053,45 +1112,46 @@ model TeacherRegistrationRequest {
 }
 
 model ClassGroup {
-  id                       String                    @id @default(cuid())
-  name                     String
-  code                     String
-  schedule                 String
-  room                     String?
-  capacity                 Int                       @default(30)
-  instituteId              String
-  branchId                 String
-  gradeId                  String?
-  subjectId                String
-  teacherId                String?
-  classType                ClassType                 @default(INHOUSE)
-  monthlyFee               Decimal?                  @db.Decimal(10, 2)
-  admissionFee             Decimal?                  @db.Decimal(10, 2)
-  paymentStartDate         DateTime?
-  defaultFreePeriodType    FreePeriodType            @default(NONE)
-  defaultFreeDays          Int                       @default(0)
-  defaultPaymentDueDay     Int                       @default(10)
-  status                   ClassStatus               @default(ACTIVE)
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
-  institute                Institute                 @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  branch                   Branch                    @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  gradeLevel               Grade?                    @relation(fields: [gradeId], references: [id], onDelete: SetNull)
-  subject                  Subject                   @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  teacher                  Teacher?                  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  enrollments              Enrollment[]
-  attendanceSessions       AttendanceSession[]
-  payments                 Payment[]
-  classEndNotificationLogs ClassEndNotificationLog[]
-  cardScanLogs             CardScanLog[]
-  notices                  Notice[]
-  homework                 Homework[]
-  quizzes                  Quiz[]
-  materials                CourseMaterial[]
-  liveClasses              LiveClass[]
-  liveRecordings           LiveClassRecording[]
-  zoomMeetings             ZoomMeeting[]
-  enrollmentRequests       EnrollmentRequest[]
+  id                          String                       @id @default(cuid())
+  name                        String
+  code                        String
+  schedule                    String
+  room                        String?
+  capacity                    Int                          @default(30)
+  instituteId                 String
+  branchId                    String
+  gradeId                     String?
+  subjectId                   String
+  teacherId                   String?
+  classType                   String                       @default("Individual")
+  monthlyFee                  Decimal?                     @db.Decimal(10, 2)
+  admissionFee                Decimal?                     @db.Decimal(10, 2)
+  paymentStartDate            DateTime?
+  defaultFreePeriodType       FreePeriodType               @default(NONE)
+  defaultFreeDays             Int                          @default(0)
+  defaultPaymentDueDay        Int                          @default(10)
+  status                      ClassStatus                  @default(ACTIVE)
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  institute                   Institute                    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  branch                      Branch                       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  gradeLevel                  Grade?                       @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  subject                     Subject                      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  teacher                     Teacher?                     @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  enrollments                 Enrollment[]
+  attendanceSessions          AttendanceSession[]
+  payments                    Payment[]
+  classEndNotificationLogs    ClassEndNotificationLog[]
+  cardScanLogs                CardScanLog[]
+  fingerprintAttendanceEvents FingerprintAttendanceEvent[]
+  notices                     Notice[]
+  homework                    Homework[]
+  quizzes                     Quiz[]
+  materials                   CourseMaterial[]
+  liveClasses                 LiveClass[]
+  liveRecordings              LiveClassRecording[]
+  zoomMeetings                ZoomMeeting[]
+  enrollmentRequests          EnrollmentRequest[]
 
   @@unique([instituteId, code])
   @@index([branchId])
@@ -1214,6 +1274,8 @@ model AttendanceSession {
   classGroup                 ClassGroup                  @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
   records                    AttendanceRecord[]
   auditLogs                  AttendanceAuditLog[]
+  faceVerificationAttempts   FaceVerificationAttempt[]
+  faceVerificationTokens     FaceVerificationToken[]
   attendanceNotificationLogs AttendanceNotificationLog[]
   classEndNotificationLogs   ClassEndNotificationLog[]
   cardScanLogs               CardScanLog[]
@@ -1232,16 +1294,164 @@ model AttendanceRecord {
   source                     AttendanceSource            @default(MANUAL)
   searchMethod               AttendanceSearchMethod?
   markedById                 String?
+  faceAttemptId              String?
+  confidenceScore            Float?
+  deviceId                   String?
   markedAt                   DateTime                    @default(now())
   notes                      String?
   session                    AttendanceSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   student                    Student                     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  faceAttempt                FaceVerificationAttempt?    @relation(fields: [faceAttemptId], references: [id], onDelete: SetNull)
   auditLogs                  AttendanceAuditLog[]
   attendanceNotificationLogs AttendanceNotificationLog[]
 
   @@unique([sessionId, studentId])
   @@index([sessionId])
   @@index([studentId])
+  @@index([faceAttemptId])
+}
+
+model StudentFaceProfile {
+  id                    String            @id @default(cuid())
+  studentId             String            @unique
+  status                FaceProfileStatus @default(PENDING)
+  encryptedEmbedding    Bytes?
+  embeddingIv           Bytes?
+  embeddingAuthTag      Bytes?
+  encryptionKeyVersion  String
+  recognitionModel      String
+  modelVersion          String
+  sampleCount           Int
+  qualityScore          Float?
+  enrolledAt            DateTime          @default(now())
+  enrolledById          String?
+  lastVerifiedAt        DateTime?
+  revokedAt             DateTime?
+  deletedAt             DateTime?
+  deletionRequestedAt   DateTime?
+  deletionRequestedById String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  student               Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model BiometricConsent {
+  id            String    @id @default(cuid())
+  studentId     String
+  consentType   String
+  consented     Boolean
+  consentedById String
+  policyVersion String
+  consentedAt   DateTime?
+  revokedAt     DateTime?
+  ipHash        String?
+  userAgent     String?   @db.Text
+  deviceInfo    String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([consentType, consented])
+}
+
+model FaceVerificationAttempt {
+  id                    String                 @id @default(cuid())
+  studentId             String
+  attendanceSessionId   String?
+  deviceId              String?
+  result                FaceVerificationResult
+  faceSimilarity        Float?
+  livenessScore         Float?
+  qualityScore          Float?
+  recognitionModel      String?
+  modelVersion          String?
+  thresholdUsed         Float?
+  failureCode           String?
+  failureMessage        String?                @db.Text
+  ipHash                String?
+  userAgent             String?                @db.Text
+  locationValidation    String?
+  verificationNonce     String?                @unique
+  tokenConsumedAt       DateTime?
+  startedAt             DateTime               @default(now())
+  completedAt           DateTime?
+  createdAt             DateTime               @default(now())
+  student               Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attendanceSession     AttendanceSession?     @relation(fields: [attendanceSessionId], references: [id], onDelete: SetNull)
+  attendanceRecords     AttendanceRecord[]
+  FaceVerificationToken FaceVerificationToken?
+
+  @@index([studentId, createdAt])
+  @@index([attendanceSessionId])
+  @@index([result])
+}
+
+model FaceVerificationToken {
+  id                  String                  @id @default(cuid())
+  tokenHash           String                  @unique
+  studentId           String
+  attendanceSessionId String
+  attemptId           String                  @unique
+  deviceId            String?
+  nonce               String                  @unique
+  result              FaceVerificationResult
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime                @default(now())
+  student             Student                 @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attendanceSession   AttendanceSession       @relation(fields: [attendanceSessionId], references: [id], onDelete: Cascade)
+  attempt             FaceVerificationAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([attendanceSessionId])
+  @@index([expiresAt])
+}
+
+model StudentFingerprintCredential {
+  id                    String                      @id @default(cuid())
+  instituteId           String
+  studentId             String
+  externalFingerprintId String
+  deviceUserId          String?
+  status                FingerprintCredentialStatus @default(ACTIVE)
+  enrolledAt            DateTime                    @default(now())
+  enrolledById          String?
+  lastVerifiedAt        DateTime?
+  deletedAt             DateTime?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  institute             Institute                   @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student               Student                     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([instituteId, externalFingerprintId])
+  @@index([studentId, status])
+  @@index([instituteId, status])
+}
+
+model FingerprintAttendanceEvent {
+  id                    String     @id @default(cuid())
+  eventId               String     @unique
+  instituteId           String
+  classGroupId          String
+  studentId             String?
+  externalFingerprintId String?
+  deviceId              String
+  statusCode            Int
+  result                String
+  responseJson          Json?
+  ipAddress             String?
+  occurredAt            DateTime?
+  processedAt           DateTime   @default(now())
+  createdAt             DateTime   @default(now())
+  institute             Institute  @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  classGroup            ClassGroup @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
+  student               Student?   @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([instituteId, processedAt])
+  @@index([classGroupId, processedAt])
+  @@index([studentId, processedAt])
+  @@index([deviceId, processedAt])
 }
 
 model AttendanceAuditLog {
@@ -1267,15 +1477,15 @@ model AttendanceAuditLog {
 }
 
 model StudentCard {
-  id                String               @id @default(cuid())
+  id                String                   @id @default(cuid())
   instituteId       String
   studentId         String
   cardNumber        String?
   nfcUid            String?
   qrCode            String?
   qrToken           String?
-  status            StudentCardStatus    @default(ACTIVE)
-  issuedAt          DateTime             @default(now())
+  status            StudentCardStatus        @default(ACTIVE)
+  issuedAt          DateTime                 @default(now())
   activatedAt       DateTime?
   deactivatedAt     DateTime?
   replacedAt        DateTime?
@@ -1283,15 +1493,15 @@ model StudentCard {
   stolenReportedAt  DateTime?
   missingReportedAt DateTime?
   damagedReportedAt DateTime?
-  notes             String?              @db.Text
+  notes             String?                  @db.Text
   issuedById        String?
   replacedById      String?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  institute         Institute            @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  student           Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  issuedBy          User?                @relation("StudentCardIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
-  replacedBy        User?                @relation("StudentCardReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  institute         Institute                @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student           Student                  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  issuedBy          User?                    @relation("StudentCardIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  replacedBy        User?                    @relation("StudentCardReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
   history           StudentCardHistory[]
   scanLogs          CardScanLog[]
   activationTokens  StudentActivationToken[]
@@ -1311,21 +1521,21 @@ model StudentCard {
 }
 
 model StudentActivationToken {
-  id          String      @id @default(cuid())
-  tokenHash   String      @unique
+  id          String       @id @default(cuid())
+  tokenHash   String       @unique
   instituteId String
   studentId   String
   userId      String
   cardId      String
   method      CardScanType
-  deviceInfo  String?     @db.Text
+  deviceInfo  String?      @db.Text
   expiresAt   DateTime
   usedAt      DateTime?
-  createdAt   DateTime    @default(now())
-  institute   Institute   @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  card        StudentCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  institute   Institute    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card        StudentCard  @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@index([studentId, createdAt])
   @@index([userId])
@@ -1334,19 +1544,19 @@ model StudentActivationToken {
 }
 
 model CardPrintBatch {
-  id           String                 @id @default(cuid())
+  id           String               @id @default(cuid())
   instituteId  String
   batchNumber  String
   title        String
-  status       CardPrintBatchStatus   @default(DRAFT)
-  studentCount Int                    @default(0)
+  status       CardPrintBatchStatus @default(DRAFT)
+  studentCount Int                  @default(0)
   exportedById String?
   exportedAt   DateTime?
-  notes        String?                @db.Text
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  institute    Institute              @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  exportedBy   User?                  @relation("CardPrintBatchExportedBy", fields: [exportedById], references: [id], onDelete: SetNull)
+  notes        String?              @db.Text
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  institute    Institute            @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  exportedBy   User?                @relation("CardPrintBatchExportedBy", fields: [exportedById], references: [id], onDelete: SetNull)
   items        CardPrintBatchItem[]
 
   @@unique([instituteId, batchNumber])
@@ -1377,6 +1587,7 @@ model CardPrintBatchItem {
   @@index([studentId])
   @@index([studentCardId])
 }
+
 model StudentCardHistory {
   id             String                   @id @default(cuid())
   instituteId    String
@@ -1452,6 +1663,26 @@ model ReaderDevice {
   @@index([deviceCode, isActive])
 }
 
+model RecognitionDevice {
+  id             String    @id @default(cuid())
+  instituteId    String
+  deviceId       String
+  label          String?
+  location       String?
+  trusted        Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  lastSeenAt     DateTime?
+  lastUserAgent  String?   @db.Text
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  institute      Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+
+  @@unique([instituteId, deviceId])
+  @@index([instituteId, isActive])
+  @@index([deviceId])
+}
+
 model ScanRequestLog {
   id                  String       @id @default(cuid())
   instituteId         String?
@@ -1503,7 +1734,7 @@ model NotificationQueue {
 }
 
 model SecurityAuditLog {
-  id           String    @id @default(cuid())
+  id           String     @id @default(cuid())
   instituteId  String?
   actorUserId  String?
   actorRole    String?
@@ -1513,9 +1744,9 @@ model SecurityAuditLog {
   success      Boolean
   message      String
   ipAddress    String?
-  userAgent    String?   @db.Text
+  userAgent    String?    @db.Text
   metadata     Json?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
   institute    Institute? @relation(fields: [instituteId], references: [id], onDelete: SetNull)
 
   @@index([instituteId, createdAt])
@@ -1988,19 +2219,19 @@ model LiveClassRecording {
 }
 
 model ZoomConnection {
-  id            String    @id @default(cuid())
-  userId        String    @unique
+  id            String        @id @default(cuid())
+  userId        String        @unique
   zoomAccountId String
   email         String
   displayName   String?
-  accessToken   String    @db.Text
-  refreshToken  String    @db.Text
+  accessToken   String        @db.Text
+  refreshToken  String        @db.Text
   expiresAt     DateTime
-  connectedAt   DateTime  @default(now())
+  connectedAt   DateTime      @default(now())
   lastSyncAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   meetings      ZoomMeeting[]
 
   @@index([zoomAccountId])
@@ -2009,43 +2240,43 @@ model ZoomConnection {
 }
 
 model ZoomMeetingSettings {
-  id                         String   @id @default(cuid())
-  userId                     String   @unique
-  defaultDurationMinutes     Int      @default(60)
-  defaultWaitingRoom         Boolean  @default(true)
-  defaultRecording           String   @default("none")
-  defaultJoinBeforeHost      Boolean  @default(false)
-  defaultMuteParticipants    Boolean  @default(true)
-  defaultPasscodeGeneration  Boolean  @default(true)
-  defaultHostVideo           Boolean  @default(true)
-  defaultParticipantVideo    Boolean  @default(false)
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
-  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  defaultDurationMinutes    Int      @default(60)
+  defaultWaitingRoom        Boolean  @default(true)
+  defaultRecording          String   @default("none")
+  defaultJoinBeforeHost     Boolean  @default(false)
+  defaultMuteParticipants   Boolean  @default(true)
+  defaultPasscodeGeneration Boolean  @default(true)
+  defaultHostVideo          Boolean  @default(true)
+  defaultParticipantVideo   Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ZoomMeeting {
-  id                String      @id @default(cuid())
+  id                String          @id @default(cuid())
   userId            String
   classGroupId      String
-  liveClassId       String      @unique
+  liveClassId       String          @unique
   zoomConnectionId  String?
   zoomMeetingId     String
   topic             String
-  joinUrl           String      @db.Text
-  startUrl          String?     @db.Text
+  joinUrl           String          @db.Text
+  startUrl          String?         @db.Text
   password          String?
-  status            String      @default("scheduled")
+  status            String          @default("scheduled")
   scheduledTime     DateTime?
   durationMinutes   Int?
-  recordingImported Boolean     @default(false)
-  recordingUrl      String?     @db.Text
+  recordingImported Boolean         @default(false)
+  recordingUrl      String?         @db.Text
   recordingMetadata Json?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  classGroup        ClassGroup  @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
-  liveClass         LiveClass   @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classGroup        ClassGroup      @relation(fields: [classGroupId], references: [id], onDelete: Cascade)
+  liveClass         LiveClass       @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
   zoomConnection    ZoomConnection? @relation(fields: [zoomConnectionId], references: [id], onDelete: SetNull)
 
   @@index([userId])

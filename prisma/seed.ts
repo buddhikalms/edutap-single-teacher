@@ -319,7 +319,7 @@ async function main() {
         gradeId: grade11.id,
         subjectId: subjects[1].id,
         teacherId: teachers[1].id,
-        classType: "HYBRID",
+        classType: "Group",
         defaultFreePeriodType: "FIRST_WEEK",
         defaultFreeDays: 7,
         defaultPaymentDueDay: 10
@@ -338,7 +338,7 @@ async function main() {
         gradeId: grade10.id,
         subjectId: subjects[2].id,
         teacherId: teachers[2].id,
-        classType: "ONLINE"
+        classType: "Spoken"
       }
     })
   ]);

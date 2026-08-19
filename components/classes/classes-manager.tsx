@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarDays, Clock, Eye, Loader2, MapPin, Pencil, Plus, RotateCcw, Search, Trash2, UsersRound, X } from "lucide-react";
+import { CalendarDays, Clock, Eye, Loader2, MapPin, Pencil, Plus, RotateCcw, Search, Settings2, Trash2, UsersRound, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { createClassGroup, deleteClassGroup, updateClassGroup } from "@/app/(dashboard)/dashboard/classes/actions";
+import { createClassGroup, deleteClassGroup, saveClassTypeOptions, updateClassGroup } from "@/app/(dashboard)/dashboard/classes/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export type ClassRow = {
   schedule: string;
   room: string | null;
   capacity: number;
-  classType: "INHOUSE" | "ONLINE" | "HYBRID";
+  classType: string;
   monthlyFee: number;
   admissionFee: number | null;
   paymentStartDate: string | null;
@@ -89,16 +89,19 @@ export function ClassesManager({
   branches,
   grades,
   subjects,
-  currency
+  currency,
+  classTypeOptions
 }: {
   classes: ClassRow[];
   branches: Option[];
   grades: Option[];
   subjects: SubjectOption[];
   currency: string;
+  classTypeOptions: string[];
 }) {
   const [panel, setPanel] = useState<ClassRow | "new" | null>(null);
   const [deleting, setDeleting] = useState<ClassRow | null>(null);
+  const [managingTypes, setManagingTypes] = useState(false);
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [day, setDay] = useState("");
@@ -157,6 +160,10 @@ export function ClassesManager({
                   Locations
                 </Link>
               </Button>
+              <Button type="button" variant="outline" onClick={() => setManagingTypes(true)}>
+                <Settings2 className="h-4 w-4" />
+                Class types
+              </Button>
               <Button onClick={() => setPanel("new")}>
                 <Plus className="h-4 w-4" />
                 Add class
@@ -189,9 +196,11 @@ export function ClassesManager({
             </Select>
             <Select value={classType} onChange={(event) => setClassType(event.target.value)} aria-label="Filter by class type">
               <option value="">All types</option>
-              <option value="INHOUSE">Inhouse</option>
-              <option value="ONLINE">Online</option>
-              <option value="HYBRID">Hybrid</option>
+              {classTypeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </Select>
             <Button type="button" variant="outline" onClick={resetFilters} disabled={!hasFilters}>
               <RotateCcw className="h-4 w-4" />
@@ -234,7 +243,7 @@ export function ClassesManager({
                 </div>
                 <h3 className="mt-4 text-xl font-semibold">{item.name}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {item.grade} - {item.classType.toLowerCase()}
+                  {item.grade} - {item.classType}
                 </p>
                 <div className="mt-4 space-y-2 rounded-xl border bg-white/70 p-4 text-sm">
                   <p className="flex gap-2">
@@ -285,7 +294,17 @@ export function ClassesManager({
         ) : null}
       </div>
 
-      {panel ? <ClassPanel item={panel === "new" ? null : panel} branches={branches} grades={grades} subjects={subjects} onClose={() => setPanel(null)} /> : null}
+      {panel ? (
+        <ClassPanel
+          item={panel === "new" ? null : panel}
+          branches={branches}
+          grades={grades}
+          subjects={subjects}
+          classTypeOptions={classTypeOptions}
+          onClose={() => setPanel(null)}
+        />
+      ) : null}
+      {managingTypes ? <ClassTypePanel options={classTypeOptions} onClose={() => setManagingTypes(false)} /> : null}
       {deleting ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/35 p-4">
           <div className="rounded-2xl bg-white p-6 shadow-xl">
@@ -320,17 +339,78 @@ export function ClassesManager({
   );
 }
 
+function ClassTypePanel({ options, onClose }: { options: string[]; onClose: () => void }) {
+  const [values, setValues] = useState(() => (options.length ? options : ["Individual", "Group", "Spoken"]));
+  const [pending, startTransition] = useTransition();
+
+  const update = (index: number, value: string) => {
+    setValues((current) => current.map((item, itemIndex) => (itemIndex === index ? value : item)));
+  };
+  const remove = (index: number) => setValues((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  const add = () => setValues((current) => [...current, ""]);
+  const save = () =>
+    startTransition(async () => {
+      const cleaned = values.map((value) => value.trim()).filter(Boolean);
+      const result = await saveClassTypeOptions(cleaned);
+      if (result.ok) {
+        toast.success(result.message);
+        onClose();
+      } else {
+        toast.error(result.message);
+      }
+    });
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden bg-primary/35">
+      <button className="absolute inset-0" onClick={onClose} aria-label="Close class type manager" />
+      <div className="absolute right-0 h-full w-full max-w-md overflow-y-auto bg-background p-6 shadow-xl">
+        <div className="mb-5 flex justify-between">
+          <div>
+            <Badge variant="secondary">Class catalog</Badge>
+            <h2 className="mt-3 text-2xl font-semibold">Class types</h2>
+          </div>
+          <Button variant="outline" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="space-y-3">
+          {values.map((value, index) => (
+            <div key={index} className="flex gap-2">
+              <Input value={value} onChange={(event) => update(index, event.target.value)} placeholder="Class type" />
+              <Button type="button" variant="outline" size="icon" onClick={() => remove(index)} disabled={values.length === 1}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 flex justify-between gap-3 border-t pt-5">
+          <Button type="button" variant="outline" onClick={add}>
+            <Plus className="h-4 w-4" />
+            Add type
+          </Button>
+          <Button type="button" onClick={save} disabled={pending}>
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save types
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClassPanel({
   item,
   branches,
   grades,
   subjects,
+  classTypeOptions,
   onClose
 }: {
   item: ClassRow | null;
   branches: Option[];
   grades: Option[];
   subjects: SubjectOption[];
+  classTypeOptions: string[];
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -366,7 +446,7 @@ function ClassPanel({
           branchId: branches[0]?.id ?? "",
           gradeId: grades[0]?.id ?? "",
           subjectId: subjects[0]?.id ?? "",
-          classType: "INHOUSE",
+          classType: classTypeOptions[0] ?? "Individual",
           fee: 0,
           admissionFee: 0,
           paymentStartDate: new Date().toISOString().slice(0, 10),
@@ -446,9 +526,11 @@ function ClassPanel({
               <FieldRow>
                 <FormField label="Class type">
                   <Select {...form.register("classType")}>
-                    <option value="INHOUSE">Inhouse</option>
-                    <option value="ONLINE">Online</option>
-                    <option value="HYBRID">Hybrid</option>
+                    {classTypeOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </Select>
                 </FormField>
                 <FormField label="Institute / branch">

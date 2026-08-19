@@ -8,10 +8,12 @@ import {
   BookOpen,
   BookOpenCheck,
   CalendarCheck,
+  ScanFace,
   CreditCard,
   Printer,
   GraduationCap,
   LayoutDashboard,
+  MessageSquareText,
   Settings2,
   Trophy,
   UserPlus,
@@ -31,6 +33,7 @@ const tenantNavItems = [
   { href: "/enrollment", label: "Enrollment", icon: UserPlus, area: "enrollment", group: "Academics" },
   { href: "/dashboard/enrollment-requests", label: "Enrollment requests", icon: UserPlus, area: "enrollment", group: "Academics" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, area: "attendance", group: "Operations" },
+  { href: "/attendance/face/test", label: "Face Test", icon: ScanFace, area: "attendance", group: "Operations" },
   { href: "/cards", label: "Cards", icon: CreditCard, area: "cards", group: "Operations" },
   { href: "/dashboard/card-print-export", label: "Card Print Export", icon: Printer, area: "cards", group: "Operations" },
   { href: "/payments", label: "Payments", icon: CreditCard, area: "payments", group: "Operations" },
@@ -39,6 +42,7 @@ const tenantNavItems = [
   { href: "/live-classes", label: "Live Classes", icon: Video, area: "liveClasses", group: "Learning" },
   { href: "/reports", label: "Reports", icon: BarChart3, area: "reports", group: "Insights" },
   { href: "/notifications", label: "Notifications", icon: BellRing, area: "notifications", group: "Insights" },
+  { href: "/notifications/sms-test", label: "SMS Test", icon: MessageSquareText, area: "notifications", group: "Insights" },
   { href: "/settings", label: "Profile & settings", icon: Settings2, area: "settings", group: "Workspace" }
 ];
 

@@ -1,5 +1,6 @@
-import { Prisma } from "@prisma/client";
+import { AttendanceStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { sendAttendanceSmsNotification } from "@/lib/attendance-sms-notifications";
 import { sendParentAttendanceNotification } from "@/lib/parent-attendance-notifications";
 import { sendStudentAttendanceNotification } from "@/lib/student-attendance-notifications";
 
@@ -11,7 +12,7 @@ export type AttendanceNotificationPayload = {
   classGroupId: string;
   branchId?: string | null;
   className: string;
-  status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
+  status: AttendanceStatus;
   markedAt: string;
   payment?: {
     status: "clear" | "pending" | "overdue" | "partial";
@@ -24,6 +25,10 @@ type QueueChannel = "PARENT_PUSH" | "WEB_PUSH" | "SMS";
 
 function redisUrl() {
   return process.env.REDIS_URL || process.env.BULLMQ_REDIS_URL || "";
+}
+
+function shouldProcessDatabaseQueueInline() {
+  return process.env.NOTIFICATION_QUEUE_INLINE !== "false";
 }
 
 export async function enqueueAttendanceNotifications(payload: AttendanceNotificationPayload) {
@@ -59,19 +64,28 @@ export async function enqueueAttendanceNotifications(payload: AttendanceNotifica
     }
   }
 
-  await prisma.notificationQueue.createMany({
-    data: jobs.map((job) => ({
-      instituteId: payload.instituteId,
-      attendanceRecordId: payload.attendanceRecordId,
-      attendanceSessionId: payload.attendanceSessionId,
-      studentId: payload.studentId,
-      jobType: job.jobType,
-      channel: job.channel,
-      payloadJson: { ...payload, channel: job.channel } as Prisma.InputJsonObject
-    }))
-  });
+  const createdJobs = await prisma.$transaction(
+    jobs.map((job) =>
+      prisma.notificationQueue.create({
+        data: {
+          instituteId: payload.instituteId,
+          attendanceRecordId: payload.attendanceRecordId,
+          attendanceSessionId: payload.attendanceSessionId,
+          studentId: payload.studentId,
+          jobType: job.jobType,
+          channel: job.channel,
+          payloadJson: { ...payload, channel: job.channel } as Prisma.InputJsonObject
+        }
+      })
+    )
+  );
 
-  return { backend: "database" as const, queued: jobs.length };
+  if (shouldProcessDatabaseQueueInline()) {
+    const result = await processDatabaseNotificationJobs(createdJobs);
+    return { backend: "database" as const, queued: jobs.length, processed: result.processed };
+  }
+
+  return { backend: "database" as const, queued: jobs.length, processed: 0 };
 }
 
 export async function processAttendanceNotificationJob(jobType: string, payload: AttendanceNotificationPayload) {
@@ -101,7 +115,16 @@ export async function processAttendanceNotificationJob(jobType: string, payload:
   }
 
   if (jobType === "ATTENDANCE_SMS") {
-    return { ok: true, skipped: true, reason: "SMS provider is not configured." };
+    return sendAttendanceSmsNotification({
+      instituteId: payload.instituteId,
+      attendanceRecordId: payload.attendanceRecordId,
+      studentId: payload.studentId,
+      classGroupId: payload.classGroupId,
+      branchId: payload.branchId ?? null,
+      status: payload.status,
+      markedAt: new Date(payload.markedAt),
+      payment: payload.payment
+    });
   }
 
   throw new Error(`Unknown attendance notification job type: ${jobType}`);
@@ -114,6 +137,10 @@ export async function processDatabaseNotificationQueue(limit = 50) {
     take: limit
   });
 
+  return processDatabaseNotificationJobs(jobs);
+}
+
+async function processDatabaseNotificationJobs(jobs: Awaited<ReturnType<typeof prisma.notificationQueue.findMany>>) {
   for (const job of jobs) {
     const claimed = await prisma.notificationQueue.updateMany({
       where: { id: job.id, status: "PENDING" },

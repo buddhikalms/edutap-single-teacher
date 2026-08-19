@@ -37,13 +37,14 @@ type MarkInput = {
   token?: string;
   nfcUid?: string;
   studentId?: string;
-  searchMethod?: "NFC" | "QR" | "MANUAL_ID" | "MANUAL_SEARCH";
+  searchMethod?: "NFC" | "QR" | "FACE" | "FINGERPRINT" | "MANUAL_ID" | "MANUAL_SEARCH";
   scanId?: string;
   deviceId?: string;
   scanType?: CardScanType;
   scannedValue?: string;
   timestamp?: string;
   ipAddress?: string;
+  notes?: string;
 };
 
 function todayRange() {
@@ -429,7 +430,8 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
             studentId: student.id,
             status,
             source: input.source,
-            searchMethod: input.searchMethod ?? (input.source === AttendanceSource.NFC ? "NFC" : input.source === AttendanceSource.QR ? "QR" : "MANUAL_SEARCH")
+            searchMethod: input.searchMethod ?? (input.source === AttendanceSource.NFC ? "NFC" : input.source === AttendanceSource.QR ? "QR" : "MANUAL_SEARCH"),
+            notes: input.notes ?? null
           },
           select: { id: true, markedAt: true, status: true }
         });
@@ -456,7 +458,7 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
         status: record.status,
         success: !duplicate,
         message: auditMessage,
-        metadata: { scanId: input.scanId, deviceId: input.deviceId, duplicate }
+        metadata: { scanId: input.scanId, deviceId: input.deviceId, duplicate, correctionReason: input.notes ?? null }
       });
 
       if (scanType) {

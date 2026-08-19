@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
 import { classGroupSchema, type ClassGroupInput } from "@/lib/validations";
@@ -43,6 +44,12 @@ function dataFor(input: ClassGroupInput, teacherId: string) {
     status: input.status
   };
 }
+
+const classTypeOptionsSchema = z
+  .array(z.string().trim().min(1).max(60))
+  .min(1, "Add at least one class type.")
+  .max(20, "Keep class types to 20 or fewer.")
+  .transform((values) => Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))));
 
 export async function createClassGroup(input: ClassGroupInput): Promise<ActionState> {
   try {
@@ -87,5 +94,28 @@ export async function deleteClassGroup(id: string): Promise<ActionState> {
     return { ok: true, message: "Class removed." };
   } catch (error) {
     return actionError(error, "Could not remove class.");
+  }
+}
+
+export async function saveClassTypeOptions(input: string[]): Promise<ActionState> {
+  try {
+    const { instituteId } = await getTenantContext();
+    const options = classTypeOptionsSchema.parse(input);
+
+    await prisma.instituteSettings.upsert({
+      where: { instituteId },
+      create: {
+        instituteId,
+        classTypeOptions: options
+      },
+      update: {
+        classTypeOptions: options
+      }
+    });
+
+    revalidatePath("/dashboard/classes");
+    return { ok: true, message: "Class types updated." };
+  } catch (error) {
+    return actionError(error, "Could not update class types.");
   }
 }

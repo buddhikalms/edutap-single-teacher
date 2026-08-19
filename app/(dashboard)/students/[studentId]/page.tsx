@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarCheck2, CreditCard, GraduationCap, IdCard, QrCode, Radio, UserRound } from "lucide-react";
+import { ArrowLeft, CalendarCheck2, CreditCard, Fingerprint, GraduationCap, IdCard, QrCode, Radio, ScanFace, UserRound } from "lucide-react";
 import { StudentQrCode } from "@/components/students/student-qr-code";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,18 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               Manage cards
             </Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link href={`/students/${student.id}/face`}>
+              <ScanFace className="h-4 w-4" />
+              Manage Face ID
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/students/${student.id}/fingerprint`}>
+              <Fingerprint className="h-4 w-4" />
+              Fingerprint
+            </Link>
+          </Button>
           <Badge variant={student.status === "ACTIVE" ? "success" : "outline"}>{student.status.toLowerCase()}</Badge>
         </div>
       </div>
@@ -83,8 +95,13 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
         <Card className="glass-panel">
           <CardContent className="p-6">
             <div className="flex flex-col items-center text-center">
-              <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-primary text-white shadow-glow">
-                {student.avatarUrl ? <span className="text-sm font-semibold">Photo</span> : <UserRound className="h-16 w-16" />}
+              <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-2xl bg-primary text-white shadow-glow">
+                {student.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={student.avatarUrl} alt={`${student.firstName} ${student.lastName}`} className="h-full w-full object-cover" />
+                ) : (
+                  <UserRound className="h-16 w-16" />
+                )}
               </div>
               <h3 className="mt-5 text-xl font-semibold">{student.firstName} {student.lastName}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{student.email ?? "No email added"}</p>

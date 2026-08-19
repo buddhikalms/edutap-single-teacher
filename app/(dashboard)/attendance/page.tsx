@@ -1,4 +1,5 @@
 import { AttendanceTerminal, type AttendanceClass, type AttendanceReport, type AttendanceSessionView } from "@/components/attendance/attendance-terminal";
+import type { AttendanceSessionStatus, AttendanceSource, AttendanceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
 import { formatCurrency } from "@/lib/utils";
@@ -31,11 +32,11 @@ function sessionView(session: {
   id: string;
   classGroupId: string;
   sessionDate: Date;
-  status: "ACTIVE" | "ENDED";
+  status: AttendanceSessionStatus;
   startsAt: Date | null;
   endsAt: Date | null;
   classGroup: { name: string; branch?: { name: string; location: string | null } | null; teacher?: { name: string } | null };
-  records: Array<{ id: string; studentId: string; status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"; source: "MANUAL" | "QR" | "NFC" | "BULK"; markedAt: Date }>;
+  records: Array<{ id: string; studentId: string; status: AttendanceStatus; source: AttendanceSource; markedAt: Date }>;
   _count?: { classEndNotificationLogs: number };
 }): AttendanceSessionView {
   const present = session.records.filter((record) => record.status === "PRESENT").length;
@@ -184,7 +185,7 @@ export default async function AttendancePage() {
       classMap.get(record.session.classGroupId) ??
       { className: record.session.classGroup.name, total: 0, present: 0, late: 0, absent: 0, excused: 0 };
     classEntry.total += 1;
-    classEntry[record.status.toLowerCase() as "present" | "late" | "absent" | "excused"] += 1;
+    if (record.status !== "PENDING_REVIEW") classEntry[record.status.toLowerCase() as "present" | "late" | "absent" | "excused"] += 1;
     classMap.set(record.session.classGroupId, classEntry);
 
     const studentEntry =
@@ -200,7 +201,7 @@ export default async function AttendancePage() {
         excused: 0
       };
     studentEntry.total += 1;
-    studentEntry[record.status.toLowerCase() as "present" | "late" | "absent" | "excused"] += 1;
+    if (record.status !== "PENDING_REVIEW") studentEntry[record.status.toLowerCase() as "present" | "late" | "absent" | "excused"] += 1;
     studentMap.set(record.studentId, studentEntry);
   }
 

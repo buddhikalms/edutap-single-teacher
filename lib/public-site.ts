@@ -58,7 +58,7 @@ export type PublicClass = {
   grade: string;
   subject: string;
   teacherSlug: string;
-  classType: "Inhouse" | "Online" | "Hybrid";
+  classType: string;
   schedule: string;
   monthlyFee: number;
   paymentStartDate: string;

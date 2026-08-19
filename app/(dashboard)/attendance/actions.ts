@@ -18,7 +18,7 @@ function sessionDate(value: string) {
 async function assertClass(instituteId: string, classGroupId: string) {
   const classGroup = await prisma.classGroup.findFirst({
     where: { id: classGroupId, instituteId },
-    select: { id: true, branchId: true, classType: true }
+    select: { id: true, branchId: true }
   });
 
   if (!classGroup) {
@@ -56,7 +56,7 @@ export async function startAttendanceSession(input: AttendanceSessionInput): Pro
           startsAt: new Date(),
           endsAt: null,
           branchId: classGroup.branchId,
-          sessionType: parsed.sessionType ?? classGroup.classType,
+          sessionType: parsed.sessionType ?? "INHOUSE",
           startedById: userId,
           notes: parsed.notes ?? existing.notes
         }
@@ -67,7 +67,7 @@ export async function startAttendanceSession(input: AttendanceSessionInput): Pro
           classGroupId: parsed.classGroupId,
           branchId: classGroup.branchId,
           sessionDate: date,
-          sessionType: parsed.sessionType ?? classGroup.classType,
+          sessionType: parsed.sessionType ?? "INHOUSE",
           startedById: userId,
           startsAt: new Date(),
           status: "ACTIVE",

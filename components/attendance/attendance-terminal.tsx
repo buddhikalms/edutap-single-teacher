@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   CalendarCheck2,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Send,
   Search,
   ScanLine,
+  ScanFace,
   ShieldAlert,
   UsersRound
 } from "lucide-react";
@@ -25,9 +27,9 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { AttendanceMarkResult } from "@/lib/attendance";
-import type { AttendanceSource } from "@prisma/client";
+import type { AttendanceSessionStatus, AttendanceSource, AttendanceStatus } from "@prisma/client";
 
-type Status = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
+type Status = AttendanceStatus;
 
 export type AttendanceStudent = {
   id: string;
@@ -54,7 +56,7 @@ export type AttendanceSessionView = {
   branchName: string;
   teacherName: string;
   sessionDate: string;
-  status: "ACTIVE" | "ENDED";
+  status: AttendanceSessionStatus;
   startsAt: string | null;
   endsAt: string | null;
   classEndNotificationCount: number;
@@ -71,7 +73,7 @@ export type AttendanceClass = {
   name: string;
   branchId: string;
   branch: string;
-  classType: "INHOUSE" | "ONLINE" | "HYBRID";
+  classType: string;
   course: string;
   teacher: string;
   students: AttendanceStudent[];
@@ -296,7 +298,7 @@ export function AttendanceTerminal({
       const result = await startAttendanceSession({
         classGroupId: selectedClass.id,
         sessionDate,
-        sessionType: selectedClass.classType,
+        sessionType: "INHOUSE",
         notes
       });
       if (result.ok) {
@@ -461,6 +463,14 @@ export function AttendanceTerminal({
             <MiniMetric icon={UsersRound} label="Class students" value={String(selectedClass?.students.length ?? 0)} />
             <MiniMetric icon={ScanLine} label="Recent scans" value={String(audits.length)} />
           </div>
+        </div>
+        <div className="mt-5">
+          <Button asChild variant="outline">
+            <Link href="/attendance/face">
+              <ScanFace className="h-4 w-4" />
+              Open Face Kiosk
+            </Link>
+          </Button>
         </div>
       </section>
 

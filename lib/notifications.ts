@@ -1,5 +1,6 @@
 import { NotificationChannel, NotificationStatus, NotificationType, NoticeAudience, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizeSmsRecipient, sendSmsLenzSms } from "@/lib/smslenz-sms";
 import { sendStudentWebPush, sendWebPushMessages } from "@/lib/web-push";
 
 type NotificationRecipient = {
@@ -281,11 +282,11 @@ export async function createNoticeWithNotifications(input: {
   });
 
   const recipients = students.flatMap((student) => [
-    ...(student.user
+    ...(student.user && input.channel !== "SMS"
       ? [{ userId: student.user.id, studentId: student.id, target: student.user.email }]
       : []),
     ...student.parents
-      .filter((parent) => parent.user)
+      .filter((parent) => input.channel === "SMS" || parent.user)
       .map((parent) => ({
         userId: parent.user?.id,
         studentId: student.id,
@@ -293,6 +294,74 @@ export async function createNoticeWithNotifications(input: {
         target: input.channel === "SMS" || input.channel === "WHATSAPP" ? parent.phone : parent.user?.email ?? parent.email
       }))
   ]);
+
+  if (input.channel === "SMS") {
+    const recipientMap = new Map<string, NotificationRecipient>();
+    let skipped = 0;
+
+    for (const recipient of recipients) {
+      const target = normalizeSmsRecipient(recipient.target);
+      if (!target) {
+        skipped += 1;
+        continue;
+      }
+
+      if (!recipientMap.has(target)) {
+        recipientMap.set(target, { ...recipient, target });
+      }
+    }
+
+    const results = [];
+    for (const recipient of recipientMap.values()) {
+      const result = await sendSmsLenzSms({ recipient: recipient.target!, message: input.body });
+      results.push({ recipient, result });
+    }
+
+    if (results.length > 0) {
+      await prisma.notificationLog.createMany({
+        data: results.map(({ recipient, result }) => ({
+          instituteId: input.instituteId,
+          noticeId: notice.id,
+          userId: recipient.userId ?? null,
+          studentId: recipient.studentId ?? null,
+          parentId: recipient.parentId ?? null,
+          type: input.type,
+          channel: NotificationChannel.SMS,
+          status: result.ok ? NotificationStatus.SENT : NotificationStatus.FAILED,
+          title: input.title,
+          body: input.body,
+          message: input.body,
+          target: recipient.target ?? null,
+          provider: result.provider,
+          providerRef: result.providerRef ?? null,
+          recipientType: "PARENT",
+          recipientId: recipient.parentId ?? null,
+          payloadJson: {
+            audience: input.audience,
+            classGroupId: input.classGroupId,
+            provider: "smslenz",
+            statusCode: result.statusCode
+          },
+          metadata: {
+            providerResponse:
+              result.response === undefined ? null : (JSON.parse(JSON.stringify(result.response)) as Prisma.InputJsonValue)
+          },
+          errorMessage: result.error ?? null,
+          error: result.error ?? null,
+          sentAt: result.ok ? new Date() : null
+        }))
+      });
+    }
+
+    return {
+      ...notice,
+      sms: {
+        sent: results.filter(({ result }) => result.ok).length,
+        failed: results.filter(({ result }) => !result.ok).length,
+        skipped
+      }
+    };
+  }
 
   await createNotificationLogs({
     instituteId: input.instituteId,

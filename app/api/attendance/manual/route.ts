@@ -23,7 +23,8 @@ export async function POST(request: Request) {
       studentId: parsed.data.studentId,
       status: parsed.data.status as AttendanceStatus,
       source: AttendanceSource.MANUAL,
-      searchMethod: parsed.data.method
+      searchMethod: parsed.data.method,
+      notes: parsed.data.notes
     });
 
     return NextResponse.json(result, { status: result.statusCode });

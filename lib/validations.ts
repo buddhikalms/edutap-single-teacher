@@ -209,7 +209,7 @@ export const classGroupSchema = z.object({
   gradeId: z.string().min(1, "Grade is required."),
   subjectId: z.string().min(1, "Subject is required."),
   teacherId: optionalText,
-  classType: z.enum(["INHOUSE", "ONLINE", "HYBRID"]),
+  classType: z.string().trim().min(1, "Class type is required.").max(60, "Class type must be shorter than 60 characters."),
   fee: z.coerce.number().min(0, "Fee must be zero or more."),
   admissionFee: z.coerce.number().min(0, "Admission fee must be zero or more.").optional(),
   paymentStartDate: optionalText,
@@ -283,6 +283,20 @@ export const nfcAttendanceSchema = scanRequestMetadataSchema.extend({
   status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT")
 });
 
+export const fingerprintAttendanceSchema = scanRequestMetadataSchema.extend({
+  classGroupId: z.string().min(1, "Class is required."),
+  fingerprintId: z.string().trim().min(1, "Fingerprint user ID is required.").optional(),
+  studentId: z.string().trim().min(1, "Student is required.").optional(),
+  admissionNo: z.string().trim().min(1, "Admission number is required.").optional(),
+  eventId: z.string().trim().min(8, "Event ID is required.").optional(),
+  deviceId: z.string().trim().min(1, "Device ID is required."),
+  scannedValue: z.string().trim().optional(),
+  occurredAt: z.string().datetime().optional(),
+  status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT")
+}).refine((value) => value.fingerprintId || value.studentId || value.admissionNo, {
+  message: "Fingerprint ID, student ID, or admission number is required."
+});
+
 export const assignStudentNfcSchema = z.object({
   nfcUid: z.string().trim().min(1, "NFC UID is required."),
   writeMode: z.enum(["UID_ONLY", "NDEF_WRITTEN", "NDEF_UNSUPPORTED"]).optional()
@@ -298,7 +312,8 @@ export const manualIdAttendanceSchema = z.object({
   classGroupId: z.string().min(1, "Class is required."),
   studentId: z.string().min(1, "Student is required."),
   status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT"),
-  method: z.enum(["MANUAL_ID", "MANUAL_SEARCH"]).default("MANUAL_SEARCH")
+  method: z.enum(["MANUAL_ID", "MANUAL_SEARCH"]).default("MANUAL_SEARCH"),
+  notes: optionalText
 });
 
 export const attendanceReportSchema = z.object({
@@ -498,6 +513,7 @@ export type AttendanceSessionInput = z.infer<typeof attendanceSessionSchema>;
 export type ManualAttendanceInput = z.infer<typeof manualAttendanceSchema>;
 export type QrAttendanceInput = z.infer<typeof qrAttendanceSchema>;
 export type NfcAttendanceInput = z.infer<typeof nfcAttendanceSchema>;
+export type FingerprintAttendanceInput = z.infer<typeof fingerprintAttendanceSchema>;
 export type AssignStudentNfcInput = z.infer<typeof assignStudentNfcSchema>;
 export type AttendanceSearchInput = z.infer<typeof attendanceSearchSchema>;
 export type ManualIdAttendanceInput = z.infer<typeof manualIdAttendanceSchema>;

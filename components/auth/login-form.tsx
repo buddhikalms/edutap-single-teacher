@@ -28,12 +28,22 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginInput) {
     setIsSubmitting(true);
-    const result = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-      callbackUrl: searchParams.get("callbackUrl") ?? "/dashboard"
-    });
+    let result;
+    try {
+      result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+        callbackUrl: searchParams.get("callbackUrl") ?? "/dashboard"
+      });
+    } catch {
+      toast.error("Login failed", {
+        description: "The login request did not complete. Please try again."
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(false);
 
     if (result?.error) {
@@ -44,8 +54,16 @@ export function LoginForm() {
     }
 
     toast.success("Welcome back to EduTap");
-    router.push(result?.url ?? "/dashboard");
+    const nextUrl = result?.url ? new URL(result.url, window.location.origin) : null;
+    const nextPath = nextUrl ? `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}` : "/dashboard";
+    router.push(nextPath || "/dashboard");
     router.refresh();
+  }
+
+  async function submitCurrentForm() {
+    const isValid = await form.trigger();
+    if (!isValid) return;
+    await onSubmit(form.getValues());
   }
 
   return (
@@ -57,7 +75,16 @@ export function LoginForm() {
         </p>
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      <form
+        method="post"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void form.handleSubmit(onSubmit)(event);
+        }}
+        className="space-y-5"
+      >
         <div className="space-y-2">
           <Label htmlFor="email">Email or mobile</Label>
           <Input id="email" type="text" autoComplete="username" {...form.register("email")} />
@@ -74,7 +101,15 @@ export function LoginForm() {
           ) : null}
         </div>
 
-        <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          disabled={isSubmitting}
+          onClick={() => {
+            void submitCurrentForm();
+          }}
+        >
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
           Sign in
         </Button>

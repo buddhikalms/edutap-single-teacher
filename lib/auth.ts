@@ -121,20 +121,12 @@ export const authOptions: NextAuthOptions = {
         if (user.role !== "FAMILY" && user.accountStatus === "PENDING_APPROVAL") throw new Error(PENDING_ACCOUNT_MESSAGE);
         if (user.role !== "FAMILY" && user.accountStatus === "REJECTED") throw new Error(REJECTED_ACCOUNT_MESSAGE);
 
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date(), lastLoginDevice: "Password login" }
-        });
-        await writeSecurityAudit({
+        void recordSuccessfulLogin({
+          userId: user.id,
           instituteId: user.instituteId,
-          actorUserId: user.id,
-          actorRole: user.role,
-          action: "LOGIN_SUCCESS",
-          resourceType: "User",
-          resourceId: user.id,
-          success: true,
-          message: "Credentials login succeeded.",
-          metadata: { provider: "credentials" }
+          role: user.role,
+          device: "Password login",
+          provider: "credentials"
         });
 
         return {
@@ -245,6 +237,39 @@ export const authOptions: NextAuthOptions = {
     }
   }
 };
+
+async function recordSuccessfulLogin(input: {
+  userId: string;
+  instituteId: string | null;
+  role: string;
+  device: string;
+  provider: string;
+}) {
+  try {
+    await prisma.user.update({
+      where: { id: input.userId },
+      data: { lastLoginAt: new Date(), lastLoginDevice: input.device }
+    });
+  } catch (error) {
+    console.warn("Could not update last login metadata.", error);
+  }
+
+  try {
+    await writeSecurityAudit({
+      instituteId: input.instituteId,
+      actorUserId: input.userId,
+      actorRole: input.role,
+      action: "LOGIN_SUCCESS",
+      resourceType: "User",
+      resourceId: input.userId,
+      success: true,
+      message: `${input.provider === "google" ? "Google" : "Credentials"} login succeeded.`,
+      metadata: { provider: input.provider }
+    });
+  } catch (error) {
+    console.warn("Could not write login success audit.", error);
+  }
+}
 
 async function findPortalUser(identifier: string) {
   const normalized = normalizePhone(identifier);

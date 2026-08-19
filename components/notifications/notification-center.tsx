@@ -80,7 +80,7 @@ export function NotificationCenter({
       body: String(formData.get("body") ?? ""),
       audience: audience as "INSTITUTE" | "CLASS" | "STUDENTS",
       type: String(formData.get("type") ?? "NOTICE") as "NOTICE",
-      channel: String(formData.get("channel") ?? "IN_APP") as "IN_APP" | "PUSH" | "WEB_PUSH" | "SMS" | "WHATSAPP" | "EMAIL",
+      channel: "SMS" as const,
       classGroupId: audience === "CLASS" ? classGroupId : undefined,
       studentIds: audience === "STUDENTS" ? selectedStudents : []
     };
@@ -105,8 +105,8 @@ export function NotificationCenter({
               <BellRing className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle>Compose notification</CardTitle>
-              <CardDescription>Send institute, class, or student-specific notices with delivery logs.</CardDescription>
+              <CardTitle>Compose SMS</CardTitle>
+              <CardDescription>Send institute, class, or student-specific SMS notices to parent phones.</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -127,17 +127,7 @@ export function NotificationCenter({
                   <option value="RECEIPT">Receipt notification</option>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="channel">Channel</Label>
-                <Select id="channel" name="channel" defaultValue="IN_APP">
-                  <option value="IN_APP">In-app now</option>
-                  <option value="WEB_PUSH">Student web push now</option>
-                  <option value="PUSH">Push queued</option>
-                  <option value="SMS">SMS ready</option>
-                  <option value="WHATSAPP">WhatsApp ready</option>
-                  <option value="EMAIL">Email ready</option>
-                </Select>
-              </div>
+              <input type="hidden" name="channel" value="SMS" />
               <div className="space-y-2">
                 <Label htmlFor="audience">Audience</Label>
                 <Select id="audience" value={audience} onChange={(event) => setAudience(event.target.value)}>
@@ -193,7 +183,7 @@ export function NotificationCenter({
 
             <Button type="submit" size="lg" disabled={isPending}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Send notification
+              Send SMS
             </Button>
           </form>
         </CardContent>
@@ -224,7 +214,7 @@ export function NotificationCenter({
         <Card>
           <CardHeader>
             <CardTitle>Delivery logs</CardTitle>
-            <CardDescription>Push/SMS/WhatsApp providers can consume queued rows later.</CardDescription>
+            <CardDescription>Latest SMS delivery results.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {logs.map((log) => (

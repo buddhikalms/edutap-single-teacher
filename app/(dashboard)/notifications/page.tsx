@@ -30,7 +30,7 @@ export default async function NotificationsPage() {
       include: { _count: { select: { recipients: true } } }
     }),
     prisma.notificationLog.findMany({
-      where: { instituteId: context.instituteId },
+      where: { instituteId: context.instituteId, channel: "SMS" },
       orderBy: { createdAt: "desc" },
       take: 12,
       select: { id: true, title: true, channel: true, status: true, target: true, createdAt: true }
@@ -43,7 +43,7 @@ export default async function NotificationsPage() {
         <CardHeader>
           <CardTitle className="text-2xl">Notification Center</CardTitle>
           <CardDescription className="text-white/70">
-            Create notices, queue parent communications, and keep a delivery history for every family-facing message.
+            Send SMS notices to parent phone numbers and keep a delivery history for every message.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -54,7 +54,7 @@ export default async function NotificationsPage() {
             </div>
             <div className="rounded-2xl bg-white/10 p-4">
               <p className="text-2xl font-bold">{logs.length}</p>
-              <p className="text-sm text-white/65">Delivery logs</p>
+              <p className="text-sm text-white/65">SMS logs</p>
             </div>
             <div className="rounded-2xl bg-white/10 p-4">
               <p className="text-2xl font-bold">{students.length}</p>

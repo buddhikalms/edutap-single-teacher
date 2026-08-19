@@ -18,7 +18,7 @@ export default async function ClassesPage() {
     prisma.branch.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.grade.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true }, orderBy: [{ order: "asc" }, { name: "asc" }] }),
     prisma.subject.findMany({ where: { instituteId, isActive: true }, select: { id: true, name: true, color: true }, orderBy: { name: "asc" } }),
-    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } })
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true, classTypeOptions: true } })
   ]);
 
   const rows: ClassRow[] = classes.map((item) => ({
@@ -46,5 +46,18 @@ export default async function ClassesPage() {
     enrolled: item._count.enrollments
   }));
 
-  return <ClassesManager classes={rows} branches={branches} grades={grades} subjects={subjects} currency={settings?.currency ?? "LKR"} />;
+  const classTypeOptions = Array.isArray(settings?.classTypeOptions)
+    ? settings.classTypeOptions.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : ["Individual", "Group", "Spoken"];
+
+  return (
+    <ClassesManager
+      classes={rows}
+      branches={branches}
+      grades={grades}
+      subjects={subjects}
+      currency={settings?.currency ?? "LKR"}
+      classTypeOptions={classTypeOptions}
+    />
+  );
 }

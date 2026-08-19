@@ -5,12 +5,22 @@ import { NotificationChannel, NotificationType, NoticeAudience } from "@prisma/c
 import { createNoticeWithNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { getSmsLenzConfig } from "@/lib/smslenz-sms";
 import { noticeSchema, type NoticeInput } from "@/lib/validations";
 
 export async function createNotice(input: NoticeInput): Promise<ActionState> {
   try {
     const { instituteId, userId } = await getTenantContext();
     const parsed = noticeSchema.parse(input);
+
+    if (parsed.channel !== "SMS") {
+      return { ok: false, message: "Only SMS sending is available here right now." };
+    }
+
+    const smsConfig = getSmsLenzConfig();
+    if (!smsConfig.ok) {
+      return { ok: false, message: smsConfig.reason };
+    }
 
     if (parsed.audience === "CLASS" && !parsed.classGroupId) {
       return { ok: false, message: "Select a class for class notices." };
@@ -38,7 +48,7 @@ export async function createNotice(input: NoticeInput): Promise<ActionState> {
       }
     }
 
-    await createNoticeWithNotifications({
+    const result = await createNoticeWithNotifications({
       instituteId,
       createdById: userId,
       title: parsed.title,
@@ -53,7 +63,15 @@ export async function createNotice(input: NoticeInput): Promise<ActionState> {
     revalidatePath("/notifications");
     revalidatePath("/portal");
     revalidatePath("/portal/notices");
-    return { ok: true, message: "Notice and notification logs created." };
+    if ("sms" in result) {
+      const { sms } = result;
+      const parts = [`SMS sent to ${sms.sent} parent${sms.sent === 1 ? "" : "s"}`];
+      if (sms.failed > 0) parts.push(`${sms.failed} failed`);
+      if (sms.skipped > 0) parts.push(`${sms.skipped} skipped`);
+      return { ok: sms.sent > 0, message: `${parts.join(", ")}.` };
+    }
+
+    return { ok: true, message: "SMS notice created." };
   } catch (error) {
     return actionError(error, "Could not create notice.");
   }
