@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 apps/mobile/node_modules/
+.venv/
+venv/
+env/
+face-service/.venv/
+face-service/.venv*/
 
 # Next.js
 .next/
@@ -40,6 +45,12 @@ coverage/
 .turbo/
 .vercel/
 .eslintcache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.agents/
 public/uploads/
 .private/
 storage/
