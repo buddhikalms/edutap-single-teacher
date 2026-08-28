@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { BellRing, BookOpenCheck, CalendarCheck2, CreditCard, DollarSign, Radio, UsersRound } from "lucide-react";
-import { AttendanceStatus, PaymentStatus } from "@prisma/client";
+import { AttendanceStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { AttendanceChart } from "@/components/dashboard/attendance-chart";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
@@ -33,6 +33,32 @@ export default async function DashboardPage() {
   }
 
   const instituteId = session.user.instituteId;
+  const teacher = session.user.role === "TEACHER"
+    ? await prisma.teacher.findFirst({ where: { userId: session.user.id, instituteId }, select: { id: true } })
+    : null;
+
+  if (session.user.role === "TEACHER" && !teacher) {
+    redirect("/login");
+  }
+
+  const teacherId = teacher?.id ?? null;
+  const classGroupScope: Prisma.ClassGroupWhereInput = teacherId ? { teacherId } : {};
+  const attendanceSessionScope: Prisma.AttendanceSessionWhereInput = { classGroup: { instituteId, ...classGroupScope } };
+  const teacherStudentWhere: Prisma.StudentWhereInput = teacherId
+    ? {
+        instituteId,
+        OR: [
+          { enrollments: { some: { classGroup: { teacherId } } } },
+          { courseEnrollments: { some: { course: { teacherId } } } }
+        ]
+      }
+    : { instituteId };
+  const paymentScope: Prisma.PaymentWhereInput = teacherId
+    ? { instituteId, OR: [{ classGroup: { teacherId } }, { course: { teacherId } }] }
+    : { instituteId };
+  const homeworkReviewScope: Prisma.HomeworkSubmissionWhereInput = teacherId
+    ? { instituteId, homework: { OR: [{ classGroup: { teacherId } }, { course: { teacherId } }] } }
+    : { instituteId };
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(startOfToday);
@@ -60,7 +86,7 @@ export default async function DashboardPage() {
     parentAlerts
   ] =
     await Promise.all([
-      prisma.student.count({ where: { instituteId } }),
+      prisma.student.count({ where: teacherStudentWhere }),
       prisma.attendanceRecord.count({
         where: {
           session: {
@@ -68,7 +94,7 @@ export default async function DashboardPage() {
               gte: startOfToday,
               lt: endOfToday
             },
-            classGroup: { instituteId }
+            ...attendanceSessionScope
           }
         }
       }),
@@ -80,7 +106,7 @@ export default async function DashboardPage() {
               gte: startOfToday,
               lt: endOfToday
             },
-            classGroup: { instituteId }
+            ...attendanceSessionScope
           }
         }
       }),
@@ -92,7 +118,7 @@ export default async function DashboardPage() {
               gte: startOfToday,
               lt: endOfToday
             },
-            classGroup: { instituteId }
+            ...attendanceSessionScope
           }
         }
       }),
@@ -104,7 +130,7 @@ export default async function DashboardPage() {
               gte: startOfToday,
               lt: endOfToday
             },
-            classGroup: { instituteId }
+            ...attendanceSessionScope
           }
         }
       }),
@@ -116,22 +142,22 @@ export default async function DashboardPage() {
               gte: startOfToday,
               lt: endOfToday
             },
-            classGroup: { instituteId }
+            ...attendanceSessionScope
           }
         }
       }),
       prisma.payment.aggregate({
-        where: { instituteId, status: { in: [PaymentStatus.PENDING, PaymentStatus.OVERDUE, PaymentStatus.PARTIAL] } },
+        where: { ...paymentScope, status: { in: [PaymentStatus.PENDING, PaymentStatus.OVERDUE, PaymentStatus.PARTIAL] } },
         _count: { _all: true },
         _sum: { amount: true }
       }),
       prisma.payment.aggregate({
-        where: { instituteId, status: PaymentStatus.PAID, paidAt: { gte: startOfMonth } },
+        where: { ...paymentScope, status: PaymentStatus.PAID, paidAt: { gte: startOfMonth } },
         _sum: { amount: true }
       }),
       prisma.payment.findMany({
         where: {
-          instituteId,
+          ...paymentScope,
           status: PaymentStatus.PAID,
           paidAt: {
             not: null,
@@ -141,7 +167,7 @@ export default async function DashboardPage() {
         select: { amount: true, paidAt: true }
       }),
       prisma.payment.findMany({
-        where: { instituteId },
+        where: paymentScope,
         include: { student: true },
         orderBy: { createdAt: "desc" },
         take: 3
@@ -149,7 +175,7 @@ export default async function DashboardPage() {
       prisma.attendanceRecord.findMany({
         where: {
           session: {
-            classGroup: { instituteId }
+            ...attendanceSessionScope
           }
         },
         include: {
@@ -164,7 +190,7 @@ export default async function DashboardPage() {
         take: 2
       }),
       prisma.classGroup.findMany({
-        where: { instituteId },
+        where: { instituteId, ...classGroupScope },
         include: {
           subject: true,
           teacher: true,
@@ -175,15 +201,15 @@ export default async function DashboardPage() {
         take: 4
       }),
       prisma.instituteSettings.findUnique({ where: { instituteId }, select: { currency: true } }),
-      prisma.homeworkSubmission.count({ where: { instituteId, status: { in: ["SUBMITTED", "LATE"] } } }),
+      prisma.homeworkSubmission.count({ where: { ...homeworkReviewScope, status: { in: ["SUBMITTED", "LATE"] } } }),
       prisma.liveClass.findMany({
-        where: { instituteId, status: "PUBLISHED", startTime: { gte: new Date() } },
+        where: { instituteId, ...(teacherId ? { OR: [{ teacherId }, { classGroup: { teacherId } }] } : {}), status: "PUBLISHED", startTime: { gte: new Date() } },
         include: { classGroup: true },
         orderBy: { startTime: "asc" },
         take: 3
       }),
       prisma.notificationLog.findMany({
-        where: { instituteId, parentId: { not: null } },
+        where: { instituteId, parentId: { not: null }, ...(teacherId ? { student: teacherStudentWhere } : {}) },
         include: { parent: true, student: true },
         orderBy: { createdAt: "desc" },
         take: 4
@@ -345,3 +371,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+

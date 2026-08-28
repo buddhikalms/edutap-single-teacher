@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { actionError, type ActionState } from "@/lib/session";
+import { resolveAssignableTeacherId } from "@/lib/teacher-tenancy";
 import { classGroupSchema, type ClassGroupInput } from "@/lib/validations";
-import { requireOwnerTeacherId } from "@/lib/single-teacher";
 
 function duplicateMessage(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
@@ -23,7 +23,7 @@ async function assertRelations(instituteId: string, input: ClassGroupInput) {
   if (!branch || !grade || !subject) throw new Error("Select a valid grade, subject, and teaching location.");
 }
 
-function dataFor(input: ClassGroupInput, teacherId: string) {
+function dataFor(input: ClassGroupInput, teacherId: string | null) {
   return {
     name: input.name,
     code: input.code,
@@ -51,12 +51,37 @@ const classTypeOptionsSchema = z
   .max(20, "Keep class types to 20 or fewer.")
   .transform((values) => Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))));
 
+function cleanClassTypeOptions(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+async function classTypeOptionsForTeacher(instituteId: string, teacherId: string | null) {
+  const [teacher, settings] = await Promise.all([
+    teacherId ? prisma.teacher.findFirst({ where: { id: teacherId, instituteId }, select: { classTypeOptions: true } }) : null,
+    prisma.instituteSettings.findUnique({ where: { instituteId }, select: { classTypeOptions: true } })
+  ]);
+
+  const teacherOptions = cleanClassTypeOptions(teacher?.classTypeOptions);
+  if (teacherOptions.length) return teacherOptions;
+
+  const instituteOptions = cleanClassTypeOptions(settings?.classTypeOptions);
+  return instituteOptions.length ? instituteOptions : ["Individual", "Group", "Spoken"];
+}
+
+async function assertTeacherClassType(instituteId: string, teacherId: string | null, classType: string) {
+  if (!teacherId) return;
+  const options = await classTypeOptionsForTeacher(instituteId, teacherId);
+  if (!options.includes(classType)) {
+    throw new Error("Select a valid class type for this teacher.");
+  }
+}
+
 export async function createClassGroup(input: ClassGroupInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, teacherId } = await resolveAssignableTeacherId(input.teacherId, "canCreateClasses");
     const parsed = classGroupSchema.parse(input);
     await assertRelations(instituteId, parsed);
-    const teacherId = await requireOwnerTeacherId(instituteId);
+    await assertTeacherClassType(instituteId, teacherId, parsed.classType);
     await prisma.classGroup.create({ data: { ...dataFor(parsed, teacherId), instituteId } });
     revalidatePath("/dashboard/classes");
     return { ok: true, message: "Class added successfully." };
@@ -68,12 +93,12 @@ export async function createClassGroup(input: ClassGroupInput): Promise<ActionSt
 
 export async function updateClassGroup(id: string, input: ClassGroupInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, role, teacherId } = await resolveAssignableTeacherId(input.teacherId, "canEditClasses");
     const parsed = classGroupSchema.parse(input);
     await assertRelations(instituteId, parsed);
-    const existing = await prisma.classGroup.findFirst({ where: { id, instituteId }, select: { id: true } });
+    await assertTeacherClassType(instituteId, teacherId, parsed.classType);
+    const existing = await prisma.classGroup.findFirst({ where: { id, instituteId, ...(role === "TEACHER" ? { teacherId } : {}) }, select: { id: true } });
     if (!existing) return { ok: false, message: "Class was not found." };
-    const teacherId = await requireOwnerTeacherId(instituteId);
     await prisma.classGroup.update({ where: { id }, data: dataFor(parsed, teacherId) });
     revalidatePath("/dashboard/classes");
     revalidatePath(`/dashboard/classes/${id}`);
@@ -86,8 +111,8 @@ export async function updateClassGroup(id: string, input: ClassGroupInput): Prom
 
 export async function deleteClassGroup(id: string): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
-    const existing = await prisma.classGroup.findFirst({ where: { id, instituteId }, select: { id: true } });
+    const { instituteId, role, teacherId } = await resolveAssignableTeacherId(null, "canEditClasses");
+    const existing = await prisma.classGroup.findFirst({ where: { id, instituteId, ...(role === "TEACHER" ? { teacherId } : {}) }, select: { id: true } });
     if (!existing) return { ok: false, message: "Class was not found." };
     await prisma.classGroup.delete({ where: { id } });
     revalidatePath("/dashboard/classes");
@@ -97,23 +122,23 @@ export async function deleteClassGroup(id: string): Promise<ActionState> {
   }
 }
 
-export async function saveClassTypeOptions(input: string[]): Promise<ActionState> {
+export async function saveClassTypeOptions(input: string[], inputTeacherId?: string | null): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { teacherId } = await resolveAssignableTeacherId(inputTeacherId, "canEditClasses");
     const options = classTypeOptionsSchema.parse(input);
 
-    await prisma.instituteSettings.upsert({
-      where: { instituteId },
-      create: {
-        instituteId,
-        classTypeOptions: options
-      },
-      update: {
-        classTypeOptions: options
-      }
+    if (!teacherId) {
+      return { ok: false, message: "Select a teacher before saving class types." };
+    }
+
+    await prisma.teacher.update({
+      where: { id: teacherId },
+      data: { classTypeOptions: options }
     });
 
     revalidatePath("/dashboard/classes");
+    revalidatePath("/teachers");
+    revalidatePath(`/teachers/${teacherId}`);
     return { ok: true, message: "Class types updated." };
   } catch (error) {
     return actionError(error, "Could not update class types.");

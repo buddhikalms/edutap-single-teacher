@@ -8,6 +8,10 @@ declare module "next-auth" {
       instituteId: string | null;
       branchId: string | null;
       accountStatus: string;
+      teacherId: string | null;
+      teacherSlug: string | null;
+      mustChangePassword: boolean;
+      passwordStatus: string;
     } & DefaultSession["user"];
   }
 
@@ -16,6 +20,10 @@ declare module "next-auth" {
     instituteId: string | null;
     branchId: string | null;
     accountStatus?: string;
+    teacherId?: string | null;
+    teacherSlug?: string | null;
+    mustChangePassword?: boolean;
+    passwordStatus?: string;
   }
 }
 
@@ -26,5 +34,9 @@ declare module "next-auth/jwt" {
     instituteId: string | null;
     branchId: string | null;
     accountStatus: string;
+    teacherId: string | null;
+    teacherSlug: string | null;
+    mustChangePassword: boolean;
+    passwordStatus: string;
   }
 }

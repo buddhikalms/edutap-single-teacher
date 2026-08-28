@@ -64,10 +64,13 @@ export async function POST(request: Request) {
 
   const classGroup = await prisma.classGroup.findFirst({
     where: { id: parsed.data.classGroupId, status: "ACTIVE", gradeId: parsed.data.gradeId },
-    include: { teacher: { select: { userId: true } } }
+    include: { teacher: { select: { id: true, userId: true, status: true } } }
   });
   if (!classGroup || !classGroup.gradeId) {
     return NextResponse.json({ message: "The selected class does not match the selected grade or is no longer accepting requests." }, { status: 404 });
+  }
+  if (!classGroup.teacherId || classGroup.teacher?.status !== "ACTIVE") {
+    return NextResponse.json({ message: "This teacher portal is currently unavailable." }, { status: 403 });
   }
 
   const parentMobile = normalizeMobile(parsed.data.parentMobile);
@@ -147,6 +150,7 @@ export async function POST(request: Request) {
       const created = await tx.enrollmentRequest.create({
         data: {
           instituteId: classGroup.instituteId,
+          teacherId: classGroup.teacherId,
           familyUserId: familyUser.id,
           requestedParentId: parent.id,
           requestedStudentId: student.id,

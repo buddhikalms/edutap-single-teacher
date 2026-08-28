@@ -343,6 +343,9 @@ export function AttendanceTerminal({
         sentCount?: number;
         skippedDuplicates?: number;
         failedCount?: number;
+        smsSentCount?: number;
+        smsFailedCount?: number;
+        smsSkippedCount?: number;
       };
 
       if (!response.ok || !payload.ok) {
@@ -351,7 +354,9 @@ export function AttendanceTerminal({
       }
 
       if ((payload.sentCount ?? 0) > 0) {
-        toast.success(`Class over notifications sent to ${payload.sentCount} parent${payload.sentCount === 1 ? "" : "s"}.`);
+        const delivered = payload.smsSentCount ?? 0;
+        const failed = (payload.smsFailedCount ?? 0) + (payload.smsSkippedCount ?? 0);
+        toast.success(`Class over SMS sent to ${delivered} parent${delivered === 1 ? "" : "s"}${failed ? `, ${failed} not sent` : ""}.`);
       } else {
         toast.info(payload.message ?? "Class over notification already sent.");
       }
@@ -537,7 +542,7 @@ export function AttendanceTerminal({
                 disabled={isSendingClassOver || activeSession.classEndNotificationCount > 0}
               >
                 {isSendingClassOver ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {activeSession.classEndNotificationCount > 0 ? "Already sent" : "Send Class Over Notification"}
+                {activeSession.classEndNotificationCount > 0 ? "Already sent" : "Send Class Over Message to Parents"}
               </Button>
             ) : null}
           </CardContent>

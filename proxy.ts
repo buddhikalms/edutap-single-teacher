@@ -1,88 +1,94 @@
-import { withAuth } from "next-auth/middleware";
+import { NextResponse, type NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { canAccess } from "@/lib/rbac";
 
-export default withAuth({
-  callbacks: {
-    authorized({ token, req }) {
-      const pathname = req.nextUrl.pathname;
+const RESERVED_TEACHER_SLUGS = new Set(["www", "app", "admin", "api", "student", "parent", "support"]);
 
-      if (pathname === "/student/login" || pathname === "/student/register") return true;
+const protectedAreas = [
+  { prefix: "/dashboard/classes", area: "classes" },
+  { prefix: "/dashboard/courses", area: "classes" },
+  { prefix: "/dashboard/enrollment-requests", area: "enrollment" },
+  { prefix: "/dashboard", area: "dashboard" },
+  { prefix: "/students", area: "students" },
+  { prefix: "/subjects", area: "subjects" },
+  { prefix: "/enrollment", area: "enrollment" },
+  { prefix: "/attendance", area: "attendance" },
+  { prefix: "/payments", area: "payments" },
+  { prefix: "/homework", area: "homework" },
+  { prefix: "/quizzes", area: "quizzes" },
+  { prefix: "/reports", area: "reports" },
+  { prefix: "/settings", area: "settings" },
+  { prefix: "/notifications", area: "notifications" },
+  { prefix: "/admin", area: "admin" }
+] as const;
 
-      if (!token) {
-        return false;
-      }
+const publicStudentPaths = new Set(["/student/login", "/student/register"]);
 
-      if (pathname.startsWith("/students")) {
-        return canAccess(token.role, "students");
-      }
+function requestSubdomain(request: NextRequest) {
+  const hostname = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "").split(":")[0]?.toLowerCase() ?? "";
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "edutap.lk";
+  const localRootDomain = "localhost";
 
-      if (pathname.startsWith("/dashboard/classes") || pathname.startsWith("/dashboard/courses")) {
-        return canAccess(token.role, "classes");
-      }
-      if (pathname.startsWith("/dashboard/enrollment-requests")) {
-        return canAccess(token.role, "enrollment");
-      }
-      if (pathname.startsWith("/subjects")) {
-        return canAccess(token.role, "subjects");
-      }
+  const activeRootDomain = hostname.endsWith(`.${rootDomain}`)
+    ? rootDomain
+    : hostname.endsWith(`.${localRootDomain}`)
+      ? localRootDomain
+      : null;
 
-      if (pathname.startsWith("/enrollment")) {
-        return canAccess(token.role, "enrollment");
-      }
-
-      if (pathname.startsWith("/attendance")) {
-        return canAccess(token.role, "attendance");
-      }
-
-      if (pathname.startsWith("/payments")) {
-        return canAccess(token.role, "payments");
-      }
-
-      if (pathname.startsWith("/homework")) {
-        return canAccess(token.role, "homework");
-      }
-
-      if (pathname.startsWith("/quizzes")) {
-        return canAccess(token.role, "quizzes");
-      }
-
-      if (pathname.startsWith("/reports")) {
-        return canAccess(token.role, "reports");
-      }
-
-      if (pathname.startsWith("/settings")) {
-        return canAccess(token.role, "settings");
-      }
-
-      if (pathname.startsWith("/notifications")) {
-        return canAccess(token.role, "notifications");
-      }
-
-      if (pathname.startsWith("/admin")) {
-        return canAccess(token.role, "admin");
-      }
-
-      return canAccess(token.role, "dashboard");
-    }
-  },
-  pages: {
-    signIn: "/login"
+  if (!activeRootDomain) {
+    return null;
   }
-});
+
+  const subdomain = hostname.slice(0, -activeRootDomain.length - 1);
+  if (!subdomain || subdomain.includes(".") || RESERVED_TEACHER_SLUGS.has(subdomain)) {
+    return null;
+  }
+
+  return subdomain;
+}
+
+function protectedArea(pathname: string) {
+  return protectedAreas.find((item) => pathname === item.prefix || pathname.startsWith(`${item.prefix}/`));
+}
+
+export default async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const requestHeaders = new Headers(request.headers);
+  const subdomain = requestSubdomain(request);
+
+  if (subdomain) {
+    requestHeaders.set("x-edutap-teacher-slug", subdomain);
+  }
+
+  const protectedRoute = protectedArea(pathname);
+  if (!protectedRoute || publicStudentPaths.has(pathname)) {
+    if (subdomain && pathname === "/enroll") {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = "/student/register";
+      return NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } });
+    }
+
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET
+  });
+
+  if (!token) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", request.nextUrl.pathname + request.nextUrl.search);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (!canAccess(String(token.role), protectedRoute.area)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/students/:path*",
-    "/subjects/:path*",
-    "/enrollment/:path*",
-    "/attendance/:path*",
-    "/payments/:path*",
-    "/homework/:path*",
-    "/quizzes/:path*",
-    "/reports/:path*",
-    "/settings/:path*",
-    "/notifications/:path*",
-    "/admin/:path*"
-  ]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|icons/|uploads/|sw.js).*)"]
 };

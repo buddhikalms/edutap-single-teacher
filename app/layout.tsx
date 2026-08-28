@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "EduTap",
-  description: "A complete self-hosted LMS for one private tuition teacher.",
+  description: "A multi-teacher institute LMS with public teacher websites, classes, courses, attendance, payments, and family portals.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

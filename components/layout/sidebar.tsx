@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 const tenantNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, area: "dashboard", group: "Main" },
   { href: "/students", label: "Students", icon: UsersRound, area: "students", group: "People" },
+  { href: "/teachers", label: "Teachers", icon: GraduationCap, area: "teachers", group: "People" },
   { href: "/grades", label: "Grades", icon: BookOpenCheck, area: "grades", group: "Academics" },
   { href: "/subjects", label: "Subjects", icon: BookOpen, area: "subjects", group: "Academics" },
   { href: "/dashboard/classes", label: "Classes", icon: BookOpen, area: "classes", group: "Academics" },

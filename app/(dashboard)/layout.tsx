@@ -16,6 +16,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect("/portal");
   }
 
+  if (session.user.role === "TEACHER" && session.user.mustChangePassword) {
+    redirect("/change-password");
+  }
+
   const [institute, pendingEnrollmentCount] = session.user.instituteId
     ? await Promise.all([prisma.institute.findUnique({
         where: { id: session.user.instituteId },

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarDays, Clock, Eye, Loader2, MapPin, Pencil, Plus, RotateCcw, Search, Settings2, Trash2, UsersRound, X } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { createClassGroup, deleteClassGroup, saveClassTypeOptions, updateClassGroup } from "@/app/(dashboard)/dashboard/classes/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/utils";
 
 type Option = { id: string; name: string };
 type SubjectOption = Option & { color: string };
+type TeacherOption = Option & { classTypeOptions: string[] };
 type ScheduleParts = { day: string; startTime: string; endTime: string };
 
 export type ClassRow = {
@@ -29,6 +30,8 @@ export type ClassRow = {
   subjectId: string;
   subject: string;
   subjectColor: string;
+  teacherId: string | null;
+  teacher: string;
   branchId: string;
   branch: string;
   schedule: string;
@@ -84,11 +87,18 @@ function formatSchedule(parts: ScheduleParts) {
   return `${parts.day} ${parts.startTime}-${parts.endTime}`;
 }
 
+function classTypeOptionsForTeacher(teachers: TeacherOption[], teacherId: string | null | undefined, fallback: string[]) {
+  const teacher = teachers.find((item) => item.id === teacherId);
+  return teacher?.classTypeOptions.length ? teacher.classTypeOptions : fallback;
+}
+
 export function ClassesManager({
   classes,
   branches,
   grades,
   subjects,
+  teachers,
+  canAssignTeacher,
   currency,
   classTypeOptions
 }: {
@@ -96,6 +106,8 @@ export function ClassesManager({
   branches: Option[];
   grades: Option[];
   subjects: SubjectOption[];
+  teachers: TeacherOption[];
+  canAssignTeacher: boolean;
   currency: string;
   classTypeOptions: string[];
 }) {
@@ -116,7 +128,7 @@ export function ClassesManager({
 
     return classes.filter((item) => {
       const parsedSchedule = parseSchedule(item.schedule);
-      const searchable = [item.name, item.code, item.grade, item.subject, item.branch, item.schedule, item.room ?? ""].join(" ").toLowerCase();
+      const searchable = [item.name, item.code, item.grade, item.subject, item.teacher, item.branch, item.schedule, item.room ?? ""].join(" ").toLowerCase();
 
       return (
         (!term || searchable.includes(term)) &&
@@ -245,6 +257,7 @@ export function ClassesManager({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {item.grade} - {item.classType}
                 </p>
+                <p className="mt-1 text-xs text-muted-foreground">{item.teacher}</p>
                 <div className="mt-4 space-y-2 rounded-xl border bg-white/70 p-4 text-sm">
                   <p className="flex gap-2">
                     <CalendarDays className="h-4 w-4 text-primary" />
@@ -300,11 +313,20 @@ export function ClassesManager({
           branches={branches}
           grades={grades}
           subjects={subjects}
+          teachers={teachers}
+          canAssignTeacher={canAssignTeacher}
           classTypeOptions={classTypeOptions}
           onClose={() => setPanel(null)}
         />
       ) : null}
-      {managingTypes ? <ClassTypePanel options={classTypeOptions} onClose={() => setManagingTypes(false)} /> : null}
+      {managingTypes ? (
+        <ClassTypePanel
+          teachers={teachers}
+          fallbackOptions={classTypeOptions}
+          canAssignTeacher={canAssignTeacher}
+          onClose={() => setManagingTypes(false)}
+        />
+      ) : null}
       {deleting ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/35 p-4">
           <div className="rounded-2xl bg-white p-6 shadow-xl">
@@ -339,8 +361,23 @@ export function ClassesManager({
   );
 }
 
-function ClassTypePanel({ options, onClose }: { options: string[]; onClose: () => void }) {
-  const [values, setValues] = useState(() => (options.length ? options : ["Individual", "Group", "Spoken"]));
+function ClassTypePanel({
+  teachers,
+  fallbackOptions,
+  canAssignTeacher,
+  onClose
+}: {
+  teachers: TeacherOption[];
+  fallbackOptions: string[];
+  canAssignTeacher: boolean;
+  onClose: () => void;
+}) {
+  const [teacherId, setTeacherId] = useState(() => teachers[0]?.id ?? "");
+  const valuesForTeacher = (id: string) => {
+    const options = classTypeOptionsForTeacher(teachers, id, fallbackOptions);
+    return options.length ? options : ["Individual", "Group", "Spoken"];
+  };
+  const [values, setValues] = useState(() => valuesForTeacher(teacherId));
   const [pending, startTransition] = useTransition();
 
   const update = (index: number, value: string) => {
@@ -348,10 +385,14 @@ function ClassTypePanel({ options, onClose }: { options: string[]; onClose: () =
   };
   const remove = (index: number) => setValues((current) => current.filter((_, itemIndex) => itemIndex !== index));
   const add = () => setValues((current) => [...current, ""]);
+  const chooseTeacher = (id: string) => {
+    setTeacherId(id);
+    setValues(valuesForTeacher(id));
+  };
   const save = () =>
     startTransition(async () => {
       const cleaned = values.map((value) => value.trim()).filter(Boolean);
-      const result = await saveClassTypeOptions(cleaned);
+      const result = await saveClassTypeOptions(cleaned, teacherId);
       if (result.ok) {
         toast.success(result.message);
         onClose();
@@ -374,6 +415,15 @@ function ClassTypePanel({ options, onClose }: { options: string[]; onClose: () =
           </Button>
         </div>
         <div className="space-y-3">
+          {canAssignTeacher ? (
+            <Select value={teacherId} onChange={(event) => chooseTeacher(event.target.value)} aria-label="Teacher">
+              {teachers.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
           {values.map((value, index) => (
             <div key={index} className="flex gap-2">
               <Input value={value} onChange={(event) => update(index, event.target.value)} placeholder="Class type" />
@@ -403,6 +453,8 @@ function ClassPanel({
   branches,
   grades,
   subjects,
+  teachers,
+  canAssignTeacher,
   classTypeOptions,
   onClose
 }: {
@@ -410,12 +462,16 @@ function ClassPanel({
   branches: Option[];
   grades: Option[];
   subjects: SubjectOption[];
+  teachers: TeacherOption[];
+  canAssignTeacher: boolean;
   classTypeOptions: string[];
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [scheduleParts, setScheduleParts] = useState<ScheduleParts>(() => parseSchedule(item?.schedule));
   const schedule = formatSchedule(scheduleParts);
+  const initialTeacherId = item?.teacherId ?? teachers[0]?.id ?? "";
+  const initialClassTypeOptions = classTypeOptionsForTeacher(teachers, initialTeacherId, classTypeOptions);
   const form = useForm<ClassGroupInput>({
     resolver: zodResolver(classGroupSchema),
     defaultValues: item
@@ -428,6 +484,7 @@ function ClassPanel({
           branchId: item.branchId,
           gradeId: item.gradeId,
           subjectId: item.subjectId,
+          teacherId: item.teacherId ?? initialTeacherId,
           classType: item.classType,
           fee: item.monthlyFee,
           admissionFee: item.admissionFee ?? undefined,
@@ -446,7 +503,8 @@ function ClassPanel({
           branchId: branches[0]?.id ?? "",
           gradeId: grades[0]?.id ?? "",
           subjectId: subjects[0]?.id ?? "",
-          classType: classTypeOptions[0] ?? "Individual",
+          teacherId: initialTeacherId,
+          classType: initialClassTypeOptions[0] ?? "Individual",
           fee: 0,
           admissionFee: 0,
           paymentStartDate: new Date().toISOString().slice(0, 10),
@@ -456,10 +514,24 @@ function ClassPanel({
           status: "ACTIVE"
         }
   });
+  const selectedTeacherId = useWatch({ control: form.control, name: "teacherId" });
+  const watchedClassType = useWatch({ control: form.control, name: "classType" });
+  const selectedClassTypeOptions = useMemo(() => {
+    const options = classTypeOptionsForTeacher(teachers, selectedTeacherId, classTypeOptions);
+    return watchedClassType && !options.includes(watchedClassType) ? [watchedClassType, ...options] : options;
+  }, [classTypeOptions, selectedTeacherId, teachers, watchedClassType]);
 
   useEffect(() => {
     form.setValue("schedule", schedule, { shouldDirty: true, shouldValidate: true });
   }, [form, schedule]);
+
+  useEffect(() => {
+    const options = classTypeOptionsForTeacher(teachers, selectedTeacherId, classTypeOptions);
+    const current = form.getValues("classType");
+    if (options.length && !options.includes(current)) {
+      form.setValue("classType", options[0], { shouldDirty: true, shouldValidate: true });
+    }
+  }, [classTypeOptions, form, selectedTeacherId, teachers]);
 
   const updateSchedule = (patch: Partial<ScheduleParts>) => setScheduleParts((current) => ({ ...current, ...patch }));
   const submit = (values: ClassGroupInput) =>
@@ -524,15 +596,30 @@ function ClassPanel({
           <FormShell title="Schedule & location">
             <div className="space-y-4">
               <FieldRow>
+                {canAssignTeacher ? (
+                  <FormField label="Teacher" error={form.formState.errors.teacherId?.message}>
+                    <Select {...form.register("teacherId")}>
+                      {teachers.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                ) : (
+                  <input type="hidden" {...form.register("teacherId")} />
+                )}
                 <FormField label="Class type">
                   <Select {...form.register("classType")}>
-                    {classTypeOptions.map((option) => (
+                    {selectedClassTypeOptions.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
                     ))}
                   </Select>
                 </FormField>
+              </FieldRow>
+              <FieldRow>
                 <FormField label="Institute / branch">
                   <Select {...form.register("branchId")}>
                     {branches.map((option) => (

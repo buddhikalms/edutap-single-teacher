@@ -7,6 +7,7 @@ import {
   Prisma
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizeSmsRecipient, sendSmsLenzSms } from "@/lib/smslenz-sms";
 import { sendWebPushMessages } from "@/lib/web-push";
 
 type AttendanceNotificationInput = {
@@ -509,6 +510,7 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
   const allowedStatuses = new Set<AttendanceStatus>();
   if (settings?.classEndedSendToPresent !== false) allowedStatuses.add(AttendanceStatus.PRESENT);
   if (settings?.classEndedSendToLate !== false) allowedStatuses.add(AttendanceStatus.LATE);
+  if (settings?.classEndedSendToAbsent === true) allowedStatuses.add(AttendanceStatus.ABSENT);
 
   const records = session.records.filter((record) => allowedStatuses.has(record.status));
 
@@ -539,6 +541,9 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
   let sentCount = 0;
   let skippedDuplicates = 0;
   let failedCount = 0;
+  let smsSentCount = 0;
+  let smsFailedCount = 0;
+  let smsSkippedCount = 0;
 
   for (const record of records) {
     const parents = explicitLinks
@@ -715,6 +720,70 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
           });
         }
 
+        const smsRecipient = normalizeSmsRecipient(parent.phone);
+        if (smsRecipient) {
+          const smsResult = await sendSmsLenzSms({ recipient: smsRecipient, message: body });
+          await prisma.notificationLog.create({
+            data: {
+              instituteId: input.instituteId,
+              userId: parent.userId,
+              studentId: record.studentId,
+              parentId: parent.id,
+              notificationId: notification.id,
+              type: NotificationType.CLASS_ENDED,
+              channel: NotificationChannel.SMS,
+              status: smsResult.ok ? NotificationStatus.SENT : NotificationStatus.FAILED,
+              title,
+              body,
+              message: body,
+              target: smsRecipient,
+              provider: smsResult.provider,
+              providerRef: smsResult.providerRef ?? null,
+              recipientType: "PARENT",
+              recipientId: parent.id,
+              payloadJson: payload as Prisma.InputJsonObject,
+              metadata: {
+                ...payload,
+                notificationId: notification.id,
+                providerResponse: smsResult.response === undefined ? null : (JSON.parse(JSON.stringify(smsResult.response)) as Prisma.InputJsonValue)
+              } as Prisma.InputJsonObject,
+              errorMessage: smsResult.error ?? null,
+              error: smsResult.error ?? null,
+              sentAt: smsResult.ok ? new Date() : null
+            }
+          });
+
+          if (smsResult.ok) {
+            smsSentCount += 1;
+          } else {
+            smsFailedCount += 1;
+          }
+        } else {
+          smsSkippedCount += 1;
+          await prisma.notificationLog.create({
+            data: {
+              instituteId: input.instituteId,
+              userId: parent.userId,
+              studentId: record.studentId,
+              parentId: parent.id,
+              notificationId: notification.id,
+              type: NotificationType.CLASS_ENDED,
+              channel: NotificationChannel.SMS,
+              status: NotificationStatus.FAILED,
+              title,
+              body,
+              message: body,
+              target: parent.phone,
+              recipientType: "PARENT",
+              recipientId: parent.id,
+              payloadJson: payload as Prisma.InputJsonObject,
+              metadata: payload as Prisma.InputJsonObject,
+              errorMessage: "Parent phone number is not a valid SMS recipient.",
+              error: "Parent phone number is not a valid SMS recipient."
+            }
+          });
+        }
+
         sentCount += 1;
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -751,6 +820,9 @@ export async function sendClassEndedNotification(input: ClassEndedNotificationIn
     sentCount,
     skippedDuplicates,
     failedCount,
-    message: sentCount > 0 ? "Class over notifications sent." : "Class over notification already sent."
+    smsSentCount,
+    smsFailedCount,
+    smsSkippedCount,
+    message: sentCount > 0 ? `Class over messages sent. SMS delivered to ${smsSentCount} parent${smsSentCount === 1 ? "" : "s"}.` : "Class over notification already sent."
   };
 }

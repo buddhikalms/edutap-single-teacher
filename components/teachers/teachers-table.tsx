@@ -12,7 +12,7 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { useForm, useWatch } from "react-hook-form";
-import { Eye, Loader2, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { Eye, Globe2, Loader2, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createTeacher, deleteTeacher, updateTeacher } from "@/app/(dashboard)/teachers/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { formatCurrency } from "@/lib/utils";
 import { teacherSchema, type TeacherInput } from "@/lib/validations";
 
 export type TeacherRow = {
@@ -29,13 +30,30 @@ export type TeacherRow = {
   name: string;
   email: string;
   phone: string | null;
+  username: string | null;
+  slug: string;
+  status: "ACTIVE" | "INACTIVE";
   specialty: string | null;
+  bio: string | null;
+  qualifications: string | null;
+  subjects: string;
+  gradesTaught: string;
+  photoUrl: string | null;
+  accentColor: string;
+  heroImage: string | null;
+  logoUrl: string | null;
+  commissionRate: number;
+  grossRevenue: number;
+  commissionDue: number;
   branchId: string;
   branch: string;
   classGroupIds: string[];
   classes: string;
   activeClasses: number;
   students: number;
+  courses: number;
+  enrollmentRequests: number;
+  permissions: TeacherInput["permissions"];
 };
 
 export type TeacherClassOption = {
@@ -53,30 +71,109 @@ const emptyTeacher: TeacherInput = {
   name: "",
   email: "",
   phone: undefined,
+  username: undefined,
+  password: undefined,
+  sendCredentialsSms: true,
+  slug: "",
+  status: "ACTIVE",
   specialty: undefined,
+  bio: undefined,
+  qualifications: undefined,
+  subjects: undefined,
+  gradesTaught: undefined,
+  photoUrl: undefined,
+  accentColor: "#0f766e",
+  heroImage: undefined,
+  logoUrl: undefined,
+  commissionRate: 0,
   branchId: "",
+  permissions: {
+    canCreateStudents: true,
+    canEditStudents: true,
+    canDeleteStudents: false,
+    canCreateClasses: true,
+    canEditClasses: true,
+    canManageAttendance: true,
+    canManagePayments: false,
+    canVerifyPayments: false,
+    canCreateCourses: true,
+    canUploadResources: true,
+    canManageHomework: true,
+    canManageQuizzes: true,
+    canSendNotifications: true,
+    canSendSms: false,
+    canExportStudentData: false,
+    canManageStudentCards: true,
+    canViewFinancialReports: false
+  },
   classGroupIds: []
 };
+
+const permissionFields: Array<{ name: keyof TeacherInput["permissions"]; label: string }> = [
+  { name: "canCreateStudents", label: "Create students" },
+  { name: "canEditStudents", label: "Edit students" },
+  { name: "canDeleteStudents", label: "Delete students" },
+  { name: "canCreateClasses", label: "Create classes" },
+  { name: "canEditClasses", label: "Edit classes" },
+  { name: "canManageAttendance", label: "Manage attendance" },
+  { name: "canManagePayments", label: "Manage payments" },
+  { name: "canVerifyPayments", label: "Verify payments" },
+  { name: "canCreateCourses", label: "Create courses" },
+  { name: "canUploadResources", label: "Upload resources" },
+  { name: "canManageHomework", label: "Manage homework" },
+  { name: "canManageQuizzes", label: "Manage quizzes" },
+  { name: "canSendNotifications", label: "Send notifications" },
+  { name: "canSendSms", label: "Send SMS" },
+  { name: "canExportStudentData", label: "Export student data" },
+  { name: "canManageStudentCards", label: "Manage student cards" },
+  { name: "canViewFinancialReports", label: "View financial reports" }
+];
 
 function rowToInput(row: TeacherRow): TeacherInput {
   return {
     name: row.name,
     email: row.email,
     phone: row.phone ?? undefined,
+    username: row.username ?? undefined,
+    password: undefined,
+    sendCredentialsSms: false,
+    slug: row.slug,
+    status: row.status,
     specialty: row.specialty ?? undefined,
+    bio: row.bio ?? undefined,
+    qualifications: row.qualifications ?? undefined,
+    subjects: row.subjects || undefined,
+    gradesTaught: row.gradesTaught || undefined,
+    photoUrl: row.photoUrl ?? undefined,
+    accentColor: row.accentColor,
+    heroImage: row.heroImage ?? undefined,
+    logoUrl: row.logoUrl ?? undefined,
+    commissionRate: row.commissionRate,
     branchId: row.branchId,
+    permissions: row.permissions,
     classGroupIds: row.classGroupIds
   };
+}
+
+function suggestedSlug(name: string) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export function TeachersTable({
   data,
   branches,
-  classes
+  classes,
+  currency
 }: {
   data: TeacherRow[];
   branches: TeacherBranchOption[];
   classes: TeacherClassOption[];
+  currency: string;
 }) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -99,11 +196,21 @@ export function TeachersTable({
                 {row.original.name}
               </Link>
               <p className="text-xs text-muted-foreground">{row.original.email}</p>
+              {row.original.username ? <p className="text-xs text-muted-foreground">@{row.original.username}</p> : null}
+              <p className="mt-1 flex items-center gap-1 text-xs text-teal-700">
+                <Globe2 className="h-3 w-3" />
+                {row.original.slug}.edutap.lk
+              </p>
             </div>
           </div>
         )
       },
-      { accessorKey: "specialty", header: "Specialty", cell: ({ row }) => row.original.specialty ?? "General" },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <Badge variant={row.original.status === "ACTIVE" ? "secondary" : "outline"}>{row.original.status.toLowerCase()}</Badge>
+      },
+      { accessorKey: "specialty", header: "Subjects", cell: ({ row }) => row.original.subjects || row.original.specialty || "General" },
       { accessorKey: "branch", header: "Branch" },
       {
         accessorKey: "activeClasses",
@@ -116,6 +223,22 @@ export function TeachersTable({
         )
       },
       { accessorKey: "students", header: "Students" },
+      { accessorKey: "courses", header: "Courses" },
+      {
+        accessorKey: "grossRevenue",
+        header: "Revenue",
+        cell: ({ row }) => formatCurrency(row.original.grossRevenue, currency)
+      },
+      {
+        accessorKey: "commissionDue",
+        header: "Commission",
+        cell: ({ row }) => (
+          <div>
+            <p className="font-semibold">{formatCurrency(row.original.commissionDue, currency)}</p>
+            <p className="text-xs text-muted-foreground">{row.original.commissionRate}% rate</p>
+          </div>
+        )
+      },
       {
         id: "actions",
         header: "",
@@ -136,7 +259,7 @@ export function TeachersTable({
         )
       }
     ],
-    []
+    [currency]
   );
 
   // TanStack Table intentionally returns function-heavy instances that React Compiler cannot memoize.
@@ -257,6 +380,8 @@ function TeacherPanel({
     defaultValues
   });
   const selected = useWatch({ control: form.control, name: "classGroupIds" }) ?? [];
+  const watchedName = useWatch({ control: form.control, name: "name" });
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "edutap.lk";
 
   function toggleClass(id: string, checked: boolean) {
     form.setValue("classGroupIds", checked ? [...selected, id] : selected.filter((classId) => classId !== id), { shouldValidate: true });
@@ -292,7 +417,15 @@ function TeacherPanel({
             <div className="space-y-4">
               <FieldRow>
                 <FormField label="Name" error={form.formState.errors.name?.message}>
-                  <Input {...form.register("name")} />
+                  <Input
+                    {...form.register("name")}
+                    onBlur={(event) => {
+                      form.register("name").onBlur(event);
+                      if (!form.getValues("slug")) {
+                        form.setValue("slug", suggestedSlug(event.target.value), { shouldValidate: true });
+                      }
+                    }}
+                  />
                 </FormField>
                 <FormField label="Email" error={form.formState.errors.email?.message}>
                   <Input type="email" {...form.register("email")} />
@@ -300,10 +433,25 @@ function TeacherPanel({
               </FieldRow>
               <FieldRow>
                 <FormField label="Phone" error={form.formState.errors.phone?.message}>
-                  <Input {...form.register("phone")} />
+                  <Input autoComplete="tel" {...form.register("phone")} />
+                </FormField>
+                <FormField label="Status" error={form.formState.errors.status?.message}>
+                  <Select {...form.register("status")}>
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </Select>
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Subdomain" error={form.formState.errors.slug?.message}>
+                  <div className="flex overflow-hidden rounded-xl border bg-white">
+                    <Input className="rounded-none border-0" placeholder={suggestedSlug(watchedName || "teacher-name")} {...form.register("slug")} />
+                    <span className="flex items-center border-l bg-muted px-3 text-sm text-muted-foreground">.{rootDomain}</span>
+                  </div>
                 </FormField>
                 <FormField label="Branch" error={form.formState.errors.branchId?.message}>
                   <Select {...form.register("branchId")}>
+                    <option value="">Unassigned</option>
                     {branches.map((branch) => (
                       <option key={branch.id} value={branch.id}>
                         {branch.name}
@@ -315,6 +463,79 @@ function TeacherPanel({
               <FormField label="Specialty" error={form.formState.errors.specialty?.message}>
                 <Input placeholder="Mathematics, Physics, English..." {...form.register("specialty")} />
               </FormField>
+              <FieldRow>
+                <FormField label="Subjects" error={form.formState.errors.subjects?.message}>
+                  <Input placeholder="Mathematics, Statistics" {...form.register("subjects")} />
+                </FormField>
+                <FormField label="Grades taught" error={form.formState.errors.gradesTaught?.message}>
+                  <Input placeholder="Grade 10, Grade 11" {...form.register("gradesTaught")} />
+                </FormField>
+              </FieldRow>
+              <FormField label="Bio" error={form.formState.errors.bio?.message}>
+                <Input placeholder="Short public profile summary" {...form.register("bio")} />
+              </FormField>
+              <FormField label="Qualifications" error={form.formState.errors.qualifications?.message}>
+                <Input placeholder="BSc Mathematics, PGDE" {...form.register("qualifications")} />
+              </FormField>
+            </div>
+          </FormShell>
+          <FormShell title="Teacher login" description={teacherId ? "Update the username, reset the password, or send a fresh login SMS." : "Create the username and password for the teacher login."}>
+            <div className="space-y-4">
+              <FieldRow>
+                <FormField label="Username" error={form.formState.errors.username?.message}>
+                  <Input autoComplete="username" placeholder={suggestedSlug(watchedName || "teacher-name").replaceAll("-", ".")} {...form.register("username")} />
+                </FormField>
+                <FormField label={teacherId ? "New password" : "Password"} error={form.formState.errors.password?.message}>
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={teacherId ? "Leave blank to keep current password" : "Leave blank to auto-generate"}
+                    {...form.register("password")}
+                  />
+                </FormField>
+              </FieldRow>
+              <label className="flex items-center justify-between gap-4 rounded-xl border bg-white/70 p-4">
+                <span>
+                  <span className="block text-sm font-medium">Send username and password by SMS</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {teacherId ? "Sends a new password if the password field is blank." : "Uses the entered password, or an auto-generated one if blank."}
+                  </span>
+                </span>
+                <Checkbox {...form.register("sendCredentialsSms")} />
+              </label>
+            </div>
+          </FormShell>
+          <FormShell title="Teacher theme" description="Public profile colors and image branding.">
+            <div className="space-y-4">
+              <FieldRow>
+                <FormField label="Profile photo URL" error={form.formState.errors.photoUrl?.message}>
+                  <Input {...form.register("photoUrl")} />
+                </FormField>
+                <FormField label="Theme color" error={form.formState.errors.accentColor?.message}>
+                  <Input type="color" {...form.register("accentColor")} />
+                </FormField>
+              </FieldRow>
+              <FieldRow>
+                <FormField label="Hero image URL" error={form.formState.errors.heroImage?.message}>
+                  <Input {...form.register("heroImage")} />
+                </FormField>
+                <FormField label="Logo URL" error={form.formState.errors.logoUrl?.message}>
+                  <Input {...form.register("logoUrl")} />
+                </FormField>
+              </FieldRow>
+              <FormField label="Institute commission (%)" error={form.formState.errors.commissionRate?.message}>
+                <Input type="number" min="0" max="100" step="0.01" {...form.register("commissionRate", { valueAsNumber: true })} />
+              </FormField>
+            </div>
+          </FormShell>
+          <FormShell title="Teacher permissions" description="These permissions are enforced on server actions and protected APIs.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {permissionFields.map((permission) => (
+                <label key={permission.name} className="flex items-center justify-between gap-3 rounded-xl border bg-white/70 p-4">
+                  <span className="text-sm font-medium">{permission.label}</span>
+                  <Checkbox {...form.register(`permissions.${permission.name}`)} />
+                </label>
+              ))}
             </div>
           </FormShell>
           <FormShell title="Assign classes" description="Classes assigned here will show this teacher as the class owner.">
@@ -363,7 +584,7 @@ function TeacherDataTable<TData>({
     <>
       <div className="overflow-hidden rounded-xl border bg-white/75">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead className="bg-muted/70">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>

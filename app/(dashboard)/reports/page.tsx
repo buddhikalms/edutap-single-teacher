@@ -231,7 +231,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const teacherReport = teacherRows.map((teacher) => ({
     name: teacher.name,
     email: teacher.email,
-    branch: teacher.branch.name,
+    branch: teacher.branch?.name ?? "Unassigned",
     specialty: teacher.specialty ?? "-",
     classes: teacher.classGroups.map((item) => item.name).join(", ") || "-",
     classCount: teacher.classGroups.length

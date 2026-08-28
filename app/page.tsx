@@ -27,6 +27,9 @@ export default async function HomePage() {
   if (!teacher) {
     return <PublicShell><div className="container py-32 text-center"><h1 className="text-4xl font-semibold">EduTap is being prepared.</h1><p className="mt-4 text-muted-foreground">Complete teacher setup to publish the learning website.</p></div></PublicShell>;
   }
+  if (teacher.status === "INACTIVE") {
+    return <PublicShell><div className="container py-32 text-center"><h1 className="text-4xl font-semibold">This teacher portal is currently unavailable.</h1><p className="mt-4 text-muted-foreground">Please contact EduTap support or the institute office for assistance.</p></div></PublicShell>;
+  }
   const currency = teacher.institute.settings?.currency ?? "LKR";
 
   return (

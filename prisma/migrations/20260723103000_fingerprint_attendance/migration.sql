@@ -24,7 +24,7 @@ CREATE TABLE `StudentFingerprintCredential` (
   `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updatedAt` DATETIME(3) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE INDEX `StudentFingerprintCredential_instituteId_externalFingerprintId_key` (`instituteId`, `externalFingerprintId`),
+  UNIQUE INDEX `SFC_institute_externalFingerprint_key` (`instituteId`, `externalFingerprintId`),
   INDEX `StudentFingerprintCredential_studentId_status_idx` (`studentId`, `status`),
   INDEX `StudentFingerprintCredential_instituteId_status_idx` (`instituteId`, `status`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

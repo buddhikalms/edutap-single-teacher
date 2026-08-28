@@ -19,7 +19,7 @@ export default async function TeacherPage() {
           <Fact icon={Award} title="Experience" value={teacher.experience || "Experienced private educator"} />
           <Fact icon={BookOpenCheck} title="Qualifications" value={teacher.qualifications || "Subject-focused teaching expertise"} />
           <Fact icon={HeartHandshake} title="Teaching mode" value={teacher.teachingMode.toLowerCase()} />
-          <Fact icon={MapPin} title="Learning location" value={teacher.branch.location || teacher.branch.name} />
+          <Fact icon={MapPin} title="Learning location" value={teacher.branch?.location || teacher.branch?.name || "Online"} />
         </div>
       </div>
     </section>
@@ -29,4 +29,3 @@ export default async function TeacherPage() {
 function Fact({ icon: Icon, title, value }: { icon: typeof Award; title: string; value: string }) {
   return <div className="rounded-3xl border bg-white p-6"><Icon className="h-5 w-5 text-teal-600" /><p className="mt-4 text-sm text-muted-foreground">{title}</p><p className="mt-1 font-semibold capitalize">{value}</p></div>;
 }
-

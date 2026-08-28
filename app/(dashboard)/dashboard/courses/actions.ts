@@ -8,8 +8,8 @@ import path from "node:path";
 import type { CourseEnrollmentStatus, CourseResourceType, Prisma } from "@prisma/client";
 import { nextInvoiceNo } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
-import { requireOwnerTeacherId } from "@/lib/single-teacher";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { resolveAssignableTeacherId } from "@/lib/teacher-tenancy";
 import { COURSE_RESOURCE_POLICY, assertUploadSignature, safeUploadExtension, scanFileForViruses } from "@/lib/file-security";
 import { uploadDiskPath } from "@/lib/upload-storage";
 import { sendStudentWebPush } from "@/lib/web-push";
@@ -23,15 +23,15 @@ function date(value?: string) {
   return value ? new Date(value) : null;
 }
 
-async function assertCourse(courseId: string, instituteId: string) {
-  const course = await prisma.course.findFirst({ where: { id: courseId, instituteId } });
+async function assertCourse(courseId: string, instituteId: string, teacherId?: string | null) {
+  const course = await prisma.course.findFirst({ where: { id: courseId, instituteId, ...(teacherId ? { teacherId } : {}) } });
   if (!course) throw new Error("Course not found.");
   return course;
 }
 
 export async function saveCourse(id: string | null, input: CourseInput): Promise<ActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, role, teacherId } = await resolveAssignableTeacherId(input.teacherId, "canCreateCourses");
     const parsed = courseSchema.parse(input);
     const subject = await prisma.subject.findFirst({ where: { id: parsed.subjectId, instituteId, isActive: true } });
     if (!subject) return { ok: false, message: "Select a valid subject." };
@@ -39,7 +39,9 @@ export async function saveCourse(id: string | null, input: CourseInput): Promise
     const grade = parsed.gradeId ? await prisma.grade.findFirst({ where: { id: parsed.gradeId, instituteId, isActive: true } }) : null;
     if (parsed.gradeId && !grade) return { ok: false, message: "Select a valid grade." };
 
-    const teacherId = await requireOwnerTeacherId(instituteId);
+    if (id && role === "TEACHER") {
+      await assertCourse(id, instituteId, teacherId);
+    }
     const base = slugify(parsed.name) || "course";
     const data = {
       name: parsed.name,

@@ -69,6 +69,7 @@ export const authOptions: NextAuthOptions = {
         const userByEmail = await prisma.user.findFirst({
           where: {
             OR: [
+              { username: identifier.toLowerCase() },
               { email: identifier.toLowerCase() },
               ...(normalized.length >= 6 ? [{ mobile: normalized }] : [])
             ]
@@ -77,13 +78,16 @@ export const authOptions: NextAuthOptions = {
             id: true,
             name: true,
             email: true,
+            username: true,
             passwordHash: true,
             passwordStatus: true,
+            mustChangePassword: true,
             accountStatus: true,
             role: true,
             instituteId: true,
             branchId: true,
-            image: true
+            image: true,
+            teacher: { select: { id: true, slug: true, status: true } }
           }
         });
         const user =
@@ -136,7 +140,12 @@ export const authOptions: NextAuthOptions = {
           image: user.image,
           role: user.role,
           instituteId: user.instituteId,
-          branchId: user.branchId
+          branchId: user.branchId,
+          accountStatus: user.accountStatus,
+          mustChangePassword: user.mustChangePassword,
+          passwordStatus: user.passwordStatus,
+          teacherId: user.teacher?.id ?? null,
+          teacherSlug: user.teacher?.slug ?? null
         };
       }
     }),
@@ -207,18 +216,40 @@ export const authOptions: NextAuthOptions = {
         token.role = databaseUser?.role ?? user.role;
         token.instituteId = databaseUser?.instituteId ?? user.instituteId;
         token.branchId = databaseUser?.branchId ?? user.branchId;
-        token.accountStatus = databaseUser?.accountStatus ?? "ACTIVE";
+        token.accountStatus = databaseUser?.accountStatus ?? user.accountStatus ?? "ACTIVE";
+        token.mustChangePassword = databaseUser?.mustChangePassword ?? user.mustChangePassword ?? false;
+        token.passwordStatus = databaseUser?.passwordStatus ?? user.passwordStatus ?? "ACTIVE";
+        if ((databaseUser?.role ?? user.role) === "TEACHER") {
+          const teacher = await prisma.teacher.findFirst({
+            where: { userId: token.id as string },
+            select: { id: true, slug: true }
+          });
+          token.teacherId = teacher?.id ?? user.teacherId ?? null;
+          token.teacherSlug = teacher?.slug ?? user.teacherSlug ?? null;
+        }
       }
-      if (token.id && token.role === "FAMILY") {
+      if (token.id && (token.role === "FAMILY" || token.role === "TEACHER")) {
         const current = await prisma.user.findUnique({
           where: { id: token.id },
-          select: { role: true, instituteId: true, branchId: true, accountStatus: true }
+          select: {
+            role: true,
+            instituteId: true,
+            branchId: true,
+            accountStatus: true,
+            mustChangePassword: true,
+            passwordStatus: true,
+            teacher: { select: { id: true, slug: true } }
+          }
         });
         if (current) {
           token.role = current.role;
           token.instituteId = current.instituteId;
           token.branchId = current.branchId;
           token.accountStatus = current.accountStatus;
+          token.mustChangePassword = current.mustChangePassword;
+          token.passwordStatus = current.passwordStatus;
+          token.teacherId = current.teacher?.id ?? token.teacherId ?? null;
+          token.teacherSlug = current.teacher?.slug ?? token.teacherSlug ?? null;
         }
       }
 
@@ -231,6 +262,10 @@ export const authOptions: NextAuthOptions = {
         session.user.instituteId = token.instituteId as string | null;
         session.user.branchId = token.branchId as string | null;
         session.user.accountStatus = token.accountStatus as string;
+        session.user.teacherId = token.teacherId as string | null;
+        session.user.teacherSlug = token.teacherSlug as string | null;
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
+        session.user.passwordStatus = token.passwordStatus as string;
       }
 
       return session;
@@ -285,13 +320,16 @@ async function findPortalUser(identifier: string) {
           id: true,
           name: true,
           email: true,
+          username: true,
           passwordHash: true,
           passwordStatus: true,
+          mustChangePassword: true,
           accountStatus: true,
           role: true,
           instituteId: true,
           branchId: true,
-          image: true
+          image: true,
+          teacher: { select: { id: true, slug: true, status: true } }
         }
       }
     }
@@ -318,13 +356,16 @@ async function findPortalUser(identifier: string) {
           id: true,
           name: true,
           email: true,
+          username: true,
           passwordHash: true,
           passwordStatus: true,
+          mustChangePassword: true,
           accountStatus: true,
           role: true,
           instituteId: true,
           branchId: true,
-          image: true
+          image: true,
+          teacher: { select: { id: true, slug: true, status: true } }
         }
       }
     }

@@ -9,7 +9,7 @@ export const strongPasswordSchema = z
   .regex(/[^A-Za-z0-9]/, "Password must include a symbol.");
 
 export const loginSchema = z.object({
-  email: z.string().trim().min(3, "Enter your email or mobile number."),
+  email: z.string().trim().min(3, "Enter your email, mobile number, or username."),
   password: z.string().min(8, "Password must be at least 8 characters.")
 });
 
@@ -156,8 +156,41 @@ export const teacherSchema = z.object({
   name: z.string().trim().min(1, "Teacher name is required."),
   email: z.string().trim().email("Enter a valid email."),
   phone: optionalText,
+  username: z.string().trim().optional().transform((value) => (value ? value.toLowerCase() : undefined)).pipe(z.string().min(3, "Username must be at least 3 characters.").regex(/^[a-z0-9._-]+$/, "Use letters, numbers, dots, hyphens, or underscores only.").optional()),
+  password: z.string().trim().optional().transform((value) => (value ? value : undefined)).pipe(z.string().min(8, "Password must be at least 8 characters.").optional()),
+  sendCredentialsSms: z.boolean().default(true),
+  slug: z.string().trim().min(3, "Subdomain must be at least 3 characters.").regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, and hyphens only."),
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
   specialty: optionalText,
-  branchId: z.string().min(1, "Branch is required."),
+  bio: optionalText,
+  qualifications: optionalText,
+  subjects: optionalText,
+  gradesTaught: optionalText,
+  photoUrl: optionalText,
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Choose a valid color.").default("#0f766e"),
+  heroImage: optionalText,
+  logoUrl: optionalText,
+  commissionRate: z.coerce.number().min(0, "Commission cannot be negative.").max(100, "Commission cannot exceed 100%.").default(0),
+  branchId: optionalText,
+  permissions: z.object({
+    canCreateStudents: z.boolean().default(true),
+    canEditStudents: z.boolean().default(true),
+    canDeleteStudents: z.boolean().default(false),
+    canCreateClasses: z.boolean().default(true),
+    canEditClasses: z.boolean().default(true),
+    canManageAttendance: z.boolean().default(true),
+    canManagePayments: z.boolean().default(false),
+    canVerifyPayments: z.boolean().default(false),
+    canCreateCourses: z.boolean().default(true),
+    canUploadResources: z.boolean().default(true),
+    canManageHomework: z.boolean().default(true),
+    canManageQuizzes: z.boolean().default(true),
+    canSendNotifications: z.boolean().default(true),
+    canSendSms: z.boolean().default(false),
+    canExportStudentData: z.boolean().default(false),
+    canManageStudentCards: z.boolean().default(true),
+    canViewFinancialReports: z.boolean().default(false)
+  }),
   classGroupIds: z.array(z.string()).optional().default([])
 });
 
@@ -190,6 +223,7 @@ export const courseSchema = z.object({
   gradeId: optionalText,
   description: optionalText,
   thumbnailUrl: optionalText,
+  teacherId: optionalText,
   durationType: z.enum(["DAYS", "WEEKS", "MONTHS", "LIFETIME"]),
   durationValue: z.coerce.number().int().min(1).optional(),
   accessType: z.enum(["FREE", "PAID", "MANUAL_UNLOCK"]),

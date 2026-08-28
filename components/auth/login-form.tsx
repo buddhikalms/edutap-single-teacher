@@ -26,6 +26,15 @@ export function LoginForm() {
     }
   });
 
+  function teacherDashboardUrl(slug: string) {
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname.endsWith(".localhost") || window.location.hostname === "127.0.0.1";
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? (isLocal ? "lvh.me" : "edutap.lk");
+    const port = isLocal && window.location.port ? `:${window.location.port}` : "";
+    const protocol = isLocal ? window.location.protocol : "https:";
+
+    return `${protocol}//${slug}.${rootDomain}${port}/dashboard`;
+  }
+
   async function onSubmit(values: LoginInput) {
     setIsSubmitting(true);
     let result;
@@ -54,6 +63,19 @@ export function LoginForm() {
     }
 
     toast.success("Welcome back to EduTap");
+    const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
+    const sessionData = (await sessionResponse.json()) as { user?: { role?: string; teacherSlug?: string | null; mustChangePassword?: boolean } };
+    if (sessionData.user?.role === "TEACHER" && sessionData.user.mustChangePassword) {
+      router.push("/change-password");
+      router.refresh();
+      return;
+    }
+
+    if (sessionData.user?.role === "TEACHER" && sessionData.user.teacherSlug) {
+      window.location.href = teacherDashboardUrl(sessionData.user.teacherSlug);
+      return;
+    }
+
     const nextUrl = result?.url ? new URL(result.url, window.location.origin) : null;
     const nextPath = nextUrl ? `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}` : "/dashboard";
     router.push(nextPath || "/dashboard");
@@ -86,7 +108,7 @@ export function LoginForm() {
         className="space-y-5"
       >
         <div className="space-y-2">
-          <Label htmlFor="email">Email or mobile</Label>
+          <Label htmlFor="email">Username, email, or mobile</Label>
           <Input id="email" type="text" autoComplete="username" {...form.register("email")} />
           {form.formState.errors.email ? (
             <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>

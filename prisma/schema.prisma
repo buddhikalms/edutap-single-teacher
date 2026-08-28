@@ -240,6 +240,11 @@ enum TeachingMode {
   BOTH
 }
 
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum CourseDurationType {
   DAYS
   WEEKS
@@ -740,6 +745,7 @@ model Subject {
 model User {
   id                        String                   @id @default(cuid())
   name                      String
+  username                  String?                  @unique
   email                     String?                  @unique
   mobile                    String?                  @unique
   googleId                  String?                  @unique
@@ -790,6 +796,7 @@ model User {
   @@index([instituteId])
   @@index([branchId])
   @@index([passwordStatus])
+  @@index([username])
 }
 
 model MobileAuthToken {
@@ -946,30 +953,73 @@ model ParentStudent {
 model Teacher {
   id             String       @id @default(cuid())
   name           String
+  displayName    String?
   email          String
   phone          String?
+  mobile         String?
+  slug           String       @unique @default(cuid())
+  status         TeacherStatus @default(ACTIVE)
   specialty      String?
   photoUrl       String?
+  profileImage   String?
+  logoUrl        String?
+  accentColor    String       @default("#0f766e")
+  heroImage      String?
+  socialLinks    Json?
+  contactDetails Json?
+  branding       Json?
+  classTypeOptions Json?
   bio            String?      @db.Text
   subjects       Json?
   gradesTaught   Json?
   experience     String?
   qualifications String?      @db.Text
   teachingMode   TeachingMode @default(BOTH)
+  commissionRate Decimal      @default(0) @db.Decimal(5, 2)
+  joinedAt       DateTime     @default(now())
   userId         String?      @unique
   instituteId    String
-  branchId       String
+  branchId       String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   institute      Institute    @relation(fields: [instituteId], references: [id], onDelete: Cascade)
-  branch         Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
   user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  permissions    TeacherPermission?
   courses        Course[]
   classGroups    ClassGroup[]
   liveClasses    LiveClass[]
+  enrollmentRequests EnrollmentRequest[]
 
   @@unique([instituteId, email])
   @@index([branchId])
+  @@index([instituteId, status])
+  @@index([slug])
+}
+
+model TeacherPermission {
+  id                    String   @id @default(cuid())
+  teacherId             String   @unique
+  canCreateStudents     Boolean  @default(true)
+  canEditStudents       Boolean  @default(true)
+  canDeleteStudents     Boolean  @default(false)
+  canCreateClasses      Boolean  @default(true)
+  canEditClasses        Boolean  @default(true)
+  canManageAttendance   Boolean  @default(true)
+  canManagePayments     Boolean  @default(false)
+  canVerifyPayments     Boolean  @default(false)
+  canCreateCourses      Boolean  @default(true)
+  canUploadResources    Boolean  @default(true)
+  canManageHomework     Boolean  @default(true)
+  canManageQuizzes      Boolean  @default(true)
+  canSendNotifications  Boolean  @default(true)
+  canSendSms            Boolean  @default(false)
+  canExportStudentData  Boolean  @default(false)
+  canManageStudentCards Boolean  @default(true)
+  canViewFinancialReports Boolean @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  teacher               Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 }
 
 model Course {
@@ -1157,11 +1207,13 @@ model ClassGroup {
   @@index([branchId])
   @@index([gradeId])
   @@index([subjectId])
+  @@index([teacherId])
 }
 
 model EnrollmentRequest {
   id                 String                  @id @default(cuid())
   instituteId        String
+  teacherId          String?
   studentName        String
   studentMobile      String?
   studentEmail       String?
@@ -1185,6 +1237,7 @@ model EnrollmentRequest {
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   institute          Institute               @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  teacher            Teacher?                @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   grade              Grade                   @relation(fields: [gradeId], references: [id], onDelete: Restrict)
   subject            Subject                 @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   classGroup         ClassGroup              @relation(fields: [classGroupId], references: [id], onDelete: Restrict)
@@ -1198,6 +1251,7 @@ model EnrollmentRequest {
   payment            Payment?
 
   @@index([instituteId, status, createdAt])
+  @@index([teacherId, status, createdAt])
   @@index([classGroupId])
   @@index([studentMobile])
   @@index([parentMobile])
@@ -1424,7 +1478,7 @@ model StudentFingerprintCredential {
   institute             Institute                   @relation(fields: [instituteId], references: [id], onDelete: Cascade)
   student               Student                     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@unique([instituteId, externalFingerprintId])
+  @@unique([instituteId, externalFingerprintId], map: "SFC_institute_externalFingerprint_key")
   @@index([studentId, status])
   @@index([instituteId, status])
 }

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { nextInvoiceNo, nextReceiptNo } from "@/lib/payments";
 import { paymentMethodForLedger } from "@/lib/payment-slips";
-import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { actionError, type ActionState } from "@/lib/session";
+import { getAuthenticatedTeacherContext, requireTeacherPermission } from "@/lib/teacher-tenancy";
 
 export type EnrollmentRequestActionState = ActionState;
 
@@ -63,9 +64,9 @@ async function queueContact(tx: Parameters<Parameters<typeof prisma.$transaction
 
 async function processEnrollmentApproval(id: string, formData: FormData, verifyPayment: boolean): Promise<EnrollmentRequestActionState> {
   try {
-    const { instituteId, userName } = await getTenantContext();
+    const { instituteId, userName, role, teacher } = await requireTeacherPermission(verifyPayment ? "canVerifyPayments" : "canCreateStudents");
     const request = await prisma.enrollmentRequest.findFirst({
-      where: { id, instituteId, status: "PENDING" },
+      where: { id, instituteId, status: "PENDING", ...(role === "TEACHER" && teacher ? { teacherId: teacher.id } : {}) },
       include: { classGroup: true, paymentSlip: true }
     });
     if (!request) return { ok: false, message: "This pending request was not found." };
@@ -198,9 +199,9 @@ export async function approveEnrollmentAndVerifyPayment(id: string, formData: Fo
 
 export async function verifyEnrollmentPayment(id: string, formData: FormData): Promise<EnrollmentRequestActionState> {
   try {
-    const { instituteId, userName } = await getTenantContext();
+    const { instituteId, userName, role, teacher } = await requireTeacherPermission("canVerifyPayments");
     const request = await prisma.enrollmentRequest.findFirst({
-      where: { id, instituteId, status: "APPROVED" },
+      where: { id, instituteId, status: "APPROVED", ...(role === "TEACHER" && teacher ? { teacherId: teacher.id } : {}) },
       include: { paymentSlip: true }
     });
     if (!request?.paymentSlip || request.paymentSlip.status !== "PENDING_REVIEW" || !request.requestedStudentId) {
@@ -245,9 +246,9 @@ export async function verifyEnrollmentPayment(id: string, formData: FormData): P
 
 export async function rejectEnrollmentPayment(id: string, formData: FormData): Promise<EnrollmentRequestActionState> {
   try {
-    const { instituteId } = await getTenantContext();
+    const { instituteId, role, teacher } = await requireTeacherPermission("canVerifyPayments");
     const request = await prisma.enrollmentRequest.findFirst({
-      where: { id, instituteId, status: { in: ["PENDING", "APPROVED"] } },
+      where: { id, instituteId, status: { in: ["PENDING", "APPROVED"] }, ...(role === "TEACHER" && teacher ? { teacherId: teacher.id } : {}) },
       include: { paymentSlip: true }
     });
     if (!request?.paymentSlip || request.paymentSlip.status !== "PENDING_REVIEW") {
@@ -268,8 +269,8 @@ export async function rejectEnrollmentPayment(id: string, formData: FormData): P
 
 export async function rejectEnrollmentRequest(id: string, formData: FormData): Promise<EnrollmentRequestActionState> {
   try {
-    const { instituteId } = await getTenantContext();
-    const request = await prisma.enrollmentRequest.findFirst({ where: { id, instituteId, status: { in: ["PENDING", "APPROVED"] } }, include: { classGroup: true } });
+    const { instituteId, role, teacher } = await getAuthenticatedTeacherContext();
+    const request = await prisma.enrollmentRequest.findFirst({ where: { id, instituteId, status: { in: ["PENDING", "APPROVED"] }, ...(role === "TEACHER" && teacher ? { teacherId: teacher.id } : {}) }, include: { classGroup: true } });
     if (!request) return { ok: false, message: "This request can no longer be rejected." };
     const teacherNote = noteFrom(formData);
 

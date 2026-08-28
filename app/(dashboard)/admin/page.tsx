@@ -1,8 +1,10 @@
 import { Activity, Bell, CheckCircle2, Clock3, CopyCheck, Radio, ShieldAlert, XCircle } from "lucide-react";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTenantContext } from "@/lib/session";
 
 function avg(values: number[]) {
   if (!values.length) return 0;
@@ -10,19 +12,29 @@ function avg(values: number[]) {
 }
 
 export default async function AdminPage() {
-  const context = await getTenantContext();
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  if (session.user.role !== "SUPER_ADMIN") {
+    redirect("/dashboard");
+  }
+
   // eslint-disable-next-line react-hooks/purity
   const since = new Date(Date.now() - 60 * 60 * 1000);
+  const instituteScope = session.user.instituteId ? { instituteId: session.user.instituteId } : {};
+  const scanScope = session.user.instituteId ? { OR: [{ instituteId: session.user.instituteId }, { instituteId: null }] } : {};
 
   const [scans, queuePending, notificationSentCount, readers] = await Promise.all([
     prisma.scanRequestLog.findMany({
-      where: { OR: [{ instituteId: context.instituteId }, { instituteId: null }], receivedAt: { gte: since } },
+      where: { ...scanScope, receivedAt: { gte: since } },
       orderBy: { receivedAt: "desc" },
       take: 100
     }),
-    prisma.notificationQueue.count({ where: { instituteId: context.instituteId, status: { in: ["PENDING", "PROCESSING"] } } }),
-    prisma.notificationQueue.count({ where: { instituteId: context.instituteId, status: "SENT", processedAt: { gte: since } } }),
-    prisma.readerDevice.findMany({ where: { instituteId: context.instituteId }, orderBy: [{ isActive: "desc" }, { lastSeenAt: "desc" }] })
+    prisma.notificationQueue.count({ where: { ...instituteScope, status: { in: ["PENDING", "PROCESSING"] } } }),
+    prisma.notificationQueue.count({ where: { ...instituteScope, status: "SENT", processedAt: { gte: since } } }),
+    prisma.readerDevice.findMany({ where: instituteScope, orderBy: [{ isActive: "desc" }, { lastSeenAt: "desc" }] })
   ]);
 
   const successCount = scans.filter((scan) => scan.result === "SUCCESS").length;

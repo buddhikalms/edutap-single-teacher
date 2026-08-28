@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getTeacherSlugFromRequest } from "@/lib/teacher-tenancy";
 
 export function classPublicKey(item: { id: string; name: string }) {
   const slug = item.name
@@ -13,9 +14,14 @@ export function classIdFromPublicKey(value: string) {
   return value.includes("--") ? value.slice(value.lastIndexOf("--") + 2) : value;
 }
 
-export async function getPublicTeacher() {
+export async function getPublicTeacher(slug?: string | null) {
+  const teacherSlug = slug === undefined ? await getTeacherSlugFromRequest() : slug;
+
   return prisma.teacher.findFirst({
-    where: { userId: { not: null }, institute: { active: true } },
+    where: {
+      ...(teacherSlug ? { slug: teacherSlug } : { userId: { not: null } }),
+      institute: { active: true }
+    },
     include: {
       user: { select: { id: true } },
       branch: true,
@@ -25,13 +31,15 @@ export async function getPublicTeacher() {
   });
 }
 
-export async function getPublicClasses() {
-  const teacher = await getPublicTeacher();
+export async function getPublicClasses(teacherSlug?: string | null) {
+  const teacher = await getPublicTeacher(teacherSlug);
   if (!teacher) return [];
+  if (teacher.status === "INACTIVE") return [];
 
   const rows = await prisma.classGroup.findMany({
     where: {
       instituteId: teacher.instituteId,
+      teacherId: teacher.id,
       status: "ACTIVE",
       gradeId: { not: null }
     },
@@ -57,8 +65,8 @@ export async function getPublicClasses() {
     subjectColor: item.subject.color,
     classType: item.classType,
     schedule: item.schedule,
-    location: item.room || item.branch.location || item.branch.name,
-    branch: item.branch.name,
+    location: item.room || item.branch?.location || item.branch?.name || "Online",
+    branch: item.branch?.name ?? "Online",
     monthlyFee: item.monthlyFee?.toNumber() ?? 0,
     admissionFee: item.admissionFee?.toNumber() ?? null,
     paymentStartDate: item.paymentStartDate?.toISOString() ?? null,
@@ -72,18 +80,19 @@ export async function getPublicClasses() {
   }));
 }
 
-export async function getPublicClass(value: string) {
+export async function getPublicClass(value: string, teacherSlug?: string | null) {
   const id = classIdFromPublicKey(value);
-  const classes = await getPublicClasses();
+  const classes = await getPublicClasses(teacherSlug);
   return classes.find((item) => item.id === id) ?? null;
 }
 
-export async function getPublicCourses() {
-  const teacher = await getPublicTeacher();
+export async function getPublicCourses(teacherSlug?: string | null) {
+  const teacher = await getPublicTeacher(teacherSlug);
   if (!teacher) return [];
+  if (teacher.status === "INACTIVE") return [];
 
   const rows = await prisma.course.findMany({
-    where: { instituteId: teacher.instituteId, status: "PUBLISHED" },
+    where: { instituteId: teacher.instituteId, teacherId: teacher.id, status: "PUBLISHED" },
     include: {
       subjectRecord: true,
       gradeLevel: true,
@@ -115,13 +124,15 @@ export async function getPublicCourses() {
   }));
 }
 
-export async function getPublicCourse(slug: string) {
-  const teacher = await getPublicTeacher();
+export async function getPublicCourse(slug: string, teacherSlug?: string | null) {
+  const teacher = await getPublicTeacher(teacherSlug);
   if (!teacher) return null;
+  if (teacher.status === "INACTIVE") return null;
 
   const course = await prisma.course.findFirst({
     where: {
       instituteId: teacher.instituteId,
+      teacherId: teacher.id,
       status: "PUBLISHED",
       OR: [{ slug }, { id: slug }]
     },
@@ -163,4 +174,3 @@ export async function getPublicCourse(slug: string) {
     }))
   };
 }
-

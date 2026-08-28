@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { EnrollmentRequestManager } from "@/components/enrollment/enrollment-request-manager";
 import { Badge } from "@/components/ui/badge";
-import { getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { getAuthenticatedTeacherContext } from "@/lib/teacher-tenancy";
 
 export const dynamic = "force-dynamic";
 
 export default async function EnrollmentRequestsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const { instituteId } = await getTenantContext();
+  const { instituteId, role, teacher } = await getAuthenticatedTeacherContext();
   const { status } = await searchParams;
   const allowed = ["PENDING", "APPROVED", "REJECTED", "CONVERTED"] as const;
   const selected = allowed.find((value) => value === status);
+  const scope = role === "TEACHER" && teacher ? { teacherId: teacher.id } : {};
   const [requests, counts] = await Promise.all([
     prisma.enrollmentRequest.findMany({
-      where: { instituteId, ...(selected ? { status: selected } : {}) },
+      where: { instituteId, ...scope, ...(selected ? { status: selected } : {}) },
       include: {
         classGroup: true,
         grade: true,
@@ -22,7 +23,7 @@ export default async function EnrollmentRequestsPage({ searchParams }: { searchP
       },
       orderBy: { createdAt: "desc" }
     }),
-    prisma.enrollmentRequest.groupBy({ by: ["status"], where: { instituteId }, _count: true })
+    prisma.enrollmentRequest.groupBy({ by: ["status"], where: { instituteId, ...scope }, _count: true })
   ]);
   const countMap = Object.fromEntries(counts.map((item) => [item.status, item._count]));
 
