@@ -146,6 +146,7 @@ export async function createTeacher(input: TeacherInput): Promise<ActionState> {
           username,
           email: parsed.email.toLowerCase(),
           mobile: normalizeLoginMobile(parsed.phone),
+          image: parsed.photoUrl ?? null,
           passwordHash,
           passwordStatus: "RESET_REQUIRED",
           mustChangePassword: true,
@@ -250,6 +251,7 @@ export async function updateTeacher(id: string, input: TeacherInput): Promise<Ac
               username,
               email: parsed.email.toLowerCase(),
               mobile: normalizeLoginMobile(parsed.phone),
+              image: parsed.photoUrl ?? null,
               ...(passwordHash
                 ? {
                     passwordHash,
@@ -269,6 +271,7 @@ export async function updateTeacher(id: string, input: TeacherInput): Promise<Ac
               username,
               email: parsed.email.toLowerCase(),
               mobile: normalizeLoginMobile(parsed.phone),
+              image: parsed.photoUrl ?? null,
               passwordHash: passwordHash!,
               passwordStatus: "RESET_REQUIRED",
               mustChangePassword: true,

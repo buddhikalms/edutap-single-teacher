@@ -58,7 +58,7 @@ export function PortalLoginForm() {
           </div>
           <h1 className="text-2xl font-semibold tracking-normal">EduTap Account</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Sign in with the family mobile number, email, or Google.
+            Sign in with the family mobile number or email.
           </p>
         </div>
 
@@ -76,10 +76,6 @@ export function PortalLoginForm() {
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
             Sign in to EduTap Account
-          </Button>
-          <div className="relative text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t"><span className="relative bg-white px-3">or</span></div>
-          <Button type="button" size="lg" variant="outline" className="w-full" onClick={() => signIn("google", { callbackUrl: "/family/register/google" })}>
-            Continue with Google
           </Button>
         </form>
 

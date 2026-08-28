@@ -16,6 +16,7 @@ import { Eye, Globe2, Loader2, Pencil, Plus, Search, Trash2, UserRound, X } from
 import { toast } from "sonner";
 import { createTeacher, deleteTeacher, updateTeacher } from "@/app/(dashboard)/teachers/actions";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
+import { ImageUploadInput } from "@/components/forms/image-upload-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -508,19 +509,28 @@ function TeacherPanel({
           <FormShell title="Teacher theme" description="Public profile colors and image branding.">
             <div className="space-y-4">
               <FieldRow>
-                <FormField label="Profile photo URL" error={form.formState.errors.photoUrl?.message}>
-                  <Input {...form.register("photoUrl")} />
+                <FormField label="Profile photo" error={form.formState.errors.photoUrl?.message}>
+                  <ImageUploadInput
+                    defaultValue={form.getValues("photoUrl")}
+                    onUploaded={(url) => form.setValue("photoUrl", url || undefined, { shouldDirty: true, shouldValidate: true })}
+                  />
                 </FormField>
                 <FormField label="Theme color" error={form.formState.errors.accentColor?.message}>
                   <Input type="color" {...form.register("accentColor")} />
                 </FormField>
               </FieldRow>
               <FieldRow>
-                <FormField label="Hero image URL" error={form.formState.errors.heroImage?.message}>
-                  <Input {...form.register("heroImage")} />
+                <FormField label="Hero image" error={form.formState.errors.heroImage?.message}>
+                  <ImageUploadInput
+                    defaultValue={form.getValues("heroImage")}
+                    onUploaded={(url) => form.setValue("heroImage", url || undefined, { shouldDirty: true, shouldValidate: true })}
+                  />
                 </FormField>
-                <FormField label="Logo URL" error={form.formState.errors.logoUrl?.message}>
-                  <Input {...form.register("logoUrl")} />
+                <FormField label="Logo" error={form.formState.errors.logoUrl?.message}>
+                  <ImageUploadInput
+                    defaultValue={form.getValues("logoUrl")}
+                    onUploaded={(url) => form.setValue("logoUrl", url || undefined, { shouldDirty: true, shouldValidate: true })}
+                  />
                 </FormField>
               </FieldRow>
               <FormField label="Institute commission (%)" error={form.formState.errors.commissionRate?.message}>

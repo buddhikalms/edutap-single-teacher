@@ -94,9 +94,34 @@ async function downloadPhoto(fileId: string, rowNumber: number) {
 }
 
 async function main() {
-  const instituteSlug = process.env.IMPORT_INSTITUTE_SLUG ?? "edutap-demo";
-  const institute = await prisma.institute.findUnique({ where: { slug: instituteSlug }, select: { id: true, name: true } });
-  if (!institute) throw new Error(`Institute slug "${instituteSlug}" was not found.`);
+  const requestedInstituteSlug = process.argv[3] ?? process.env.IMPORT_INSTITUTE_SLUG;
+  const matchedInstitute = requestedInstituteSlug
+    ? await prisma.institute.findUnique({
+        where: { slug: requestedInstituteSlug },
+        select: { id: true, name: true }
+      })
+    : null;
+  const instituteChoices = requestedInstituteSlug
+    ? []
+    : await prisma.institute.findMany({
+        select: { id: true, name: true },
+        orderBy: { createdAt: "asc" },
+        take: 2
+      });
+  const selectedInstitute = matchedInstitute ?? (instituteChoices.length === 1 ? instituteChoices[0] : null);
+  if (!selectedInstitute) {
+    const available = await prisma.institute.findMany({
+      select: { slug: true, name: true },
+      orderBy: { createdAt: "asc" }
+    });
+    const choices = available.map((item) => `${item.slug} (${item.name})`).join(", ") || "none";
+    throw new Error(
+      requestedInstituteSlug
+        ? `Institute slug "${requestedInstituteSlug}" was not found. Available slugs: ${choices}.`
+        : `Pass the institute slug as the third argument or IMPORT_INSTITUTE_SLUG. Available slugs: ${choices}.`
+    );
+  }
+  const institute = selectedInstitute;
 
   const rows = parseCsv(await sourceCsvText()).filter((row) => row["First Name"] || row["Last Name"]);
   let assigned = 0;

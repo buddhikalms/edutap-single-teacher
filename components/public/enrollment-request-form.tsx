@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { signIn } from "next-auth/react";
-import { CheckCircle2, CreditCard, Loader2, Send } from "lucide-react";
+import { BookOpenCheck, CalendarClock, CheckCircle2, CreditCard, Loader2, Send, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { PaymentSlipUpload } from "@/components/payments/payment-slip-upload";
 import { Button } from "@/components/ui/button";
@@ -69,11 +68,42 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
     );
   }
 
+  if (!classes.length) {
+    return (
+      <div className="rounded-2xl border border-dashed bg-white/80 p-8 text-center">
+        <BookOpenCheck className="mx-auto h-10 w-10 text-muted-foreground" />
+        <h3 className="mt-4 text-xl font-semibold">No classes are accepting requests</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">Please check again later or contact the teacher directly.</p>
+      </div>
+    );
+  }
+
   return (
     <form action={submit} className="space-y-5">
       <input name="website" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden="true" />
 
-      <FormSection number="1" title="Class details" description="Choose the class you want to enroll the student in.">
+      <div className="grid gap-3 rounded-2xl border bg-slate-950 p-4 text-white sm:grid-cols-[1fr_auto] sm:items-center sm:p-5">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-200">Selected class</p>
+          <h3 className="mt-2 truncate text-xl font-semibold">{selectedClass ? `${selectedClass.subject} - ${selectedClass.name}` : "Choose a class"}</h3>
+          <p className="mt-1 flex items-center gap-2 text-sm text-white/70">
+            <CalendarClock className="h-4 w-4 shrink-0 text-teal-200" />
+            <span className="truncate">{selectedClass ? `${selectedClass.grade} - ${selectedClass.schedule}` : "Class schedule will appear here"}</span>
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-center text-xs sm:w-44">
+          <div className="rounded-xl bg-white/10 p-3">
+            <p className="font-semibold">{grades.length}</p>
+            <p className="mt-1 text-white/60">Grades</p>
+          </div>
+          <div className="rounded-xl bg-white/10 p-3">
+            <p className="font-semibold">{classes.length}</p>
+            <p className="mt-1 text-white/60">Classes</p>
+          </div>
+        </div>
+      </div>
+
+      <FormSection icon={<BookOpenCheck className="h-4 w-4" />} title="Class details" description="Choose the class you want to enroll the student in.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Student grade" required>
             <Select name="gradeId" value={gradeId} onChange={(event) => changeGrade(event.target.value)} required>
@@ -94,19 +124,9 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
             </Select>
           </Field>
         </div>
-        {selectedClass ? (
-          <div className="rounded-xl border bg-primary/5 p-4 text-sm">
-            <p className="font-semibold">
-              {selectedClass.subject} - {selectedClass.name}
-            </p>
-            <p className="mt-1 text-muted-foreground">
-              {selectedClass.grade} - {selectedClass.schedule}
-            </p>
-          </div>
-        ) : null}
       </FormSection>
 
-      <FormSection number="2" title="Student details" description="Enter the student information needed for enrollment.">
+      <FormSection icon={<UserRound className="h-4 w-4" />} title="Student details" description="Enter the student information needed for enrollment.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Student full name" required>
             <Input name="studentName" autoComplete="name" required />
@@ -120,7 +140,7 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
         </Field>
       </FormSection>
 
-      <FormSection number="3" title="Parent details" description="These details create the parent account after teacher approval.">
+      <FormSection icon={<UsersRound className="h-4 w-4" />} title="Parent details" description="These details create the parent account after teacher approval.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Parent / guardian full name" required>
             <Input name="parentName" autoComplete="name" required />
@@ -142,15 +162,9 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
         <p className="text-xs leading-5 text-muted-foreground">
           Password must have at least 10 characters with uppercase, lowercase, number, and symbol.
         </p>
-        <div className="relative py-1 text-center text-xs text-muted-foreground before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t">
-          <span className="relative bg-white px-3">or</span>
-        </div>
-        <Button type="button" variant="outline" className="w-full" onClick={() => signIn("google", { callbackUrl: `/family/register/google?classGroupId=${encodeURIComponent(classGroupId)}` })}>
-          Continue with Google
-        </Button>
       </FormSection>
 
-      <FormSection number="4" title="Payment details" description="Optional. Attach a slip only if you have already paid.">
+      <FormSection icon={<CreditCard className="h-4 w-4" />} title="Payment details" description="Optional. Attach a slip only if you have already paid.">
         <fieldset className="space-y-2">
           <Label>Payment made?</Label>
           <div className="grid grid-cols-2 gap-3">
@@ -200,7 +214,8 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
 
       <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-muted/35 p-4 text-sm leading-6">
         <Checkbox name="agreement" value="true" required className="mt-1" />
-        <span>I confirm the class, student, and parent details are correct and agree to be contacted about this enrollment request.</span>
+        <span className="flex-1">I confirm the class, student, and parent details are correct and agree to be contacted about this enrollment request.</span>
+        <ShieldCheck className="mt-1 hidden h-4 w-4 shrink-0 text-emerald-600 sm:block" />
       </label>
 
       <Button type="submit" className="w-full" size="lg" disabled={submitting || !classes.length}>
@@ -220,11 +235,11 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
   );
 }
 
-function FormSection({ number, title, description, children }: { number: string; title: string; description: string; children: React.ReactNode }) {
+function FormSection({ icon, title, description, children }: { icon: React.ReactNode; title: string; description: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-2xl border bg-white/72 p-4 sm:p-5">
+    <section className="space-y-4 rounded-2xl border bg-white/82 p-4 shadow-sm shadow-slate-200/50 sm:p-5">
       <div className="flex gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-white">{number}</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-white">{icon}</span>
         <div>
           <h3 className="text-lg font-semibold">{title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>

@@ -25,7 +25,7 @@ export async function getPublicTeacher(slug?: string | null) {
     include: {
       user: { select: { id: true } },
       branch: true,
-      institute: { include: { settings: { select: { currency: true } } } }
+      institute: { include: { settings: { select: { currency: true, logoPlaceholder: true } } } }
     },
     orderBy: { createdAt: "asc" }
   });

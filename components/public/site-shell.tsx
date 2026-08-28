@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { PublicHeader } from "@/components/public/public-header";
+import { getPublicTeacher } from "@/lib/public-catalog";
 
 const navItems = [
   { href: "/classes", label: "Classes" },
@@ -10,26 +11,33 @@ const navItems = [
   { href: "/contact", label: "Contact" }
 ];
 
-export function PublicShell({ children }: { children: React.ReactNode }) {
+export async function PublicShell({ children }: { children: React.ReactNode }) {
+  const teacher = await getPublicTeacher();
+  const logoUrl = teacher?.logoUrl ?? teacher?.institute.settings?.logoPlaceholder ?? teacher?.institute.logoUrl ?? null;
+  const brandName = teacher?.displayName ?? teacher?.name ?? teacher?.institute.name ?? null;
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbff_0%,#eef7f3_42%,#fff8ec_100%)] text-foreground">
-      <PublicHeader />
+      <PublicHeader brand={{ name: brandName, logoUrl }} />
       <main>{children}</main>
-      <PublicFooter />
+      <PublicFooter brand={{ name: brandName, logoUrl }} />
     </div>
   );
 }
 
-export function PublicFooter() {
+export function PublicFooter({ brand }: { brand?: { name?: string | null; logoUrl?: string | null } }) {
+  const name = brand?.name || "EduTap LMS";
+  const logoUrl = brand?.logoUrl;
+
   return (
     <footer className="border-t bg-primary text-primary-foreground">
       <div className="container grid gap-8 py-10 md:grid-cols-[1.3fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-3 font-semibold">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/12">
-              <BookOpen className="h-5 w-5" />
+            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-white/12">
+              {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : <BookOpen className="h-5 w-5" />}
             </span>
-            EduTap LMS
+            {name}
           </div>
           <p className="mt-4 max-w-md text-sm leading-6 text-white/72">
             A connected learning space for classes, courses, resources, attendance, and clear family communication.

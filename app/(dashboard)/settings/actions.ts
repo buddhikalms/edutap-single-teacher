@@ -87,7 +87,8 @@ export async function updateInstituteSettings(_previous: ActionState, formData: 
           specialty: parsed.teacherSpecialty,
           subjects: [parsed.teacherSpecialty],
           bio: parsed.teacherBio || null,
-          photoUrl: parsed.teacherPhotoUrl || null
+          photoUrl: parsed.teacherPhotoUrl || null,
+          profileImage: parsed.teacherPhotoUrl || null
         }
       });
 
@@ -178,6 +179,10 @@ export async function updateInstituteSettings(_previous: ActionState, formData: 
     revalidatePath("/settings");
     revalidatePath("/dashboard");
     revalidatePath("/");
+    revalidatePath("/teacher");
+    revalidatePath("/classes");
+    revalidatePath("/courses");
+    revalidatePath("/contact");
     return { ok: true, message: "Teacher profile and settings updated." };
   } catch (error) {
     return actionError(error, "Settings could not be updated.");

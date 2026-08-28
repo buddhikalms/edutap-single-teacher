@@ -12,7 +12,7 @@ import { uploadDiskPath } from "@/lib/upload-storage";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
-const PUBLIC_UPLOAD_FOLDERS = new Set(["images"]);
+const PUBLIC_UPLOAD_FOLDERS = new Set(["images", "student-photos"]);
 const AUTHORIZED_UPLOAD_FOLDERS = new Set(["homework", "homework-submissions"]);
 
 function isSafePath(segments: string[]) {

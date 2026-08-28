@@ -158,7 +158,7 @@ async function downloadStudentPhoto(row: SheetRow, index: number) {
 }
 
 async function main() {
-  const instituteSlug = process.env.IMPORT_INSTITUTE_SLUG ?? "edutap-demo";
+  const requestedInstituteSlug = process.argv[3] ?? process.env.IMPORT_INSTITUTE_SLUG;
   const rows = parseCsv(await sourceCsvText()).filter((row) => clean(row["First Name"]) || clean(row["Last Name"]));
   const imported = await Promise.all(
     rows.map(async (row, index) => ({
@@ -169,11 +169,33 @@ async function main() {
     }))
   );
 
-  const institute = await prisma.institute.findUnique({
-    where: { slug: instituteSlug },
-    include: { branches: { orderBy: { createdAt: "asc" }, take: 1 } }
-  });
-  if (!institute) throw new Error(`Institute slug "${instituteSlug}" was not found.`);
+  const matchedInstitute = requestedInstituteSlug
+    ? await prisma.institute.findUnique({
+        where: { slug: requestedInstituteSlug },
+        include: { branches: { orderBy: { createdAt: "asc" }, take: 1 } }
+      })
+    : null;
+  const instituteChoices = requestedInstituteSlug
+    ? []
+    : await prisma.institute.findMany({
+        include: { branches: { orderBy: { createdAt: "asc" }, take: 1 } },
+        orderBy: { createdAt: "asc" },
+        take: 2
+      });
+  const selectedInstitute = matchedInstitute ?? (instituteChoices.length === 1 ? instituteChoices[0] : null);
+  if (!selectedInstitute) {
+    const available = await prisma.institute.findMany({
+      select: { slug: true, name: true },
+      orderBy: { createdAt: "asc" }
+    });
+    const choices = available.map((item) => `${item.slug} (${item.name})`).join(", ") || "none";
+    throw new Error(
+      requestedInstituteSlug
+        ? `Institute slug "${requestedInstituteSlug}" was not found. Available slugs: ${choices}.`
+        : `Pass the institute slug as the third argument or IMPORT_INSTITUTE_SLUG. Available slugs: ${choices}.`
+    );
+  }
+  const institute = selectedInstitute;
   const branch = institute.branches[0];
   if (!branch) throw new Error(`Institute "${institute.name}" has no branch.`);
 

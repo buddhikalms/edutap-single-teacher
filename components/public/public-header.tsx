@@ -13,17 +13,24 @@ const navItems = [
   { href: "/contact", label: "Contact" }
 ];
 
-export function PublicHeader() {
+type PublicBrand = {
+  name?: string | null;
+  logoUrl?: string | null;
+};
+
+export function PublicHeader({ brand }: { brand?: PublicBrand }) {
   const [isOpen, setIsOpen] = useState(false);
+  const logoUrl = brand?.logoUrl;
+  const name = brand?.name || "EduTap";
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/70 bg-white/88 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-3 font-semibold" onClick={() => setIsOpen(false)}>
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white">
-            <GraduationCap className="h-5 w-5" />
+            {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full rounded-lg object-cover" /> : <GraduationCap className="h-5 w-5" />}
           </span>
-          <span className="text-lg">EduTap</span>
+          <span className="text-lg">{name}</span>
         </Link>
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
           {navItems.map((item) => (

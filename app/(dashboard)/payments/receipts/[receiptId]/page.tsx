@@ -60,8 +60,8 @@ export default async function ReceiptPage({ params }: { params: Promise<{ receip
         <CardContent className="receipt-paper p-8">
           <div className="flex items-start justify-between gap-6 border-b pb-6">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-white">
-                {receipt.institute.logoUrl ? <span className="text-xs">Logo</span> : <Building2 className="h-8 w-8" />}
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-primary text-white">
+                {receipt.institute.logoUrl ? <img src={receipt.institute.logoUrl} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-8 w-8" />}
               </div>
               <div>
                 <h1 className="text-2xl font-semibold">{receipt.institute.name}</h1>
