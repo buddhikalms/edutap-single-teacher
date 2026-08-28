@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { NotificationChannel, NotificationStatus, NotificationType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { actionError, getTenantContext, type ActionState } from "@/lib/session";
+import { APP_BRAND_NAME, DEFAULT_ROOT_DOMAIN } from "@/lib/brand";
 import { normalizeSmsRecipient, sendSmsLenzSms } from "@/lib/smslenz-sms";
 import { assertValidTeacherSlug } from "@/lib/teacher-tenancy";
 import { assertCanCreateWithinLimit, packageLimitMessage } from "@/lib/usage-limits";
@@ -71,7 +72,7 @@ function appLoginUrl() {
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     process.env.APP_URL?.trim() ||
     process.env.NEXTAUTH_URL?.trim() ||
-    "http://localhost:3000";
+    `https://${DEFAULT_ROOT_DOMAIN}`;
 
   return new URL("/login", baseUrl).toString();
 }
@@ -90,7 +91,7 @@ async function sendTeacherCredentialsSms(input: {
     return { sent: false, message: "Teacher login saved, but SMS was not sent because the mobile number is invalid." };
   }
 
-  const body = `EduTap login for ${input.name}: ${appLoginUrl()} Username: ${input.username} Password: ${input.password}. Change this password at first login.`;
+  const body = `${APP_BRAND_NAME} login for ${input.name}: ${appLoginUrl()} Username: ${input.username} Password: ${input.password}. Change this password at first login.`;
   const result = await sendSmsLenzSms({ recipient, message: body });
 
   await prisma.notificationLog.create({

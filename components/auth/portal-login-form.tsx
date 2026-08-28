@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { APP_BRAND_NAME } from "@/lib/brand";
 import { loginSchema, type LoginInput } from "@/lib/validations";
 
 export function PortalLoginForm() {
@@ -44,7 +45,7 @@ export function PortalLoginForm() {
       return;
     }
 
-    toast.success("Welcome to your EduTap Account");
+    toast.success(`Welcome to your ${APP_BRAND_NAME} Account`);
     router.push(result?.url ?? "/family/dashboard");
     router.refresh();
   }
@@ -56,7 +57,7 @@ export function PortalLoginForm() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-glow">
             <ShieldCheck className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-normal">EduTap Account</h1>
+          <h1 className="text-2xl font-semibold tracking-normal">{APP_BRAND_NAME} Account</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Sign in with the family mobile number or email.
           </p>
@@ -75,7 +76,7 @@ export function PortalLoginForm() {
           </div>
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-            Sign in to EduTap Account
+            Sign in to {APP_BRAND_NAME} Account
           </Button>
         </form>
 

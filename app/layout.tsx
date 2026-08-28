@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
+import { APP_BRAND_NAME } from "@/lib/brand";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -10,12 +11,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "EduTap",
-  description: "A multi-teacher institute LMS with public teacher websites, classes, courses, attendance, payments, and family portals.",
+  title: APP_BRAND_NAME,
+  description: "EliteEnglish class management for students, parents, teachers, attendance, payments, and learning resources.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "EduTap",
+    title: APP_BRAND_NAME,
     statusBarStyle: "default"
   },
   icons: {

@@ -1,7 +1,7 @@
 {
-  "name": "EduTap",
-  "short_name": "EduTap",
-  "description": "EduTap LMS for students, parents, teachers, and institutes.",
+  "name": "EliteEnglish",
+  "short_name": "EliteEnglish",
+  "description": "EliteEnglish LMS for students, parents, teachers, and institutes.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

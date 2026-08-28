@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { APP_BRAND_NAME, DEFAULT_ROOT_DOMAIN } from "@/lib/brand";
 import { loginSchema, type LoginInput } from "@/lib/validations";
 
 export function LoginForm() {
@@ -28,7 +29,7 @@ export function LoginForm() {
 
   function teacherDashboardUrl(slug: string) {
     const isLocal = window.location.hostname === "localhost" || window.location.hostname.endsWith(".localhost") || window.location.hostname === "127.0.0.1";
-    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? (isLocal ? "lvh.me" : "edutap.lk");
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? (isLocal ? "lvh.me" : DEFAULT_ROOT_DOMAIN);
     const port = isLocal && window.location.port ? `:${window.location.port}` : "";
     const protocol = isLocal ? window.location.protocol : "https:";
 
@@ -62,7 +63,7 @@ export function LoginForm() {
       return;
     }
 
-    toast.success("Welcome back to EduTap");
+    toast.success(`Welcome back to ${APP_BRAND_NAME}`);
     const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
     const sessionData = (await sessionResponse.json()) as { user?: { role?: string; teacherSlug?: string | null; mustChangePassword?: boolean } };
     if (sessionData.user?.role === "TEACHER" && sessionData.user.mustChangePassword) {
@@ -138,9 +139,9 @@ export function LoginForm() {
       </form>
 
       <p className="mt-3 text-center text-sm text-muted-foreground">
-        EduTap user?{" "}
+        {APP_BRAND_NAME} user?{" "}
         <Link href="/student/register" className="font-semibold text-primary hover:underline">
-          Create EduTap Account
+          Create {APP_BRAND_NAME} Account
         </Link>
       </p>
     </div>

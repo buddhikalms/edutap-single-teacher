@@ -6,6 +6,7 @@ import {
 import { PublicShell, SectionHeading } from "@/components/public/site-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { APP_BRAND_NAME } from "@/lib/brand";
 import { getPublicClasses, getPublicCourses, getPublicTeacher } from "@/lib/public-catalog";
 import { formatCurrency } from "@/lib/utils";
 
@@ -25,10 +26,10 @@ const features = [
 export default async function HomePage() {
   const [teacher, classes, courses] = await Promise.all([getPublicTeacher(), getPublicClasses(), getPublicCourses()]);
   if (!teacher) {
-    return <PublicShell><div className="container py-32 text-center"><h1 className="text-4xl font-semibold">EduTap is being prepared.</h1><p className="mt-4 text-muted-foreground">Complete teacher setup to publish the learning website.</p></div></PublicShell>;
+    return <PublicShell><div className="container py-32 text-center"><h1 className="text-4xl font-semibold">{APP_BRAND_NAME} is being prepared.</h1><p className="mt-4 text-muted-foreground">Complete teacher setup to publish the learning website.</p></div></PublicShell>;
   }
   if (teacher.status === "INACTIVE") {
-    return <PublicShell><div className="container py-32 text-center"><h1 className="text-4xl font-semibold">This teacher portal is currently unavailable.</h1><p className="mt-4 text-muted-foreground">Please contact EduTap support or the institute office for assistance.</p></div></PublicShell>;
+    return <PublicShell><div className="container py-32 text-center"><h1 className="text-4xl font-semibold">This teacher portal is currently unavailable.</h1><p className="mt-4 text-muted-foreground">Please contact {APP_BRAND_NAME} support or the institute office for assistance.</p></div></PublicShell>;
   }
   const currency = teacher.institute.settings?.currency ?? "LKR";
 

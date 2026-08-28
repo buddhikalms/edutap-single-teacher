@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, GraduationCap, LogIn, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { APP_BRAND_NAME } from "@/lib/brand";
 
 const navItems = [
   { href: "/classes", label: "Classes" },
@@ -21,7 +22,7 @@ type PublicBrand = {
 export function PublicHeader({ brand }: { brand?: PublicBrand }) {
   const [isOpen, setIsOpen] = useState(false);
   const logoUrl = brand?.logoUrl;
-  const name = brand?.name || "EduTap";
+  const name = brand?.name || APP_BRAND_NAME;
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/70 bg-white/88 backdrop-blur-xl">

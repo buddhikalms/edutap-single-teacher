@@ -2,13 +2,14 @@ import { FamilyNav } from "@/components/family/family-nav";
 import { StudentSwitcher } from "@/components/family/student-switcher";
 import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { WebPushPermissionCard } from "@/components/pwa/web-push-permission-card";
+import { APP_BRAND_NAME } from "@/lib/brand";
 import { getFamilyContext } from "@/lib/family";
 
 export default async function FamilyDashboardLayout({ children }: { children: React.ReactNode }) {
   const context = await getFamilyContext();
   return <main className="min-h-screen bg-slate-50">
     <header className="bg-primary text-white"><div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
-      <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs text-white/60">EduTap Account</p><h1 className="text-xl font-semibold">Welcome, {context.userName}</h1></div>
+      <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs text-white/60">{APP_BRAND_NAME} Account</p><h1 className="text-xl font-semibold">Welcome, {context.userName}</h1></div>
         <StudentSwitcher
           selectedId={context.selectedStudent.id}
           students={context.students.map((student) => ({

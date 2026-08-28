@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { canAccess, roleAccess } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
+import { APP_BRAND_NAME } from "@/lib/brand";
 
 const tenantNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, area: "dashboard", group: "Main" },
@@ -47,7 +48,19 @@ const tenantNavItems = [
   { href: "/settings", label: "Profile & settings", icon: Settings2, area: "settings", group: "Workspace" }
 ];
 
-export function Sidebar({ className, role, pendingEnrollmentCount = 0 }: { className?: string; role?: string; pendingEnrollmentCount?: number }) {
+export function Sidebar({
+  className,
+  role,
+  pendingEnrollmentCount = 0,
+  brandName = APP_BRAND_NAME,
+  logoUrl
+}: {
+  className?: string;
+  role?: string;
+  pendingEnrollmentCount?: number;
+  brandName?: string;
+  logoUrl?: string | null;
+}) {
   const pathname = usePathname();
   const navItems = tenantNavItems.filter((item) =>
     canAccess(role, item.area as keyof typeof roleAccess)
@@ -66,11 +79,11 @@ export function Sidebar({ className, role, pendingEnrollmentCount = 0 }: { class
     >
       <div className="shrink-0 border-b border-white/10 px-5 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-primary shadow-glow">
-            <GraduationCap className="h-6 w-6" />
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-primary shadow-glow">
+            {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : <GraduationCap className="h-6 w-6" />}
           </div>
           <div className="min-w-0">
-            <p className="text-lg font-bold">EduTap</p>
+            <p className="truncate text-lg font-bold">{brandName}</p>
             <p className="text-xs text-white/60">Teacher command center</p>
           </div>
         </div>

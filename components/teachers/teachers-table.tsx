@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { DEFAULT_ROOT_DOMAIN } from "@/lib/brand";
 import { formatCurrency } from "@/lib/utils";
 import { teacherSchema, type TeacherInput } from "@/lib/validations";
 
@@ -181,6 +182,7 @@ export function TeachersTable({
   const [editing, setEditing] = useState<TeacherRow | null>(null);
   const [deleting, setDeleting] = useState<TeacherRow | null>(null);
   const [isPending, startTransition] = useTransition();
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN;
 
   const columns = useMemo<ColumnDef<TeacherRow>[]>(
     () => [
@@ -189,8 +191,8 @@ export function TeachersTable({
         header: "Teacher",
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-700 text-white">
-              <UserRound className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-teal-700 text-white">
+              {row.original.photoUrl ? <img src={row.original.photoUrl} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-5 w-5" />}
             </div>
             <div>
               <Link href={`/teachers/${row.original.id}`} className="font-semibold hover:underline">
@@ -200,7 +202,7 @@ export function TeachersTable({
               {row.original.username ? <p className="text-xs text-muted-foreground">@{row.original.username}</p> : null}
               <p className="mt-1 flex items-center gap-1 text-xs text-teal-700">
                 <Globe2 className="h-3 w-3" />
-                {row.original.slug}.edutap.lk
+                {row.original.slug}.{rootDomain}
               </p>
             </div>
           </div>
@@ -260,7 +262,7 @@ export function TeachersTable({
         )
       }
     ],
-    [currency]
+    [currency, rootDomain]
   );
 
   // TanStack Table intentionally returns function-heavy instances that React Compiler cannot memoize.
@@ -382,7 +384,7 @@ function TeacherPanel({
   });
   const selected = useWatch({ control: form.control, name: "classGroupIds" }) ?? [];
   const watchedName = useWatch({ control: form.control, name: "name" });
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "edutap.lk";
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN;
 
   function toggleClass(id: string, checked: boolean) {
     form.setValue("classGroupIds", checked ? [...selected, id] : selected.filter((classId) => classId !== id), { shouldValidate: true });

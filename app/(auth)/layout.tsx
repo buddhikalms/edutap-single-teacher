@@ -1,4 +1,5 @@
 import { GraduationCap, ShieldCheck, Sparkles } from "lucide-react";
+import { APP_BRAND_NAME } from "@/lib/brand";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +11,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <GraduationCap className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-lg font-bold">EduTap</p>
+              <p className="text-lg font-bold">{APP_BRAND_NAME}</p>
               <p className="text-xs text-white/60">Single Teacher LMS</p>
             </div>
           </div>
@@ -49,14 +50,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 <GraduationCap className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-lg font-bold">EduTap</p>
+              <p className="text-lg font-bold">{APP_BRAND_NAME}</p>
                 <p className="text-xs text-muted-foreground">Single Teacher LMS</p>
               </div>
             </div>
             <div className="glass-panel rounded-2xl p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Secure EduTap access
+                Secure {APP_BRAND_NAME} access
               </div>
               {children}
             </div>

@@ -10,10 +10,12 @@ import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 export function DashboardHeader({
   instituteName,
+  logoUrl,
   user,
   pendingEnrollmentCount
 }: {
   instituteName: string;
+  logoUrl?: string | null;
   user: { name: string; email: string; role: string };
   pendingEnrollmentCount: number;
 }) {
@@ -28,7 +30,10 @@ export function DashboardHeader({
           </Button>
           <div className="hidden min-w-[240px] md:block">
             <p className="text-sm text-muted-foreground">Teaching workspace</p>
-            <h1 className="truncate text-lg font-semibold">{instituteName}</h1>
+            <div className="mt-1 flex min-w-0 items-center gap-3">
+              {logoUrl ? <img src={logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" /> : null}
+              <h1 className="truncate text-lg font-semibold">{instituteName}</h1>
+            </div>
           </div>
           <div className="relative w-full max-w-xl">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -45,7 +50,7 @@ export function DashboardHeader({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-primary/40 backdrop-blur-sm" aria-label="Close navigation" onClick={() => setOpen(false)} />
           <div className="relative h-full w-[300px] max-w-[86vw]">
-            <Sidebar role={user.role} pendingEnrollmentCount={pendingEnrollmentCount} />
+            <Sidebar role={user.role} pendingEnrollmentCount={pendingEnrollmentCount} brandName={instituteName} logoUrl={logoUrl} />
             <Button
               variant="outline"
               size="icon"

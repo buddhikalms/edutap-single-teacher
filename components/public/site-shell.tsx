@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { PublicHeader } from "@/components/public/public-header";
+import { APP_BRAND_NAME } from "@/lib/brand";
 import { getPublicTeacher } from "@/lib/public-catalog";
 
 const navItems = [
@@ -26,7 +27,7 @@ export async function PublicShell({ children }: { children: React.ReactNode }) {
 }
 
 export function PublicFooter({ brand }: { brand?: { name?: string | null; logoUrl?: string | null } }) {
-  const name = brand?.name || "EduTap LMS";
+  const name = brand?.name || APP_BRAND_NAME;
   const logoUrl = brand?.logoUrl;
 
   return (

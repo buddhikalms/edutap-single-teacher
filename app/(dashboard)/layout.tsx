@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { authOptions } from "@/lib/auth";
+import { APP_BRAND_NAME } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -21,9 +22,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const [institute, pendingEnrollmentCount] = session.user.instituteId
-    ? await Promise.all([prisma.institute.findUnique({
+      ? await Promise.all([prisma.institute.findUnique({
         where: { id: session.user.instituteId },
-        select: { name: true }
+        include: { settings: { select: { logoPlaceholder: true } } }
       }), prisma.enrollmentRequest.count({
         where: { instituteId: session.user.instituteId, status: "PENDING" }
       })])
@@ -32,14 +33,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(20,184,166,0.16),_transparent_28%),linear-gradient(180deg,#f8fafc_0%,#f3f6f9_100%)]">
       <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <Sidebar className="sticky top-0 hidden self-start lg:flex" role={session.user.role} pendingEnrollmentCount={pendingEnrollmentCount} />
+        <Sidebar
+          className="sticky top-0 hidden self-start lg:flex"
+          role={session.user.role}
+          pendingEnrollmentCount={pendingEnrollmentCount}
+          brandName={institute?.name ?? APP_BRAND_NAME}
+          logoUrl={institute?.settings?.logoPlaceholder ?? institute?.logoUrl ?? null}
+        />
         <div className="min-w-0">
           <DashboardHeader
-            instituteName={institute?.name ?? "My Teaching Workspace"}
+            instituteName={institute?.name ?? APP_BRAND_NAME}
+            logoUrl={institute?.settings?.logoPlaceholder ?? institute?.logoUrl ?? null}
             pendingEnrollmentCount={pendingEnrollmentCount}
             user={{
-              name: session.user.name ?? "EduTap User",
-              email: session.user.email ?? "user@edutap.test",
+              name: session.user.name ?? `${APP_BRAND_NAME} User`,
+              email: session.user.email ?? "user@theeliteenglish.com",
               role: session.user.role
             }}
           />

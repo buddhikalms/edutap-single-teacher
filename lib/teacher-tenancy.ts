@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { DEFAULT_ROOT_DOMAIN } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
 
@@ -64,7 +65,7 @@ export function assertValidTeacherSlug(value: string) {
   }
 
   if (RESERVED_TEACHER_SLUGS.has(slug)) {
-    throw new Error("This subdomain is reserved for EduTap.");
+    throw new Error("This subdomain is reserved for EliteEnglish.");
   }
 
   return slug;
@@ -76,7 +77,7 @@ export function teacherPortalUrl(slug: string, path = "/dashboard", requestHost?
   const host = requestHost?.split(":")[0]?.toLowerCase() ?? "";
   const port = requestHost?.includes(":") ? `:${requestHost.split(":").pop()}` : "";
   const isLocal = host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1";
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? (isLocal ? "lvh.me" : "edutap.lk");
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? (isLocal ? "lvh.me" : DEFAULT_ROOT_DOMAIN);
   const scheme = protocol ?? (isLocal ? "http" : "https");
 
   return `${scheme}://${cleanSlug}.${rootDomain}${isLocal ? port : ""}${normalizedPath}`;
@@ -92,7 +93,7 @@ export async function getTeacherSlugFromRequest() {
 
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "";
   const hostname = host.split(":")[0]?.toLowerCase() ?? "";
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "edutap.lk";
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? DEFAULT_ROOT_DOMAIN;
   const localRootDomain = "localhost";
 
   const activeRootDomain = hostname.endsWith(`.${rootDomain}`)
