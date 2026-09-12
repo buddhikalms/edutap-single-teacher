@@ -1,10 +1,10 @@
-ALTER TABLE `institutesettings`
+ALTER TABLE `InstituteSettings`
   ADD COLUMN `classTypeOptions` JSON NULL;
 
-ALTER TABLE `classgroup`
+ALTER TABLE `ClassGroup`
   MODIFY `classType` VARCHAR(191) NOT NULL DEFAULT 'Individual';
 
-UPDATE `classgroup`
+UPDATE `ClassGroup`
 SET `classType` = CASE `classType`
   WHEN 'INHOUSE' THEN 'Individual'
   WHEN 'ONLINE' THEN 'Spoken'
@@ -12,6 +12,6 @@ SET `classType` = CASE `classType`
   ELSE `classType`
 END;
 
-UPDATE `institutesettings`
+UPDATE `InstituteSettings`
 SET `classTypeOptions` = JSON_ARRAY('Individual', 'Group', 'Spoken')
 WHERE `classTypeOptions` IS NULL;

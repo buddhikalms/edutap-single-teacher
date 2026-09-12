@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `institutesettings` ADD COLUMN `cardAllowNfcOnly` BOOLEAN NOT NULL DEFAULT true,
+ALTER TABLE `InstituteSettings` ADD COLUMN `cardAllowNfcOnly` BOOLEAN NOT NULL DEFAULT true,
     ADD COLUMN `cardAllowQrOnly` BOOLEAN NOT NULL DEFAULT true,
     ADD COLUMN `cardAutoGenerateQrToken` BOOLEAN NOT NULL DEFAULT true,
     ADD COLUMN `cardNotifyAdminOnLostOrStolenScan` BOOLEAN NOT NULL DEFAULT true,
