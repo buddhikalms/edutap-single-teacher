@@ -2,14 +2,14 @@
 -- Source dump: E:/nextapp_2026-09-12_15-19.sql/nextapp_2026-09-12_15-19.sql
 -- Target instituteId: cmt8yzua40001gla0e6rvdrst
 -- Target branchId: cmt8yzuaz000dgla07dw9645w
--- Includes only the required student-entry data: Student, Parent, links, Enrollment.
+-- Includes only the required student-entry data: Student, Parent, links, Enrollment. Uses Prisma migration table casing.
 -- Excludes users/login records, NIC, occupation, cards, payments, attendance, notifications, settings, grades, subjects, and class creation.
 -- Dump content was treated as data only.
 
 SET FOREIGN_KEY_CHECKS=0;
 START TRANSACTION;
 
-INSERT INTO `student` (`id`, `admissionNo`, `firstName`, `lastName`, `phone`, `dateOfBirth`, `status`, `avatarUrl`, `instituteId`, `branchId`, `createdAt`, `updatedAt`) VALUES
+INSERT INTO `Student` (`id`, `admissionNo`, `firstName`, `lastName`, `phone`, `dateOfBirth`, `status`, `avatarUrl`, `instituteId`, `branchId`, `createdAt`, `updatedAt`) VALUES
 ('cmtdafeqj0012trzrsyz5lg3l', 'EEA-0001', 'Duwen', 'Ehas', '0779985658', '2026-10-04 00:00:00.000', 'ACTIVE', '/uploads/student-photos/eea-0001-1Me3YZZVxZtG76Ajh70ifyZ5i3M9G-4pE.jpg', 'cmt8yzua40001gla0e6rvdrst', 'cmt8yzuaz000dgla07dw9645w', '2026-08-28 18:31:13.243', '2026-08-28 18:31:13.243'),
 ('cmtdafeqt001ctrzre0uxj5jg', 'EEA-0002', 'Ewni', 'Akenya', '0702559060', '2021-06-20 00:00:00.000', 'ACTIVE', '/uploads/student-photos/eea-0002-1WG6yixEM_co9MjVtf_HKiWnrsQo8hbTu.jpg', 'cmt8yzua40001gla0e6rvdrst', 'cmt8yzuaz000dgla07dw9645w', '2026-08-28 18:31:13.253', '2026-08-28 18:31:13.253'),
 ('cmtdafer3001mtrzr4v3z0qbg', 'EEA-0003', 'Vihas', 'Yanul', '077-9362163', '2021-02-15 00:00:00.000', 'ACTIVE', '/uploads/student-photos/eea-0003-1Txn45S6Gjzro1Q7LslGkghaKMic-s4wg.jpg', 'cmt8yzua40001gla0e6rvdrst', 'cmt8yzuaz000dgla07dw9645w', '2026-08-28 18:31:13.264', '2026-08-28 18:31:13.264'),
@@ -122,7 +122,7 @@ ON DUPLICATE KEY UPDATE
   `branchId` = VALUES(`branchId`),
   `updatedAt` = VALUES(`updatedAt`);
 
-INSERT INTO `student` (`id`, `admissionNo`, `firstName`, `lastName`, `phone`, `dateOfBirth`, `status`, `avatarUrl`, `instituteId`, `branchId`, `createdAt`, `updatedAt`) VALUES
+INSERT INTO `Student` (`id`, `admissionNo`, `firstName`, `lastName`, `phone`, `dateOfBirth`, `status`, `avatarUrl`, `instituteId`, `branchId`, `createdAt`, `updatedAt`) VALUES
 ('cmtpza4cj01551emz0bb52utz', 'EEA -0102', 'Hiruka', 'Dimsara', NULL, '2013-12-21 00:00:00.000', 'ACTIVE', NULL, 'cmt8yzua40001gla0e6rvdrst', 'cmt8yzuaz000dgla07dw9645w', '2026-09-06 15:40:11.011', '2026-09-06 15:40:11.025'),
 ('cmtq0u8k301al1emzr9m7dz9t', 'EEA 0103', 'Husanadi', 'Lathara', NULL, '2011-04-12 00:00:00.000', 'ACTIVE', NULL, 'cmt8yzua40001gla0e6rvdrst', 'cmt8yzuaz000dgla07dw9645w', '2026-09-06 16:23:49.204', '2026-09-06 16:23:49.217')
 ON DUPLICATE KEY UPDATE
@@ -137,7 +137,7 @@ ON DUPLICATE KEY UPDATE
   `branchId` = VALUES(`branchId`),
   `updatedAt` = VALUES(`updatedAt`);
 
-INSERT INTO `parent` (`id`, `name`, `email`, `phone`, `relationship`, `address`, `appLoginIdentifier`, `emergencyContactNumber`, `instituteId`, `status`, `createdAt`, `updatedAt`) VALUES
+INSERT INTO `Parent` (`id`, `name`, `email`, `phone`, `relationship`, `address`, `appLoginIdentifier`, `emergencyContactNumber`, `instituteId`, `status`, `createdAt`, `updatedAt`) VALUES
 ('cmtdafeqf0010trzry7c68uhc', 'Kalpana sajeewani', 'kalpanasajeewani@gmail.com', '0779985658', 'Mother', '246/2 Polwatta gunasekara mw, himbutana', '0779985658', '0779985658', 'cmt8yzua40001gla0e6rvdrst', 'ACTIVE', '2026-08-28 18:31:13.239', '2026-08-28 18:31:13.239'),
 ('cmtdafeqr001atrzrp9c65c7b', 'Nimmi Samarasekara', 'nimmiss79@gmail.com', '0772018641', 'Mother', '134/I/1,Robert Gunawardana mw,Battaramulla', '0772018641', '0772018641', 'cmt8yzua40001gla0e6rvdrst', 'ACTIVE', '2026-08-28 18:31:13.252', '2026-08-28 18:31:13.252'),
 ('cmtdafer2001ktrzrhzn1dmoz', 'Buddhi', 'ruwan.nagoda@gmail.com', '0701553837', 'Guardian', '22222', '0701553837', '0701553837', 'cmt8yzua40001gla0e6rvdrst', 'ACTIVE', '2026-08-28 18:31:13.262', '2026-08-29 04:32:21.773'),
@@ -250,7 +250,7 @@ ON DUPLICATE KEY UPDATE
   `status` = VALUES(`status`),
   `updatedAt` = VALUES(`updatedAt`);
 
-INSERT INTO `_parenttostudent` (`A`, `B`) VALUES
+INSERT INTO `_ParentToStudent` (`A`, `B`) VALUES
 ('cmtdafeqf0010trzry7c68uhc', 'cmtdafeqj0012trzrsyz5lg3l'),
 ('cmtdafeqr001atrzrp9c65c7b', 'cmtdafeqt001ctrzre0uxj5jg'),
 ('cmtdafer2001ktrzrhzn1dmoz', 'cmtdafer3001mtrzr4v3z0qbg'),
@@ -355,7 +355,7 @@ ON DUPLICATE KEY UPDATE
   `A` = VALUES(`A`),
   `B` = VALUES(`B`);
 
-INSERT INTO `_parenttostudent` (`A`, `B`) VALUES
+INSERT INTO `_ParentToStudent` (`A`, `B`) VALUES
 ('cmtpz486j014s1emzyy881t1o', 'cmtpz486l014u1emz2q0xoyda'),
 ('cmtpz486j014s1emzyy881t1o', 'cmtpza4cj01551emz0bb52utz'),
 ('cmtq0u8k201aj1emz8b7rwje8', 'cmtq0u8k301al1emzr9m7dz9t')
@@ -363,7 +363,7 @@ ON DUPLICATE KEY UPDATE
   `A` = VALUES(`A`),
   `B` = VALUES(`B`);
 
-INSERT INTO `parentstudent` (`id`, `parentId`, `studentId`, `relation`, `createdAt`) VALUES
+INSERT INTO `ParentStudent` (`id`, `parentId`, `studentId`, `relation`, `createdAt`) VALUES
 ('cmtdafeql0014trzrqp90o0nd', 'cmtdafeqf0010trzry7c68uhc', 'cmtdafeqj0012trzrsyz5lg3l', 'Mother', '2026-08-28 18:31:13.245'),
 ('cmtdafeqw001etrzrp7ke4afw', 'cmtdafeqr001atrzrp9c65c7b', 'cmtdafeqt001ctrzre0uxj5jg', 'Mother', '2026-08-28 18:31:13.257'),
 ('cmtdafer5001otrzrpkl1r3y1', 'cmtdafer2001ktrzrhzn1dmoz', 'cmtdafer3001mtrzr4v3z0qbg', 'Mother', '2026-08-28 18:31:13.265'),
@@ -469,7 +469,7 @@ ON DUPLICATE KEY UPDATE
   `studentId` = VALUES(`studentId`),
   `relation` = VALUES(`relation`);
 
-INSERT INTO `parentstudent` (`id`, `parentId`, `studentId`, `relation`, `createdAt`) VALUES
+INSERT INTO `ParentStudent` (`id`, `parentId`, `studentId`, `relation`, `createdAt`) VALUES
 ('cmtpz486u014y1emzh2lmmrih', 'cmtpz486j014s1emzyy881t1o', 'cmtpz486l014u1emz2q0xoyda', 'Guardian', '2026-09-06 15:35:36.054'),
 ('cmtpza4cq01591emz1idl0wle', 'cmtpz486j014s1emzyy881t1o', 'cmtpza4cj01551emz0bb52utz', 'Guardian', '2026-09-06 15:40:11.018'),
 ('cmtq0u8k901ap1emzgim245r1', 'cmtq0u8k201aj1emz8b7rwje8', 'cmtq0u8k301al1emzr9m7dz9t', 'Guardian', '2026-09-06 16:23:49.209')
@@ -478,7 +478,7 @@ ON DUPLICATE KEY UPDATE
   `studentId` = VALUES(`studentId`),
   `relation` = VALUES(`relation`);
 
-INSERT INTO `enrollment` (`id`, `studentId`, `classGroupId`, `enrolledAt`, `active`, `status`, `paymentStartDate`, `freePeriodType`, `freeDays`, `monthlyFeeOverride`, `discount`) VALUES
+INSERT INTO `Enrollment` (`id`, `studentId`, `classGroupId`, `enrolledAt`, `active`, `status`, `paymentStartDate`, `freePeriodType`, `freeDays`, `monthlyFeeOverride`, `discount`) VALUES
 ('cmtdafeqn0016trzrudl3ifp8', 'cmtdafeqj0012trzrsyz5lg3l', 'cmtd8mzzy000wt1yianll8le8', '2026-08-28 18:31:13.248', 1, 'ACTIVE', '2026-09-06 00:00:00.000', 'NONE', 0, 2000.00, 0.00),
 ('cmtdafeqy001gtrzrpb2t5m8l', 'cmtdafeqt001ctrzre0uxj5jg', 'cmtd8mzzy000wt1yianll8le8', '2026-08-28 18:31:13.258', 1, 'ACTIVE', '2026-09-06 00:00:00.000', 'NONE', 0, 2000.00, 0.00),
 ('cmtdafer6001qtrzrrbfpqd70', 'cmtdafer3001mtrzr4v3z0qbg', 'cmtd8mzzy000wt1yianll8le8', '2026-08-28 18:31:13.266', 1, 'ACTIVE', '2026-09-06 00:00:00.000', 'NONE', 0, 2000.00, 0.00),
@@ -591,7 +591,7 @@ ON DUPLICATE KEY UPDATE
   `monthlyFeeOverride` = VALUES(`monthlyFeeOverride`),
   `discount` = VALUES(`discount`);
 
-INSERT INTO `enrollment` (`id`, `studentId`, `classGroupId`, `enrolledAt`, `active`, `status`, `paymentStartDate`, `freePeriodType`, `freeDays`, `monthlyFeeOverride`, `discount`) VALUES
+INSERT INTO `Enrollment` (`id`, `studentId`, `classGroupId`, `enrolledAt`, `active`, `status`, `paymentStartDate`, `freePeriodType`, `freeDays`, `monthlyFeeOverride`, `discount`) VALUES
 ('cmtpzs10e015x1emzvw6fcfg2', 'cmtdaff1e00imtrzrn7c4b3ij', 'cmtd8n06d004ot1yis64w5bni', '2026-09-06 15:54:06.494', 1, 'ACTIVE', '2026-09-06 00:00:00.000', 'NONE', 0, 1500.00, 0.00),
 ('cmtpzt7qf01631emzrd8a2p6l', 'cmtpv2fay00wh1emzw6o9izto', 'cmtd8n0if00d0t1yilgwk2q5s', '2026-09-06 15:55:01.863', 1, 'ACTIVE', '2026-09-06 00:00:00.000', 'NONE', 0, 1500.00, 0.00),
 ('cmtpztl9y01651emzz8qnb4u0', 'cmtpuww5t00w61emz5tclvbo1', 'cmtd8n0t800lct1yitsn9uogf', '2026-09-06 15:55:19.414', 1, 'ACTIVE', '2026-09-06 00:00:00.000', 'NONE', 0, 1500.00, 0.00),
