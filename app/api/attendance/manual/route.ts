@@ -1,4 +1,4 @@
-import { AttendanceSource, AttendanceStatus } from "@prisma/client";
+import { AttendanceSource, AttendanceStatus, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { AttendanceAccessError, requireAttendanceScannerAccess } from "@/lib/attendance-access";
 import { markAttendanceByCredential } from "@/lib/attendance";
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       status: parsed.data.status as AttendanceStatus,
       source: AttendanceSource.MANUAL,
       searchMethod: parsed.data.method,
+      sendSms: parsed.data.sendSms,
       notes: parsed.data.notes
     });
 
@@ -31,6 +32,20 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof AttendanceAccessError) {
       return NextResponse.json({ ok: false, message: error.message }, { status: error.statusCode });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2028" || String(error.meta?.error ?? "").includes("Transaction already closed"))
+    ) {
+      return NextResponse.json({ ok: false, message: "Attendance is busy saving another mark. Please try again." }, { status: 409 });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientUnknownRequestError &&
+      (error.message.includes("Lock wait timeout") || error.message.includes("Lock wait timeout exceeded"))
+    ) {
+      return NextResponse.json({ ok: false, message: "Attendance is busy saving another mark. Please try again." }, { status: 409 });
     }
 
     console.error(error);

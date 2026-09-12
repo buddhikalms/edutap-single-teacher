@@ -44,6 +44,7 @@ type MarkInput = {
   scannedValue?: string;
   timestamp?: string;
   ipAddress?: string;
+  sendSms?: boolean;
   notes?: string;
 };
 
@@ -512,7 +513,7 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
         scanResult: duplicate ? CardScanResult.DUPLICATE_ATTENDANCE : CardScanResult.SUCCESS
       });
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
+    { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 60_000, maxWait: 10_000 }
   );
 
   if (txResult.student) {
@@ -530,7 +531,7 @@ export async function markAttendanceByCredential(input: MarkInput): Promise<Atte
     if (queuePayload) {
       queuePayload.payment = payment;
       try {
-        await enqueueAttendanceNotifications(queuePayload);
+        await enqueueAttendanceNotifications(queuePayload, { includeSms: input.sendSms });
       } catch (error) {
         console.error("Attendance notification enqueue failed", error);
       }

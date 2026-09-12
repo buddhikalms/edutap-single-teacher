@@ -24,7 +24,7 @@ const schema = z.object({
   password: strongPasswordSchema,
   confirmPassword: z.string(),
   studentName: z.string().trim().min(2, "Student name is required.").max(120),
-  studentMobile: z.string().trim().max(30).optional().or(z.literal("")),
+  avatarUrl: z.string().trim().max(500).optional().or(z.literal("")),
   message: z.string().trim().max(1500).optional().or(z.literal("")),
   paymentMade: z.enum(["yes", "no"]),
   agreement: z.literal("true"),
@@ -37,6 +37,22 @@ const schema = z.object({
 
 function normalizeMobile(value: string) {
   return value.replace(/[^\d+]/g, "");
+}
+
+async function generateAdmissionNo(tx: Prisma.TransactionClient, instituteId: string) {
+  const prefix = `STU-${new Date().getFullYear().toString().slice(-2)}-`;
+  const existing = await tx.student.findMany({
+    where: { instituteId, admissionNo: { startsWith: prefix } },
+    select: { admissionNo: true },
+    orderBy: { createdAt: "desc" },
+    take: 200
+  });
+  const max = existing.reduce((highest, student) => {
+    const sequence = Number(student.admissionNo.slice(prefix.length));
+    return Number.isFinite(sequence) ? Math.max(highest, sequence) : highest;
+  }, 0);
+
+  return `${prefix}${String(max + 1).padStart(4, "0")}`;
 }
 
 export async function POST(request: Request) {
@@ -74,7 +90,6 @@ export async function POST(request: Request) {
   }
 
   const parentMobile = normalizeMobile(parsed.data.parentMobile);
-  const studentMobile = parsed.data.studentMobile ? normalizeMobile(parsed.data.studentMobile) : null;
   const parentEmail = (parsed.data.parentEmail || "").toLowerCase() || null;
   const existing = await prisma.user.findFirst({
     where: { OR: [{ mobile: parentMobile }, ...(parentEmail ? [{ email: parentEmail }] : [])] },
@@ -84,13 +99,6 @@ export async function POST(request: Request) {
     const field = existing.mobile === parentMobile ? "mobile number" : "email address";
     return NextResponse.json({ message: `This ${field} already belongs to an EduTap Account. Please sign in instead.` }, { status: 409 });
   }
-  if (studentMobile && studentMobile === parentMobile) {
-    return NextResponse.json({ message: "Student mobile should be different from the EduTap Account mobile." }, { status: 409 });
-  }
-  if (studentMobile && await prisma.student.findFirst({ where: { instituteId: classGroup.instituteId, phone: studentMobile }, select: { id: true } })) {
-    return NextResponse.json({ message: "This student mobile number is already registered." }, { status: 409 });
-  }
-
   const owner = classGroup.teacher?.userId
     ? { id: classGroup.teacher.userId }
     : await prisma.user.findFirst({
@@ -105,7 +113,7 @@ export async function POST(request: Request) {
   try {
     if (paymentFile && storageKey) await savePaymentSlip(storageKey, paymentFile.bytes);
     const enrollmentRequest = await prisma.$transaction(async (tx) => {
-      const suffix = randomUUID().replaceAll("-", "");
+      const admissionNo = await generateAdmissionNo(tx, classGroup.instituteId);
       const familyUser = await tx.user.create({
         data: {
           name: parsed.data.parentName,
@@ -135,10 +143,10 @@ export async function POST(request: Request) {
       const nameParts = parsed.data.studentName.trim().split(/\s+/);
       const student = await tx.student.create({
         data: {
-          admissionNo: `PENDING-${suffix.slice(0, 12).toUpperCase()}`,
+          admissionNo,
           firstName: nameParts.shift() || parsed.data.studentName,
-          lastName: nameParts.join(" ") || "-",
-          phone: studentMobile,
+          lastName: nameParts.join(" "),
+          avatarUrl: parsed.data.avatarUrl || null,
           status: "PENDING_APPROVAL",
           instituteId: classGroup.instituteId,
           branchId: classGroup.branchId,
@@ -159,7 +167,7 @@ export async function POST(request: Request) {
           parentMobile,
           parentEmail,
           studentName: parsed.data.studentName,
-          studentMobile,
+          studentMobile: null,
           gradeId: classGroup.gradeId!,
           subjectId: classGroup.subjectId,
           classGroupId: classGroup.id,

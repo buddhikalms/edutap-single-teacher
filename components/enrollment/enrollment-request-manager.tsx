@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type RequestItem = {
   id: string;
+  admissionNo: string;
   studentName: string;
   studentMobile: string | null;
   studentEmail: string | null;
@@ -77,7 +78,7 @@ export function EnrollmentRequestManager({ requests }: { requests: RequestItem[]
         <p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</p>
       </div>
       <div className="mt-5 grid gap-4 rounded-2xl bg-muted/40 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-        <div><p className="text-muted-foreground">Student contact</p><p className="mt-1 font-medium">{item.studentMobile || "No student mobile"}</p><p>{item.studentEmail || "No email"}</p></div>
+        <div><p className="text-muted-foreground">Student ID</p><p className="mt-1 font-medium">{item.admissionNo || "Auto-generated ID"}</p><p>{item.studentName}</p></div>
         <div><p className="text-muted-foreground">Parent / guardian</p><p className="mt-1 font-medium">{item.parentName}</p><p>{item.parentMobile} · {item.parentEmail || "No email"}</p></div>
         <div><p className="text-muted-foreground">Message</p><p className="mt-1">{item.message || "No additional message."}</p></div>
       </div>
@@ -110,7 +111,7 @@ export function EnrollmentRequestManager({ requests }: { requests: RequestItem[]
       {item.status === "PENDING" || (item.status === "APPROVED" && item.paymentSlip?.status === "PENDING_REVIEW") ? <form className="mt-5 grid gap-3" onSubmit={(event) => event.preventDefault()}>
         <Textarea name="teacherNote" defaultValue={item.teacherNote || ""} placeholder="Teacher note (included in updates)" rows={2} />
         {item.status === "PENDING" ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="grid gap-1 text-sm"><span className="font-medium">Student ID</span><Input name="admissionNo" placeholder="e.g. STU-2026-001" required /></label>
+          <label className="grid gap-1 text-sm"><span className="font-medium">Student ID</span><Input name="admissionNo" defaultValue={item.admissionNo} required /></label>
           <label className="grid gap-1 text-sm"><span className="font-medium">Payment start date</span><Input type="date" name="paymentStartDate" defaultValue={item.paymentStartDate} /></label>
           <label className="grid gap-1 text-sm"><span className="font-medium">Free period</span><Select name="freePeriodType" defaultValue={item.freePeriodType}>
             <option value="NONE">None</option>

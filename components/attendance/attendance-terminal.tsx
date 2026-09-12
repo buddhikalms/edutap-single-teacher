@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { endAttendanceSession, startAttendanceSession } from "@/app/(dashboard)/attendance/actions";
+import { markDuePayment } from "@/app/(dashboard)/payments/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { AttendanceMarkResult } from "@/lib/attendance";
+import { formatCurrency } from "@/lib/utils";
 import type { AttendanceSessionStatus, AttendanceSource, AttendanceStatus } from "@prisma/client";
 
 type Status = AttendanceStatus;
@@ -37,6 +39,17 @@ export type AttendanceStudent = {
   admissionNo: string;
   nfcUid: string | null;
   attendanceToken: string;
+  monthlyPayment: {
+    month: string;
+    classGroupId: string;
+    fee: number;
+    paidAmount: number;
+    discount: number;
+    balance: number;
+    status: "PENDING" | "PAID" | "PARTIAL" | "OVERDUE";
+    dueDate: string;
+    receiptId: string | null;
+  } | null;
   paymentLabel: string;
   paymentStatus: "clear" | "pending" | "overdue" | "partial";
 };
@@ -124,12 +137,16 @@ export function AttendanceTerminal({
   classes,
   sessions,
   audits,
-  reports
+  reports,
+  month,
+  currency
 }: {
   classes: AttendanceClass[];
   sessions: AttendanceSessionView[];
   audits: AttendanceAudit[];
   reports: AttendanceReport;
+  month: string;
+  currency: string;
 }) {
   const [selectedClassId, setSelectedClassId] = useState(classes[0]?.id ?? "");
   const [selectedBranchId, setSelectedBranchId] = useState(classes[0]?.branchId ?? "");
@@ -148,6 +165,11 @@ export function AttendanceTerminal({
   const [isScanning, startScanTransition] = useTransition();
   const [isSearching, startSearchTransition] = useTransition();
   const [isSendingClassOver, startClassOverTransition] = useTransition();
+  const [isPaymentPending, startPaymentTransition] = useTransition();
+  const [markingStudentIds, setMarkingStudentIds] = useState<Set<string>>(() => new Set());
+  const [paymentEdits, setPaymentEdits] = useState<
+    Record<string, { paidAmount: number; discount: number; method: "CASH" | "BANK_TRANSFER" | "CARD" | "ONLINE" }>
+  >({});
   const webNfcAbortRef = useRef<AbortController | null>(null);
   const webNfcRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webNfcPostingRef = useRef(false);
@@ -165,6 +187,121 @@ export function AttendanceTerminal({
   const selectedClass = filteredClasses.find((classGroup) => classGroup.id === selectedClassId) ?? filteredClasses[0] ?? classes[0];
   const activeSession = selectedClass?.activeSession ?? null;
   const canScan = activeSession?.status === "ACTIVE";
+  const isMarkingAttendance = markingStudentIds.size > 0 || isScanning;
+  const monthlyRows = selectedClass?.students.filter((student) => student.monthlyPayment && student.monthlyPayment.balance > 0) ?? [];
+  const pendingPaymentAmount = monthlyRows.reduce((total, student) => total + (student.monthlyPayment?.balance ?? 0), 0);
+  const markedStatusByStudentId = useMemo(() => {
+    const map = new Map<string, AttendanceRecordView>();
+    for (const record of activeSession?.records ?? []) {
+      map.set(record.studentId, record);
+    }
+    return map;
+  }, [activeSession?.records]);
+
+  function paymentEditFor(student: AttendanceStudent) {
+    const payment = student.monthlyPayment;
+    return (
+      paymentEdits[student.id] ?? {
+        paidAmount: Math.max(0, payment?.balance ?? 0),
+        discount: payment?.discount ?? 0,
+        method: "CASH" as const
+      }
+    );
+  }
+
+  function updatePaymentEdit(
+    student: AttendanceStudent,
+    patch: Partial<{ paidAmount: number; discount: number; method: "CASH" | "BANK_TRANSFER" | "CARD" | "ONLINE" }>
+  ) {
+    setPaymentEdits((current) => ({ ...current, [student.id]: { ...paymentEditFor(student), ...patch } }));
+  }
+
+  function collectMonthlyPayment(student: AttendanceStudent) {
+    if (!student.monthlyPayment) {
+      toast.error("This student has no payable due for the selected month.");
+      return;
+    }
+
+    const edit = paymentEditFor(student);
+    startPaymentTransition(async () => {
+      const result = await markDuePayment({
+        classGroupId: student.monthlyPayment!.classGroupId,
+        month: student.monthlyPayment!.month,
+        studentId: student.id,
+        paidAmount: edit.paidAmount,
+        discount: edit.discount,
+        method: edit.method,
+        note: undefined,
+        receivedBy: undefined
+      });
+
+      if (result.ok) {
+        toast.success(result.message);
+        router.refresh();
+        if (result.receiptId) {
+          router.push(`/payments/receipts/${result.receiptId}`);
+        }
+      } else {
+        toast.error(result.message);
+      }
+    });
+  }
+
+  function askSendSms(studentName: string) {
+    return window.confirm(`Attendance marked for ${studentName}. Send SMS notification to the guardian now?`);
+  }
+
+  async function markStudentRow(student: AttendanceStudent, status: Status) {
+    if (markingStudentIds.has(student.id)) {
+      return;
+    }
+
+    if (!selectedClass) {
+      toast.error("Select a class first.");
+      return;
+    }
+
+    if (!canScan) {
+      toast.error("Start an attendance session before marking students.");
+      return;
+    }
+
+    const sendSms = askSendSms(student.name);
+    setMarkingStudentIds((current) => new Set(current).add(student.id));
+
+    startScanTransition(async () => {
+      try {
+        const response = await fetch("/api/attendance/manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            classGroupId: selectedClass.id,
+            studentId: student.id,
+            status,
+            method: "MANUAL_ID",
+            sendSms
+          })
+        });
+        const result = (await response.json()) as AttendanceMarkResult;
+        setFeedback(result);
+        setRecent((current) => [result, ...current].slice(0, 8));
+
+        if (result.ok) {
+          toast.success(sendSms ? `${result.message} SMS notification queued.` : result.message);
+          router.refresh();
+        } else {
+          toast.error(result.message);
+        }
+      } finally {
+        setMarkingStudentIds((current) => {
+          const next = new Set(current);
+          next.delete(student.id);
+          return next;
+        });
+      }
+    });
+  }
+
   const postScan = useCallback(
     async (endpoint: "nfc" | "qr", payload: Record<string, string>) => {
       const response = await fetch(`/api/attendance/${endpoint}`, {
@@ -404,6 +541,8 @@ export function AttendanceTerminal({
       return;
     }
 
+    const sendSms = askSendSms(student.name);
+
     startScanTransition(async () => {
       const response = await fetch("/api/attendance/manual", {
         method: "POST",
@@ -412,7 +551,8 @@ export function AttendanceTerminal({
           classGroupId: selectedClass.id,
           studentId: student.id,
           status,
-          method: "MANUAL_SEARCH"
+          method: "MANUAL_SEARCH",
+          sendSms
         })
       });
       const result = (await response.json()) as AttendanceMarkResult;
@@ -420,10 +560,11 @@ export function AttendanceTerminal({
       setRecent((current) => [result, ...current].slice(0, 8));
 
       if (result.ok) {
-        toast.success(result.message);
+        toast.success(sendSms ? `${result.message} SMS notification queued.` : result.message);
         setManualQuery("");
         setSearchResults([]);
         setSelectedStudent(null);
+        router.refresh();
       } else {
         toast.error(result.message);
       }
@@ -466,7 +607,7 @@ export function AttendanceTerminal({
           <div className="grid gap-3 md:grid-cols-3">
             <MiniMetric icon={CalendarCheck2} label="Sessions" value={String(sessions.length)} />
             <MiniMetric icon={UsersRound} label="Class students" value={String(selectedClass?.students.length ?? 0)} />
-            <MiniMetric icon={ScanLine} label="Recent scans" value={String(audits.length)} />
+            <MiniMetric icon={CreditCard} label="Pending dues" value={formatCurrency(pendingPaymentAmount, currency)} />
           </div>
         </div>
         <div className="mt-5">
@@ -479,6 +620,210 @@ export function AttendanceTerminal({
         </div>
       </section>
 
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Select class</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-[220px_1fr_auto] md:items-end">
+          <label className="space-y-2">
+            <span className="text-sm font-semibold">Branch / location</span>
+            <Select
+              value={selectedBranchId}
+              onChange={(event) => {
+                const nextBranchId = event.target.value;
+                const nextClass = classes.find((classGroup) => classGroup.branchId === nextBranchId);
+                setSelectedBranchId(nextBranchId);
+                setSelectedClassId(nextClass?.id ?? "");
+              }}
+            >
+              {branchOptions.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-semibold">Class</span>
+            <Select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}>
+              {filteredClasses.map((classGroup) => (
+                <option key={classGroup.id} value={classGroup.id}>
+                  {classGroup.name} - {classGroup.course}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <Badge variant={canScan ? "success" : activeSession?.status === "ENDED" ? "secondary" : "warning"} className="h-10 justify-center px-4">
+            {canScan ? "Session active" : activeSession?.status === "ENDED" ? "Session ended" : "Start session"}
+          </Badge>
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel">
+        <CardHeader>
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <CardTitle>Attendance terminal</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedClass?.name ?? "Select a class"} - {selectedClass?.students.length ?? 0} students
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={startSession} disabled={isPending || !selectedClass || canScan}>
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}
+                Start session
+              </Button>
+              <Button variant="outline" onClick={endSession} disabled={isPending || isMarkingAttendance || !activeSession || activeSession.status !== "ACTIVE"}>
+                <Clock className="h-4 w-4" />
+                End class
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {selectedClass?.students.length ? (
+            <div className="overflow-hidden rounded-xl border bg-white/75">
+              <div className="divide-y">
+                {selectedClass.students.map((student) => {
+                  const marked = markedStatusByStudentId.get(student.id);
+                  const isMarkingStudent = markingStudentIds.has(student.id);
+                  const payment = student.monthlyPayment;
+                  const paymentBadge =
+                    payment && payment.balance > 0
+                      ? `${payment.status === "OVERDUE" ? "Overdue" : "Pending"} ${formatCurrency(payment.balance, currency)}`
+                      : student.paymentLabel;
+
+                  return (
+                    <div key={student.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_220px_310px] md:items-center">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">{student.name}</p>
+                          {marked ? <Badge variant="success">{marked.status.toLowerCase()}</Badge> : <Badge variant="outline">not marked</Badge>}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{student.admissionNo}</p>
+                      </div>
+                      <div>
+                        <Badge variant={student.paymentStatus === "clear" ? "success" : student.paymentStatus === "overdue" ? "warning" : "outline"}>
+                          <CreditCard className="h-3 w-3" />
+                          {paymentBadge}
+                        </Badge>
+                        {payment?.dueDate ? <p className="mt-1 text-xs text-muted-foreground">Due {payment.dueDate}</p> : null}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button size="sm" onClick={() => markStudentRow(student, "PRESENT")} disabled={isMarkingStudent || !canScan}>
+                          {isMarkingStudent ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Present
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => markStudentRow(student, "LATE")} disabled={isMarkingStudent || !canScan}>
+                          Late
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => markStudentRow(student, "ABSENT")} disabled={isMarkingStudent || !canScan}>
+                          Absent
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed bg-white/60 p-8 text-center">
+              <p className="font-semibold">No students in this class</p>
+              <p className="mt-1 text-sm text-muted-foreground">Assign students to this class before marking attendance.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel">
+        <CardHeader>
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <CardTitle>Pending payments</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedClass?.name ?? "Selected class"} - {month}
+              </p>
+            </div>
+            <Badge variant={pendingPaymentAmount > 0 ? "warning" : "success"}>
+              Pending {formatCurrency(pendingPaymentAmount, currency)}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {monthlyRows.length ? (
+            <div className="overflow-hidden rounded-xl border bg-white/75">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead className="bg-muted/70">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Student</th>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Monthly fee</th>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Paid</th>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Balance</th>
+                      <th className="px-4 py-3 text-left font-semibold text-muted-foreground">Collect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyRows.map((student) => {
+                      const payment = student.monthlyPayment!;
+                      const edit = paymentEditFor(student);
+                      const isPaid = payment.status === "PAID";
+
+                      return (
+                        <tr key={student.id} className="border-t transition hover:bg-muted/40">
+                          <td className="px-4 py-4">
+                            <p className="font-semibold">{student.name}</p>
+                            <p className="text-xs text-muted-foreground">{student.admissionNo}</p>
+                          </td>
+                          <td className="px-4 py-4">
+                            <p className="font-semibold">{formatCurrency(payment.fee, currency)}</p>
+                            <p className="text-xs text-muted-foreground">Discount {formatCurrency(payment.discount, currency)}</p>
+                          </td>
+                          <td className="px-4 py-4">{formatCurrency(payment.paidAmount, currency)}</td>
+                          <td className="px-4 py-4">
+                            <p className="font-semibold">{formatCurrency(payment.balance, currency)}</p>
+                            <Badge variant={isPaid ? "success" : payment.status === "OVERDUE" ? "warning" : "outline"}>
+                              {payment.status.toLowerCase()}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="grid min-w-[220px] grid-cols-[1fr_auto] gap-2">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={edit.paidAmount}
+                                onChange={(event) => updatePaymentEdit(student, { paidAmount: Number(event.target.value) })}
+                                disabled={isPaid}
+                                aria-label={`Paid amount for ${student.name}`}
+                              />
+                              {isPaid && payment.receiptId ? (
+                                <Button asChild variant="outline" size="sm">
+                                  <Link href={`/payments/receipts/${payment.receiptId}`}>Receipt</Link>
+                                </Button>
+                              ) : (
+                                <Button size="sm" onClick={() => collectMonthlyPayment(student)} disabled={isPaymentPending || isPaid}>
+                                  {isPaymentPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                                  Pay
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed bg-white/60 p-8 text-center">
+              <p className="font-semibold">No monthly dues for this class</p>
+              <p className="mt-1 text-sm text-muted-foreground">Students may still be inside a free period or not actively enrolled.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <section className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
         <Card className="glass-panel">
           <CardHeader>
@@ -486,34 +831,11 @@ export function AttendanceTerminal({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-sm font-semibold">Branch / location</span>
-                <Select
-                  value={selectedBranchId}
-                  onChange={(event) => {
-                    const nextBranchId = event.target.value;
-                    const nextClass = classes.find((classGroup) => classGroup.branchId === nextBranchId);
-                    setSelectedBranchId(nextBranchId);
-                    setSelectedClassId(nextClass?.id ?? "");
-                  }}
-                >
-                  {branchOptions.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className="space-y-2">
-                <span className="text-sm font-semibold">Class</span>
-                <Select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}>
-                  {filteredClasses.map((classGroup) => (
-                    <option key={classGroup.id} value={classGroup.id}>
-                      {classGroup.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+              <div className="rounded-xl border bg-white/70 p-4">
+                <p className="text-sm font-semibold">Selected class</p>
+                <p className="mt-1 text-lg font-semibold">{selectedClass?.name ?? "No class selected"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{selectedClass?.branch ?? ""}</p>
+              </div>
               <label className="space-y-2">
                 <span className="text-sm font-semibold">Date</span>
                 <Input type="date" value={sessionDate} onChange={(event) => setSessionDate(event.target.value)} />
@@ -528,7 +850,7 @@ export function AttendanceTerminal({
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />}
                 Start attendance session
               </Button>
-              <Button variant="outline" onClick={endSession} disabled={isPending || !activeSession || activeSession.status !== "ACTIVE"}>
+              <Button variant="outline" onClick={endSession} disabled={isPending || isMarkingAttendance || !activeSession || activeSession.status !== "ACTIVE"}>
                 <Clock className="h-4 w-4" />
                 End Class
               </Button>

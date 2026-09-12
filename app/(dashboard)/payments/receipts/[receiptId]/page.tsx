@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Building2 } from "lucide-react";
-import { PrintButton } from "@/components/payments/print-button";
+import { DownloadPdfButton, PrintButton, SharePdfButton, WhatsAppShareButton } from "@/components/payments/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,19 +33,11 @@ export default async function ReceiptPage({ params }: { params: Promise<{ receip
   const payment = receipt.payment;
   const student = payment.student;
   const currency = receipt.institute.settings?.currency ?? "USD";
+  const studentName = `${student.firstName} ${student.lastName}`.trim();
+  const shareText = `Invoice ${payment.invoiceNo} / Receipt ${receipt.receiptNo} for ${studentName}: ${formatCurrency(receipt.amount.toString(), currency)}`;
 
   return (
     <div className="space-y-6">
-      <style>{`
-        @media print {
-          body { background: white !important; }
-          header, aside, .no-print { display: none !important; }
-          .receipt-wrap { box-shadow: none !important; border: none !important; width: 100% !important; }
-          .receipt-paper { max-width: 794px; margin: 0 auto; }
-        }
-        @page { size: A4; margin: 14mm; }
-      `}</style>
-
       <div className="no-print flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <Button asChild variant="outline">
           <Link href="/payments">
@@ -53,10 +45,15 @@ export default async function ReceiptPage({ params }: { params: Promise<{ receip
             Payments
           </Link>
         </Button>
-        <PrintButton />
+        <div className="flex flex-wrap gap-2">
+          <DownloadPdfButton receiptId={receipt.id} />
+          <SharePdfButton receiptId={receipt.id} text={shareText} />
+          <WhatsAppShareButton text={shareText} />
+          <PrintButton />
+        </div>
       </div>
 
-      <Card className="receipt-wrap glass-panel mx-auto max-w-3xl">
+      <Card data-print-root className="receipt-wrap glass-panel mx-auto max-w-3xl">
         <CardContent className="receipt-paper p-8">
           <div className="flex items-start justify-between gap-6 border-b pb-6">
             <div className="flex items-center gap-4">
@@ -79,7 +76,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ receip
           <div className="grid gap-6 border-b py-6 md:grid-cols-2">
             <div>
               <p className="text-sm font-semibold text-muted-foreground">Received from</p>
-              <p className="mt-2 text-lg font-semibold">{student.firstName} {student.lastName}</p>
+              <p className="mt-2 text-lg font-semibold">{studentName}</p>
               <p className="text-sm text-muted-foreground">{student.admissionNo} · {student.branch.name}</p>
             </div>
             <div>

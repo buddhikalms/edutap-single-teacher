@@ -12,10 +12,9 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
-import { CreditCard, Eye, KeyRound, Loader2, Pencil, Plus, QrCode, Radio, Search, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { Eye, KeyRound, Loader2, Pencil, Plus, Search, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { createStudent, deleteStudent, updateStudent } from "@/app/(dashboard)/students/actions";
-import { QrCodeScanner } from "@/components/cards/camera-qr-scanner";
 import { FieldRow, FormField, FormShell } from "@/components/forms/form-shell";
 import { ImageUploadInput } from "@/components/forms/image-upload-input";
 import { Badge } from "@/components/ui/badge";
@@ -26,27 +25,12 @@ import { Select } from "@/components/ui/select";
 import { studentSchema, type StudentInput } from "@/lib/validations";
 import { formatCurrency } from "@/lib/utils";
 
-type WebNfcReadingEvent = Event & {
-  serialNumber?: string;
-};
-
-type WebNfcReader = {
-  scan: (options?: { signal?: AbortSignal }) => Promise<void>;
-  onreading: ((event: WebNfcReadingEvent) => void) | null;
-  onreadingerror: (() => void) | null;
-};
-
-declare global {
-  interface Window {
-    NDEFReader?: new () => WebNfcReader;
-  }
-}
-
 export type StudentRow = {
   id: string;
   admissionNo: string;
   firstName: string;
   lastName: string;
+  fullName: string;
   name: string;
   email: string | null;
   phone: string | null;
@@ -65,6 +49,7 @@ export type StudentRow = {
   activeDevice: string | null;
   branchId: string;
   branch: string;
+  classGroupId: string;
   classes: string;
   parentName: string;
   parentRelationship: "Father" | "Mother" | "Guardian" | "Other";
@@ -85,59 +70,45 @@ export type BranchOption = {
   name: string;
 };
 
+export type ClassOption = {
+  id: string;
+  name: string;
+  branchName: string;
+};
+
 const emptyStudent: StudentInput = {
-  admissionNo: "",
-  firstName: "",
-  lastName: "",
-  email: undefined,
-  phone: undefined,
+  admissionNo: undefined,
+  fullName: "",
   dateOfBirth: undefined,
   status: "ACTIVE",
   avatarUrl: undefined,
-  cardNumber: undefined,
-  nfcUid: undefined,
-  qrCode: undefined,
-  qrToken: undefined,
-  branchId: "",
+  classGroupId: "",
   parentName: "",
   parentRelationship: "Guardian",
   parentEmail: undefined,
   parentPhone: "",
-  parentNic: undefined,
   parentAddress: undefined,
-  parentAppLogin: "",
-  emergencyContactNumber: "",
-  parentOccupation: undefined
+  emergencyContactNumber: undefined
 };
 
 function rowToInput(row: StudentRow): StudentInput {
   return {
     admissionNo: row.admissionNo,
-    firstName: row.firstName,
-    lastName: row.lastName,
-    email: row.email ?? undefined,
-    phone: row.phone ?? undefined,
+    fullName: row.fullName,
     dateOfBirth: row.dateOfBirth || undefined,
     status: row.status,
     avatarUrl: row.avatarUrl ?? undefined,
-    cardNumber: row.cardNumber ?? undefined,
-    nfcUid: row.nfcUid ?? undefined,
-    qrCode: row.qrCode ?? undefined,
-    qrToken: row.qrToken ?? undefined,
-    branchId: row.branchId,
+    classGroupId: row.classGroupId,
     parentName: row.parentName,
     parentRelationship: row.parentRelationship,
     parentEmail: row.parentEmail ?? undefined,
     parentPhone: row.parentPhone,
-    parentNic: row.parentNic ?? undefined,
     parentAddress: row.parentAddress ?? undefined,
-    parentAppLogin: row.parentAppLogin,
-    emergencyContactNumber: row.emergencyContactNumber,
-    parentOccupation: row.parentOccupation ?? undefined
+    emergencyContactNumber: row.emergencyContactNumber || undefined
   };
 }
 
-export function StudentsTable({ data, branches, currency }: { data: StudentRow[]; branches: BranchOption[]; currency: string }) {
+export function StudentsTable({ data, classes, currency }: { data: StudentRow[]; classes: ClassOption[]; currency: string }) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [editing, setEditing] = useState<StudentRow | null>(null);
@@ -287,8 +258,8 @@ export function StudentsTable({ data, branches, currency }: { data: StudentRow[]
       {isCreating ? (
         <StudentPanel
           title="Add student"
-          branches={branches}
-          defaultValues={{ ...emptyStudent, branchId: branches[0]?.id ?? "" }}
+          classes={classes}
+          defaultValues={{ ...emptyStudent, classGroupId: classes[0]?.id ?? "" }}
           onClose={() => setIsCreating(false)}
           onSubmit={async (values) => createStudent(values)}
         />
@@ -297,7 +268,7 @@ export function StudentsTable({ data, branches, currency }: { data: StudentRow[]
       {editing ? (
         <StudentPanel
           title="Edit student"
-          branches={branches}
+          classes={classes}
           defaultValues={rowToInput(editing)}
           onClose={() => setEditing(null)}
           onSubmit={async (values) => updateStudent(editing.id, values)}
@@ -329,67 +300,22 @@ export function StudentsTable({ data, branches, currency }: { data: StudentRow[]
 
 function StudentPanel({
   title,
-  branches,
+  classes,
   defaultValues,
   onClose,
   onSubmit
 }: {
   title: string;
-  branches: BranchOption[];
+  classes: ClassOption[];
   defaultValues: StudentInput;
   onClose: () => void;
   onSubmit: (values: StudentInput) => Promise<{ ok: boolean; message: string }>;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [nfcScanning, setNfcScanning] = useState(false);
-  const [qrScanning, setQrScanning] = useState(false);
   const form = useForm<StudentInput>({
     resolver: zodResolver(studentSchema),
     defaultValues
   });
-
-  async function scanWebNfcCard() {
-    if (typeof window === "undefined" || !window.NDEFReader) {
-      toast.error("Web NFC is not available in this browser. Use the mobile app or enter the UID manually.");
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 20000);
-
-    setNfcScanning(true);
-
-    try {
-      const reader = new window.NDEFReader();
-      await reader.scan({ signal: controller.signal });
-      toast.info("Hold the NFC card near this device.");
-
-      reader.onreading = (event) => {
-        window.clearTimeout(timeout);
-        controller.abort();
-        setNfcScanning(false);
-
-        if (!event.serialNumber) {
-          toast.error("Card was read, but the browser did not expose a serial number.");
-          return;
-        }
-
-        form.setValue("nfcUid", event.serialNumber, { shouldDirty: true, shouldValidate: true });
-        toast.success("NFC UID captured.");
-      };
-
-      reader.onreadingerror = () => {
-        window.clearTimeout(timeout);
-        controller.abort();
-        setNfcScanning(false);
-        toast.error("Could not read NFC card. Try again or enter the UID manually.");
-      };
-    } catch (error) {
-      window.clearTimeout(timeout);
-      setNfcScanning(false);
-      toast.error(error instanceof Error ? error.message : "Could not start Web NFC scan.");
-    }
-  }
 
   function submit(values: StudentInput) {
     startTransition(async () => {
@@ -418,36 +344,21 @@ function StudentPanel({
         </div>
 
         <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-          <FormShell title="Student details" description="Core identity, branch assignment, and access identifiers.">
+          <FormShell title="Student details" description="Core identity and class assignment.">
             <div className="space-y-4">
               <FieldRow>
-                <FormField label="Admission number" error={form.formState.errors.admissionNo?.message}>
-                  <Input {...form.register("admissionNo")} />
+                <FormField label="Full name" error={form.formState.errors.fullName?.message}>
+                  <Input {...form.register("fullName")} />
                 </FormField>
-                <FormField label="Branch" error={form.formState.errors.branchId?.message}>
-                  <Select {...form.register("branchId")}>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
+                <FormField label="Class" error={form.formState.errors.classGroupId?.message}>
+                  <Select {...form.register("classGroupId")}>
+                    <option value="">Select class</option>
+                    {classes.map((classGroup) => (
+                      <option key={classGroup.id} value={classGroup.id}>
+                        {classGroup.name} - {classGroup.branchName}
                       </option>
                     ))}
                   </Select>
-                </FormField>
-              </FieldRow>
-              <FieldRow>
-                <FormField label="First name" error={form.formState.errors.firstName?.message}>
-                  <Input {...form.register("firstName")} />
-                </FormField>
-                <FormField label="Last name" error={form.formState.errors.lastName?.message}>
-                  <Input {...form.register("lastName")} />
-                </FormField>
-              </FieldRow>
-              <FieldRow>
-                <FormField label="Email" error={form.formState.errors.email?.message}>
-                  <Input type="email" {...form.register("email")} />
-                </FormField>
-                <FormField label="Phone" error={form.formState.errors.phone?.message}>
-                  <Input {...form.register("phone")} />
                 </FormField>
               </FieldRow>
               <FieldRow>
@@ -463,59 +374,7 @@ function StudentPanel({
                   </Select>
                 </FormField>
               </FieldRow>
-              <div className="rounded-xl border bg-white/75 p-4">
-                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                  <div>
-                    <p className="flex items-center gap-2 font-semibold">
-                      <CreditCard className="h-4 w-4 text-primary" />
-                      Student card assignment
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">Scan or enter the physical NFC and QR identifiers printed on the student card.</p>
-                  </div>
-                  <Badge variant="success" className="w-fit">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Active on save
-                  </Badge>
-                </div>
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <FormField label="Card number" error={form.formState.errors.cardNumber?.message}>
-                    <Input placeholder="CARD-0001" {...form.register("cardNumber")} />
-                  </FormField>
-                  <FormField label="NFC UID" error={form.formState.errors.nfcUid?.message}>
-                    <div className="flex gap-2">
-                      <Input placeholder="04:A1:..." {...form.register("nfcUid")} />
-                      <Button type="button" variant="outline" onClick={scanWebNfcCard} disabled={nfcScanning}>
-                        {nfcScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
-                        Read
-                      </Button>
-                    </div>
-                  </FormField>
-                  <FormField label="QR code value" error={form.formState.errors.qrCode?.message}>
-                    <div className="flex gap-2">
-                      <Input placeholder="QR-STUDENT-1001" {...form.register("qrCode")} />
-                      <Button type="button" variant="outline" onClick={() => setQrScanning(true)}><QrCode className="h-4 w-4" />Scan</Button>
-                    </div>
-                  </FormField>
-                  <FormField label="QR token" error={form.formState.errors.qrToken?.message}>
-                    <div className="flex gap-2">
-                      <Input placeholder="Leave blank to use QR code or auto-token" {...form.register("qrToken")} />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          const token = `QR-${crypto.randomUUID()}`;
-                          form.setValue("qrToken", token, { shouldDirty: true, shouldValidate: true });
-                          toast.success("QR token generated.");
-                        }}
-                      >
-                        <QrCode className="h-4 w-4" />
-                        Generate
-                      </Button>
-                    </div>
-                  </FormField>
-                </div>
-              </div>
-              <FormField label="Student photo" error={form.formState.errors.avatarUrl?.message}>
+              <FormField label="Profile image (optional)" error={form.formState.errors.avatarUrl?.message}>
                 <ImageUploadInput
                   defaultValue={form.getValues("avatarUrl")}
                   onUploaded={(url) => form.setValue("avatarUrl", url || undefined, { shouldDirty: true, shouldValidate: true })}
@@ -544,25 +403,12 @@ function StudentPanel({
                   <Input {...form.register("parentPhone")} />
                 </FormField>
                 <FormField label="Emergency contact" error={form.formState.errors.emergencyContactNumber?.message}>
-                  <Input {...form.register("emergencyContactNumber")} />
+                  <Input placeholder="Optional - uses guardian phone if blank" {...form.register("emergencyContactNumber")} />
                 </FormField>
               </FieldRow>
-              <FieldRow>
-                <FormField label="Guardian email" error={form.formState.errors.parentEmail?.message}>
-                  <Input type="email" {...form.register("parentEmail")} />
-                </FormField>
-                <FormField label="Parent app login mobile/email" error={form.formState.errors.parentAppLogin?.message}>
-                  <Input {...form.register("parentAppLogin")} />
-                </FormField>
-              </FieldRow>
-              <FieldRow>
-                <FormField label="Parent NIC" error={form.formState.errors.parentNic?.message}>
-                  <Input {...form.register("parentNic")} />
-                </FormField>
-                <FormField label="Occupation" error={form.formState.errors.parentOccupation?.message}>
-                  <Input {...form.register("parentOccupation")} />
-                </FormField>
-              </FieldRow>
+              <FormField label="Guardian email (optional)" error={form.formState.errors.parentEmail?.message}>
+                <Input type="email" {...form.register("parentEmail")} />
+              </FormField>
               <FormField label="Parent address" error={form.formState.errors.parentAddress?.message}>
                 <Input {...form.register("parentAddress")} />
               </FormField>
@@ -580,12 +426,6 @@ function StudentPanel({
           </div>
         </form>
       </div>
-      <QrCodeScanner open={qrScanning} onClose={() => setQrScanning(false)} onScan={(value) => {
-        form.setValue("qrCode", value, { shouldDirty: true, shouldValidate: true });
-        form.setValue("qrToken", value, { shouldDirty: true, shouldValidate: true });
-        setQrScanning(false);
-        toast.success("QR code captured and assigned.");
-      }} />
     </div>
   );
 }

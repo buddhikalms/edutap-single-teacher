@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { BookOpenCheck, CalendarClock, CheckCircle2, CreditCard, Loader2, Send, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
+import { ImageUploadInput } from "@/components/forms/image-upload-input";
 import { PaymentSlipUpload } from "@/components/payments/payment-slip-upload";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -127,14 +128,12 @@ export function EnrollmentRequestForm({ classes, selectedClassId }: { classes: C
       </FormSection>
 
       <FormSection icon={<UserRound className="h-4 w-4" />} title="Student details" description="Enter the student information needed for enrollment.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Student full name" required>
-            <Input name="studentName" autoComplete="name" required />
-          </Field>
-          <Field label="Student mobile">
-            <Input name="studentMobile" inputMode="tel" autoComplete="tel" placeholder="Optional" />
-          </Field>
-        </div>
+        <Field label="Student full name" required>
+          <Input name="studentName" autoComplete="name" required />
+        </Field>
+        <Field label="Profile image">
+          <ImageUploadInput name="avatarUrl" />
+        </Field>
         <Field label="Message to the teacher">
           <Textarea name="message" rows={3} placeholder="Optional note about the student, preferred batch, or learning goals" />
         </Field>

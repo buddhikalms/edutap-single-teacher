@@ -3,6 +3,7 @@ import type { AttendanceSessionStatus, AttendanceSource, AttendanceStatus } from
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
 import { formatCurrency } from "@/lib/utils";
+import { firstPayableDate, paymentDueDate, shouldGenerateDueForMonth } from "@/lib/payments";
 
 function dayRange(date = new Date()) {
   const start = new Date(date);
@@ -26,6 +27,11 @@ function paymentSummary(payments: Array<{ amount: unknown; balance: unknown; sta
     paymentLabel: `${overdue ? "Overdue" : partial ? "Partial" : "Pending"} ${formatCurrency(amount, currency)}`,
     paymentStatus: overdue ? ("overdue" as const) : partial ? ("partial" as const) : ("pending" as const)
   };
+}
+
+function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function sessionView(session: {
@@ -75,6 +81,8 @@ function sessionView(session: {
 export default async function AttendancePage() {
   const { instituteId } = await getTenantContext();
   const { start, end } = dayRange();
+  const month = currentMonth();
+  const now = new Date();
 
   const [classes, sessions, audits, allRecords, settings] = await Promise.all([
     prisma.classGroup.findMany({
@@ -88,7 +96,9 @@ export default async function AttendancePage() {
           include: {
             student: {
               include: {
-                payments: true
+                payments: {
+                  include: { receipts: { orderBy: { issuedAt: "desc" }, take: 1 } }
+                }
               }
             }
           },
@@ -164,12 +174,45 @@ export default async function AttendancePage() {
     activeSession: classGroup.attendanceSessions[0] ? sessionView(classGroup.attendanceSessions[0]) : null,
     students: classGroup.enrollments.map((enrollment) => {
       const payment = paymentSummary(enrollment.student.payments, currency);
+      const existingPayment = enrollment.student.payments.find(
+        (item) => item.classGroupId === classGroup.id && item.month === month && item.type === "MONTHLY_FEE" && item.status !== "CANCELLED"
+      );
+      const firstPayableAt = firstPayableDate({
+        paymentStartDate: enrollment.paymentStartDate,
+        enrolledAt: enrollment.enrolledAt,
+        freePeriodType: enrollment.freePeriodType,
+        freeDays: enrollment.freeDays
+      });
+      const fee = Number(enrollment.monthlyFeeOverride ?? classGroup.monthlyFee ?? 0);
+      const discount = existingPayment ? Number(existingPayment.discount) : Number(enrollment.discount);
+      const dueDate = paymentDueDate(month, classGroup.defaultPaymentDueDay);
+      const balance = existingPayment ? Number(existingPayment.balance) : Math.max(0, fee - discount);
+      const status = existingPayment
+        ? (existingPayment.status as "PENDING" | "PAID" | "PARTIAL" | "OVERDUE")
+        : dueDate < now
+          ? "OVERDUE"
+          : "PENDING";
+      const shouldBillThisMonth = Boolean(existingPayment) || shouldGenerateDueForMonth(month, firstPayableAt);
+
       return {
         id: enrollment.student.id,
         name: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
         admissionNo: enrollment.student.admissionNo,
         nfcUid: enrollment.student.nfcUid,
         attendanceToken: enrollment.student.attendanceToken ?? "",
+        monthlyPayment: shouldBillThisMonth
+          ? {
+              month,
+              classGroupId: classGroup.id,
+              fee,
+              paidAmount: existingPayment ? Number(existingPayment.paidAmount) : 0,
+              discount,
+              balance,
+              status,
+              dueDate: dueDate.toLocaleDateString(),
+              receiptId: existingPayment?.receipts[0]?.id ?? null
+            }
+          : null,
         ...payment
       };
     })
@@ -235,6 +278,8 @@ export default async function AttendancePage() {
         createdAt: audit.createdAt.toLocaleTimeString()
       }))}
       reports={reports}
+      month={month}
+      currency={currency}
     />
   );
 }

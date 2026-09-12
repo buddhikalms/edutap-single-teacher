@@ -1,11 +1,11 @@
-import { StudentsTable, type StudentRow } from "@/components/students/students-table";
+import { StudentsTable, type ClassOption, type StudentRow } from "@/components/students/students-table";
 import { prisma } from "@/lib/prisma";
 import { getTenantContext } from "@/lib/session";
 
 export default async function StudentsPage() {
   const { instituteId } = await getTenantContext();
 
-  const [students, branches, settings] = await Promise.all([
+  const [students, classes, settings] = await Promise.all([
     prisma.student.findMany({
       where: { instituteId },
       include: {
@@ -32,9 +32,9 @@ export default async function StudentsPage() {
       },
       orderBy: { createdAt: "desc" }
     }),
-    prisma.branch.findMany({
+    prisma.classGroup.findMany({
       where: { instituteId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, branch: { select: { name: true } } },
       orderBy: { name: "asc" }
     }),
     prisma.instituteSettings.findUnique({
@@ -43,12 +43,19 @@ export default async function StudentsPage() {
     })
   ]);
 
+  const classOptions: ClassOption[] = classes.map((classGroup) => ({
+    id: classGroup.id,
+    name: classGroup.name,
+    branchName: classGroup.branch.name
+  }));
+
   const rows: StudentRow[] = students.map((student) => ({
     id: student.id,
     admissionNo: student.admissionNo,
     firstName: student.firstName,
     lastName: student.lastName,
-    name: `${student.firstName} ${student.lastName}`,
+    fullName: `${student.firstName} ${student.lastName === "-" ? "" : student.lastName}`.trim(),
+    name: `${student.firstName} ${student.lastName === "-" ? "" : student.lastName}`.trim(),
     email: student.email,
     phone: student.phone,
     status: student.status,
@@ -66,6 +73,7 @@ export default async function StudentsPage() {
     dateOfBirth: student.dateOfBirth ? student.dateOfBirth.toISOString().slice(0, 10) : "",
     branchId: student.branchId,
     branch: student.branch.name,
+    classGroupId: student.enrollments[0]?.classGroupId ?? classOptions[0]?.id ?? "",
     classes: student.enrollments.map((enrollment) => enrollment.classGroup.name).join(", ") || "Not enrolled",
     parentName: student.parents[0]?.name ?? "",
     parentRelationship: (student.parents[0]?.relationship as StudentRow["parentRelationship"] | null) ?? "Guardian",
@@ -88,5 +96,5 @@ export default async function StudentsPage() {
         : Math.round((student.attendance.filter((record) => record.status === "PRESENT").length / student.attendance.length) * 100)
   }));
 
-  return <StudentsTable data={rows} branches={branches} currency={settings?.currency ?? "USD"} />;
+  return <StudentsTable data={rows} classes={classOptions} currency={settings?.currency ?? "USD"} />;
 }

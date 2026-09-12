@@ -31,13 +31,14 @@ function shouldProcessDatabaseQueueInline() {
   return process.env.NOTIFICATION_QUEUE_INLINE !== "false";
 }
 
-export async function enqueueAttendanceNotifications(payload: AttendanceNotificationPayload) {
+export async function enqueueAttendanceNotifications(payload: AttendanceNotificationPayload, options?: { includeSms?: boolean }) {
   const jobs: Array<{ jobType: string; channel: QueueChannel }> = [
     { jobType: "PARENT_ATTENDANCE", channel: "PARENT_PUSH" },
     { jobType: "STUDENT_WEB_ATTENDANCE", channel: "WEB_PUSH" }
   ];
 
-  if (process.env.ATTENDANCE_SMS_ENABLED === "true") {
+  const includeSms = options?.includeSms ?? process.env.ATTENDANCE_SMS_ENABLED === "true";
+  if (includeSms) {
     jobs.push({ jobType: "ATTENDANCE_SMS", channel: "SMS" });
   }
 

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { PrintButton } from "@/components/payments/print-button";
+import { DownloadPdfButton, PrintButton, SharePdfButton, WhatsAppShareButton } from "@/components/payments/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPortalContext } from "@/lib/portal";
@@ -35,12 +35,18 @@ export default async function PortalReceiptPage({ params }: ReceiptPageProps) {
     notFound();
   }
 
+  const studentName = `${receipt.payment.student.firstName} ${receipt.payment.student.lastName}`.trim();
+  const shareText = `Invoice ${receipt.payment.invoiceNo} / Receipt ${receipt.receiptNo} for ${studentName}: ${formatCurrency(Number(receipt.amount), context.currency)}`;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex justify-end print:hidden">
+      <div className="no-print flex flex-wrap justify-end gap-2">
+        <DownloadPdfButton receiptId={receipt.id} />
+        <SharePdfButton receiptId={receipt.id} text={shareText} />
+        <WhatsAppShareButton text={shareText} />
         <PrintButton />
       </div>
-      <Card className="print:shadow-none">
+      <Card data-print-root className="print:shadow-none">
         <CardContent className="p-8">
           <div className="flex flex-col gap-6 border-b pb-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -59,7 +65,7 @@ export default async function PortalReceiptPage({ params }: ReceiptPageProps) {
             <div>
               <p className="text-sm text-muted-foreground">Student</p>
               <p className="mt-1 font-semibold">
-                {receipt.payment.student.firstName} {receipt.payment.student.lastName}
+                {studentName}
               </p>
               <p className="text-sm text-muted-foreground">{receipt.payment.student.admissionNo}</p>
             </div>

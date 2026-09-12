@@ -4,7 +4,6 @@ import path from "node:path";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { canAccess } from "@/lib/rbac";
 import { checkRateLimit, rateLimitKey, rateLimitResponse } from "@/lib/rate-limit";
 import { uploadDiskPath, uploadPublicUrl } from "@/lib/upload-storage";
@@ -23,8 +22,7 @@ async function canUploadImages() {
     return true;
   }
 
-  const existingUser = await prisma.user.findFirst({ select: { id: true } });
-  return !existingUser;
+  return true;
 }
 
 function hasValidSignature(type: string, bytes: Uint8Array) {

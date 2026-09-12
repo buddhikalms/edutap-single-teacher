@@ -93,28 +93,18 @@ export const studentSelfRegistrationSchema = z.object({
 });
 
 export const studentSchema = z.object({
-  admissionNo: z.string().trim().min(1, "Admission number is required."),
-  firstName: z.string().trim().min(1, "First name is required."),
-  lastName: z.string().trim().min(1, "Last name is required."),
-  email: optionalEmail,
-  phone: optionalText,
+  admissionNo: optionalText,
+  fullName: z.string().trim().min(2, "Full name is required."),
   dateOfBirth: optionalText,
-  status: z.enum(["PENDING_APPROVAL", "ACTIVE", "REJECTED", "PAUSED", "GRADUATED", "ARCHIVED"]),
+  status: z.enum(["PENDING_APPROVAL", "ACTIVE", "REJECTED", "PAUSED", "GRADUATED", "ARCHIVED"]).default("ACTIVE"),
   avatarUrl: optionalText,
-  cardNumber: optionalText,
-  nfcUid: optionalText,
-  qrCode: optionalText,
-  qrToken: optionalText,
-  branchId: z.string().min(1, "Branch is required."),
+  classGroupId: z.string().min(1, "Class is required."),
   parentName: z.string().trim().min(1, "Guardian name is required."),
   parentRelationship: z.enum(["Father", "Mother", "Guardian", "Other"]),
   parentEmail: optionalEmail,
   parentPhone: z.string().trim().min(1, "Guardian phone is required."),
-  parentNic: optionalText,
   parentAddress: optionalText,
-  parentAppLogin: z.string().trim().min(1, "Parent app login mobile or email is required."),
-  emergencyContactNumber: z.string().trim().min(1, "Emergency contact number is required."),
-  parentOccupation: optionalText
+  emergencyContactNumber: optionalText
 });
 
 export const cardAssignmentSchema = z.object({
@@ -347,6 +337,7 @@ export const manualIdAttendanceSchema = z.object({
   studentId: z.string().min(1, "Student is required."),
   status: z.enum(["PRESENT", "ABSENT", "LATE", "EXCUSED"]).default("PRESENT"),
   method: z.enum(["MANUAL_ID", "MANUAL_SEARCH"]).default("MANUAL_SEARCH"),
+  sendSms: z.boolean().optional(),
   notes: optionalText
 });
 

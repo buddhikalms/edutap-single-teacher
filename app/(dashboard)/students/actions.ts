@@ -6,69 +6,74 @@ import { Prisma, StudentStatus } from "@prisma/client";
 import { actionError, type ActionState, getTenantContext } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { studentSchema, type StudentInput } from "@/lib/validations";
-import { normalizeNfcUid } from "@/lib/nfc";
 import { findOrCreateParent } from "@/lib/parent-registration";
-import { assignOrUpdateActiveCard, hasCardCredential } from "@/lib/student-cards";
 
 function toDate(value?: string) {
   return value ? new Date(value) : null;
 }
 
-function studentData(input: StudentInput, instituteId: string) {
-  const normalizedNfcUid = normalizeNfcUid(input.nfcUid);
+function splitFullName(fullName: string) {
+  const parts = fullName.trim().replace(/\s+/g, " ").split(" ");
+  const firstName = parts.shift() ?? fullName.trim();
+  const lastName = parts.join(" ");
 
+  return { firstName, lastName };
+}
+
+function studentData(input: StudentInput, instituteId: string, admissionNo: string, branchId: string) {
+  const { firstName, lastName } = splitFullName(input.fullName);
   return {
-    admissionNo: input.admissionNo,
-    firstName: input.firstName,
-    lastName: input.lastName,
-    email: input.email ?? null,
-    phone: input.phone ?? null,
+    admissionNo,
+    firstName,
+    lastName,
+    email: null,
+    phone: null,
     dateOfBirth: toDate(input.dateOfBirth),
     status: input.status as StudentStatus,
     avatarUrl: input.avatarUrl ?? null,
-    nfcUid: normalizedNfcUid || null,
-    qrCode: input.qrCode ?? null,
-    branchId: input.branchId,
+    branchId,
     instituteId
   };
 }
 
-async function assertUniqueNfcUid(instituteId: string, nfcUid: string | undefined, currentStudentId?: string) {
-  const normalizedNfcUid = normalizeNfcUid(nfcUid);
-
-  if (!normalizedNfcUid) {
-    return;
-  }
-
-  const existingStudents = await prisma.student.findMany({
-    where: {
-      instituteId,
-      nfcUid: { not: null },
-      ...(currentStudentId ? { id: { not: currentStudentId } } : {})
-    },
-    select: { id: true, firstName: true, lastName: true, admissionNo: true, nfcUid: true }
+async function getClassGroup(instituteId: string, classGroupId: string) {
+  const classGroup = await prisma.classGroup.findFirst({
+    where: { id: classGroupId, instituteId },
+    select: {
+      id: true,
+      branchId: true,
+      paymentStartDate: true,
+      defaultFreePeriodType: true,
+      defaultFreeDays: true
+    }
   });
-  const existing = existingStudents.find((student) => normalizeNfcUid(student.nfcUid) === normalizedNfcUid);
 
-  if (existing) {
-    throw new Error(`This NFC card is already assigned to ${existing.firstName} ${existing.lastName} (${existing.admissionNo}).`);
+  if (!classGroup) {
+    throw new Error("Invalid class.");
   }
+
+  return classGroup;
 }
 
-async function assertBranch(instituteId: string, branchId: string) {
-  const branch = await prisma.branch.findFirst({
-    where: { id: branchId, instituteId },
-    select: { id: true }
+async function generateAdmissionNo(tx: Prisma.TransactionClient, instituteId: string) {
+  const prefix = `STU-${new Date().getFullYear().toString().slice(-2)}-`;
+  const existing = await tx.student.findMany({
+    where: { instituteId, admissionNo: { startsWith: prefix } },
+    select: { admissionNo: true },
+    orderBy: { createdAt: "desc" },
+    take: 200
   });
+  const max = existing.reduce((highest, student) => {
+    const sequence = Number(student.admissionNo.slice(prefix.length));
+    return Number.isFinite(sequence) ? Math.max(highest, sequence) : highest;
+  }, 0);
 
-  if (!branch) {
-    throw new Error("Invalid branch.");
-  }
+  return `${prefix}${String(max + 1).padStart(4, "0")}`;
 }
 
 function uniqueMessage(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-    return "Admission number, NFC UID, or QR code already exists in this institute.";
+    return "Admission number already exists in this institute.";
   }
 
   return null;
@@ -76,28 +81,26 @@ function uniqueMessage(error: unknown) {
 
 export async function createStudent(input: StudentInput): Promise<ActionState> {
   try {
-    const { instituteId, userId } = await getTenantContext();
+    const { instituteId } = await getTenantContext();
     const parsed = studentSchema.parse(input);
-    await assertBranch(instituteId, parsed.branchId);
-    await assertUniqueNfcUid(instituteId, parsed.nfcUid);
+    const classGroup = await getClassGroup(instituteId, parsed.classGroupId);
 
-    const qrToken = parsed.qrToken ?? `edutap_qr_${randomUUID()}`;
     await prisma.$transaction(async (tx) => {
+      const admissionNo = parsed.admissionNo ?? await generateAdmissionNo(tx, instituteId);
       const parent = await findOrCreateParent(tx, instituteId, {
         name: parsed.parentName,
         relationship: parsed.parentRelationship,
         email: parsed.parentEmail,
         phone: parsed.parentPhone,
-        nic: parsed.parentNic,
         address: parsed.parentAddress,
-        appLogin: parsed.parentAppLogin,
-        emergencyContactNumber: parsed.emergencyContactNumber,
-        occupation: parsed.parentOccupation
+        appLogin: parsed.parentPhone,
+        emergencyContactNumber: parsed.emergencyContactNumber ?? parsed.parentPhone
       });
+      const { firstName, lastName } = splitFullName(parsed.fullName);
 
       const student = await tx.student.create({
         data: {
-          ...studentData(parsed, instituteId),
+          ...studentData(parsed, instituteId, admissionNo, classGroup.branchId),
           attendanceToken: randomUUID(),
           parents: {
             connect: { id: parent.id }
@@ -105,10 +108,22 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
         }
       });
 
-      const loginEmail = parsed.email?.toLowerCase() ?? `${parsed.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, "")}@student.edutap.local`;
+      await tx.enrollment.create({
+        data: {
+          studentId: student.id,
+          classGroupId: classGroup.id,
+          active: true,
+          status: "ACTIVE",
+          paymentStartDate: classGroup.paymentStartDate ?? new Date(),
+          freePeriodType: classGroup.defaultFreePeriodType,
+          freeDays: classGroup.defaultFreeDays
+        }
+      });
+
+      const loginEmail = `${admissionNo.toLowerCase().replace(/[^a-z0-9]/g, "")}@student.edutap.local`;
       const user = await tx.user.create({
         data: {
-          name: `${parsed.firstName} ${parsed.lastName}`,
+          name: `${firstName} ${lastName}`.trim(),
           email: loginEmail,
           passwordHash: null,
           passwordStatus: "NOT_SETUP",
@@ -116,7 +131,7 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
           mustChangePassword: false,
           accountStatus: parsed.status === "PENDING_APPROVAL" ? "PENDING_APPROVAL" : parsed.status === "REJECTED" ? "REJECTED" : "ACTIVE",
           instituteId,
-          branchId: parsed.branchId,
+          branchId: classGroup.branchId,
           image: parsed.avatarUrl ?? null
         }
       });
@@ -127,31 +142,14 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
         create: { parentId: parent.id, studentId: student.id, relation: parsed.parentRelationship },
         update: { relation: parsed.parentRelationship }
       });
-
-      await assignOrUpdateActiveCard(tx, {
-        instituteId,
-        studentId: student.id,
-        performedById: userId,
-        card: {
-          cardNumber: parsed.cardNumber,
-          nfcUid: parsed.nfcUid,
-          qrCode: parsed.qrCode,
-          qrToken
-        },
-        requireCard: false
-      });
     });
 
     revalidatePath("/students");
-    return { ok: true, message: "Student added. First login must be activated with the assigned QR or NFC card." };
+    return { ok: true, message: "Student added and assigned to class." };
   } catch (error) {
     const duplicate = uniqueMessage(error);
     if (duplicate) {
       return { ok: false, message: duplicate };
-    }
-
-    if (error instanceof Error && (error.message.includes("NFC card is already assigned") || error.message.includes("card identifier") || error.message.includes("student card"))) {
-      return { ok: false, message: error.message };
     }
 
     return actionError(error, "Could not add student.");
@@ -160,10 +158,9 @@ export async function createStudent(input: StudentInput): Promise<ActionState> {
 
 export async function updateStudent(id: string, input: StudentInput): Promise<ActionState> {
   try {
-    const { instituteId, userId } = await getTenantContext();
+    const { instituteId } = await getTenantContext();
     const parsed = studentSchema.parse(input);
-    await assertBranch(instituteId, parsed.branchId);
-    await assertUniqueNfcUid(instituteId, parsed.nfcUid, id);
+    const classGroup = await getClassGroup(instituteId, parsed.classGroupId);
 
     const existing = await prisma.student.findFirst({
       where: { id, instituteId },
@@ -180,17 +177,17 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
         relationship: parsed.parentRelationship,
         email: parsed.parentEmail,
         phone: parsed.parentPhone,
-        nic: parsed.parentNic,
         address: parsed.parentAddress,
-        appLogin: parsed.parentAppLogin,
-        emergencyContactNumber: parsed.emergencyContactNumber,
-        occupation: parsed.parentOccupation
+        appLogin: parsed.parentPhone,
+        emergencyContactNumber: parsed.emergencyContactNumber ?? parsed.parentPhone
       });
+      const admissionNo = parsed.admissionNo ?? existing.admissionNo;
+      const { firstName, lastName } = splitFullName(parsed.fullName);
 
       await tx.student.update({
         where: { id },
         data: {
-          ...studentData(parsed, instituteId),
+          ...studentData(parsed, instituteId, admissionNo, classGroup.branchId),
           parents: {
             connect: { id: parent.id }
           }
@@ -201,9 +198,9 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
         await tx.user.update({
           where: { id: existing.userId },
           data: {
-            name: `${parsed.firstName} ${parsed.lastName}`,
+            name: `${firstName} ${lastName}`.trim(),
             image: parsed.avatarUrl ?? null,
-            branchId: parsed.branchId,
+            branchId: classGroup.branchId,
             accountStatus: parsed.status === "PENDING_APPROVAL" ? "PENDING_APPROVAL" : parsed.status === "REJECTED" ? "REJECTED" : "ACTIVE"
           }
         });
@@ -215,19 +212,19 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
         update: { relation: parsed.parentRelationship }
       });
 
-      if (hasCardCredential({ cardNumber: parsed.cardNumber, nfcUid: parsed.nfcUid, qrCode: parsed.qrCode, qrToken: parsed.qrToken })) {
-        await assignOrUpdateActiveCard(tx, {
-          instituteId,
+      await tx.enrollment.upsert({
+        where: { studentId_classGroupId: { studentId: id, classGroupId: classGroup.id } },
+        create: {
           studentId: id,
-          performedById: userId,
-          card: {
-            cardNumber: parsed.cardNumber,
-            nfcUid: parsed.nfcUid,
-            qrCode: parsed.qrCode,
-            qrToken: parsed.qrToken
-          }
-        });
-      }
+          classGroupId: classGroup.id,
+          active: true,
+          status: "ACTIVE",
+          paymentStartDate: classGroup.paymentStartDate ?? new Date(),
+          freePeriodType: classGroup.defaultFreePeriodType,
+          freeDays: classGroup.defaultFreeDays
+        },
+        update: { active: true, status: "ACTIVE" }
+      });
     });
 
     revalidatePath("/students");
@@ -237,10 +234,6 @@ export async function updateStudent(id: string, input: StudentInput): Promise<Ac
     const duplicate = uniqueMessage(error);
     if (duplicate) {
       return { ok: false, message: duplicate };
-    }
-
-    if (error instanceof Error && (error.message.includes("NFC card is already assigned") || error.message.includes("card identifier") || error.message.includes("student card"))) {
-      return { ok: false, message: error.message };
     }
 
     return actionError(error, "Could not update student.");
