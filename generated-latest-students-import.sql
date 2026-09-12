@@ -1,10 +1,4 @@
-﻿-- Generated latest-schema student import for EduTap.
--- Source dump: E:/nextapp_2026-09-12_15-19.sql/nextapp_2026-09-12_15-19.sql
--- Target instituteId: cmt8yzua40001gla0e6rvdrst
--- Target branchId: cmt8yzuaz000dgla07dw9645w
--- Dump content was treated as data only.
--- Matches the updated student registration flow: no student email requirement, no user-login links, no parent NIC/occupation, guardian mobile reused as login/emergency mobile.
-
+﻿
 SET FOREIGN_KEY_CHECKS=0;
 START TRANSACTION;
 
@@ -728,12 +722,3 @@ ON DUPLICATE KEY UPDATE
 COMMIT;
 SET FOREIGN_KEY_CHECKS=1;
 
--- Import summary:
--- grades: 13
--- subjects: 6
--- class groups: 17
--- students: 102
--- parents: 100
--- parent-student links: 103
--- implicit parent-student links: 103
--- enrollments: 126
